@@ -30,18 +30,36 @@ class WindowsApplication(Application):
         root_logger.setLevel(LOG_LEVEL)
         root_logger.addHandler(handler)
 
+    @staticmethod
+    def _stop_manager_for_restart(manager):
+        """Stop both synchronous STOMP and asynchronous P2P managers completely."""
+        if hasattr(manager, "schedule_task") and hasattr(manager, "_disconnect"):
+            future = manager.schedule_task(manager._disconnect())
+            future.result(timeout=15)
+            return
+
+        manager.disconnect()
+        deadline = time.monotonic() + 5
+        while getattr(manager, "is_connected", False):
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Timed out while stopping the synchronization engine")
+            time.sleep(0.05)
+
     def restart_sync(self):
         if not self._restart_lock.acquire(blocking=False):
             return
         try:
             manager = self._get_ws_manager()
-            manager.disconnect()
-            time.sleep(0.25)
+            logging.info("Restarting synchronization engine")
+            self._stop_manager_for_restart(manager)
+
             manager.disconnected = False
+            manager.is_auto_reconnecting = False
             manager.is_login_phase = False
             success, message = manager.connect()
             if not success:
                 raise RuntimeError(message or "Connection restart failed")
+            logging.info("Synchronization engine restart requested successfully")
         finally:
             self._restart_lock.release()
 
