@@ -8,6 +8,9 @@ react {
 
 def enableProguardInReleaseBuilds = false
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+def clipcascadeBuildSha = (project.findProperty("clipcascadeBuildSha") ?: "local").toString()
+
+def quotedBuildSha = "\"${clipcascadeBuildSha.replace('\\', '\\\\').replace('\"', '\\\"')}\""
 
 android {
     ndkVersion rootProject.ext.ndkVersion
@@ -21,6 +24,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 320104
         versionName "3.2.1-extended.1"
+        buildConfigField "String", "SOURCE_COMMIT", quotedBuildSha
     }
 
     buildTypes {
