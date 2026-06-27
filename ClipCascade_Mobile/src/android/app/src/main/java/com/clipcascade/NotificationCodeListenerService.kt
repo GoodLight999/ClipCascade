@@ -6,12 +6,6 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 
-/**
- * Reads posted notifications only after the user grants Android notification
- * access. The full notification body never leaves the device: only a locally
- * extracted short verification value is queued for the existing encrypted
- * ClipCascade transport.
- */
 class NotificationCodeListenerService : NotificationListenerService() {
     companion object {
         private const val TAG = "NotificationCodeListener"
@@ -35,7 +29,11 @@ class NotificationCodeListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         val posted = sbn ?: return
+        if (!RelaySettingsStore.codeRelayEnabled(this)) return
         if (posted.packageName == packageName) return
+
+        val selectedApps = RelaySettingsStore.selectedApps(this)
+        if (selectedApps.isNotEmpty() && posted.packageName !in selectedApps) return
 
         val notification = posted.notification ?: return
         if ((notification.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
