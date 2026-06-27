@@ -1,11 +1,14 @@
+import ctypes
 import logging
+import os
+import sys
 import threading
 import time
 from logging.handlers import RotatingFileHandler
 
 from core.application import Application
 from core.constants import GITHUB_URL, LOG_LEVEL
-from gui.enhanced_tray import EnhancedTaskbarPanel
+from gui.enhanced_tray import EnhancedTaskbarPanel, get_show_window_request_path
 
 
 class WindowsApplication(Application):
@@ -31,6 +34,20 @@ class WindowsApplication(Application):
         root_logger.handlers.clear()
         root_logger.setLevel(LOG_LEVEL)
         root_logger.addHandler(handler)
+
+    def ensure_single_instance(self):
+        ctypes.windll.kernel32.CreateMutexW(None, False, self.mutex_identifier)
+        if ctypes.windll.kernel32.GetLastError() != 183:
+            return
+
+        request_path = get_show_window_request_path()
+        try:
+            os.makedirs(os.path.dirname(request_path), exist_ok=True)
+            with open(request_path, "w", encoding="utf-8") as request_file:
+                request_file.write(str(time.time()))
+        except OSError:
+            logging.exception("Failed to ask the running instance to show its window")
+        sys.exit(0)
 
     @staticmethod
     def _stop_manager_for_restart(manager):
@@ -75,7 +92,9 @@ class WindowsApplication(Application):
         peers = getattr(manager, "peers", None)
         if peers is not None:
             try:
-                remote_peer_count = len(peers) - (1 if getattr(manager, "my_peer_id", None) in peers else 0)
+                remote_peer_count = len(peers) - (
+                    1 if getattr(manager, "my_peer_id", None) in peers else 0
+                )
                 if remote_peer_count > 0:
                     if hasattr(manager, "_sync_live_connections_count"):
                         manager._sync_live_connections_count()
@@ -104,14 +123,18 @@ class WindowsApplication(Application):
                 now = time.monotonic()
                 if unhealthy_since is None:
                     unhealthy_since = now
-                    logging.warning("Synchronization watchdog detected an unhealthy connection")
+                    logging.warning(
+                        "Synchronization watchdog detected an unhealthy connection"
+                    )
                     continue
 
                 # Give the manager's native reconnect path time to recover first.
                 if now - unhealthy_since < 25 or now < next_attempt_at:
                     continue
 
-                logging.warning("Watchdog is performing a full synchronization restart")
+                logging.warning(
+                    "Watchdog is performing a full synchronization restart"
+                )
                 try:
                     self.restart_sync()
                 except Exception:
@@ -157,6 +180,8 @@ class WindowsApplication(Application):
             manager.set_tray_ref(sys_tray)
             self._start_watchdog(manager)
             sys_tray.run()
+        except SystemExit:
+            raise
         except Exception as error:
             logging.exception("Unexpected Windows application error: %s", error)
             from gui.info import CustomDialog
