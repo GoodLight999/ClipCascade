@@ -1,4 +1,4 @@
-name: Desktop Python CI
+name: Desktop Windows CI
 
 on:
   push:
@@ -14,9 +14,13 @@ permissions:
   contents: read
 
 jobs:
-  compile:
+  build:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 35
+
+    defaults:
+      run:
+        working-directory: ClipCascade_Desktop/src
 
     steps:
       - name: Checkout
@@ -26,6 +30,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ClipCascade_Desktop/src/requirements_win.txt
 
       - name: Compile desktop sources
-        run: python -m compileall -q ClipCascade_Desktop/src
+        run: python -m compileall -q .
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip pyinstaller && python -m pip install -r requirements_win.txt
+
+      - name: Build standalone executable
+        run: python -m PyInstaller --clean ClipCascade_win.spec
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-Windows
+          path: ClipCascade_Desktop/src/dist/ClipCascade.exe
+          if-no-files-found: error
