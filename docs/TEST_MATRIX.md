@@ -89,6 +89,7 @@ On HONOR 400 Pro / Android 16:
 - [ ] App removed from recents
 - [ ] App process killed by system
 - [ ] Device rebooted
+- [ ] Reboot with the immediate Headless JS path blocked/killed; delayed WorkManager heartbeat restores sync
 
 For SMS and email sources, record whether notification text is visible to NotificationListenerService or redacted by Android.
 
@@ -99,6 +100,8 @@ For SMS and email sources, record whether notification text is visible to Notifi
 - [ ] Android offline, copy, then network returns
 - [ ] Wi-Fi to mobile-data transition
 - [ ] Mobile-data to Wi-Fi transition
+- [ ] Late `onLost` for the old default network does not cancel recovery for the replacement network
+- [ ] `Disconnected` is never treated as an actual connected state by recovery, clipboard dispatch, or verification-code dispatch
 - [ ] Server restart
 - [ ] P2P peer disconnect/reconnect
 - [ ] Process death with pending clipboard item
