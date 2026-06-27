@@ -22,8 +22,16 @@ class EnhancedTaskbarPanel(TaskbarPanel):
             *base_items,
         )
 
-    def _open_status(self, icon=None, menu_item=None):
+    def run(self):
+        self.icon.run_detached()
+        self.root.after(0, self._show_status_on_ui_thread)
+        self.root.mainloop()
+
+    def _show_status_on_ui_thread(self):
         show_connection_status(self.ws_interface, self.config)
+
+    def _open_status(self, icon=None, menu_item=None):
+        self.root.after(0, self._show_status_on_ui_thread)
 
     def _restart_sync(self, icon=None, menu_item=None):
         if self.on_restart_callback is None:
@@ -39,6 +47,9 @@ class EnhancedTaskbarPanel(TaskbarPanel):
                 self.is_connected = bool(
                     getattr(self.ws_interface, "is_connected", False)
                 )
-                self.update_menu()
+                try:
+                    self.root.after(0, self.update_menu)
+                except Exception:
+                    pass
 
         threading.Thread(target=worker, daemon=True).start()
