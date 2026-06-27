@@ -1,34 +1,43 @@
 package com.clipcascade
 
 import android.app.AlertDialog
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 
 object NotificationAccessPrompt {
-    fun isEnabled(context: Context): Boolean =
-        NotificationManagerCompat
-            .getEnabledListenerPackages(context)
+    private fun notificationAccessEnabled(context: Context): Boolean =
+        NotificationManagerCompat.getEnabledListenerPackages(context)
             .contains(context.packageName)
 
+    private fun accessibilityEnabled(context: Context): Boolean {
+        val expected = ComponentName(context, ClipboardAccessibilityService::class.java)
+            .flattenToString()
+        val enabled = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+        ).orEmpty()
+        return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+    }
+
     fun showIfNeeded(context: Context) {
-        if (isEnabled(context)) return
+        if (notificationAccessEnabled(context) && accessibilityEnabled(context)) return
 
         AlertDialog.Builder(context)
-            .setTitle("Enable notification code relay")
+            .setTitle("バックグラウンド共有の設定")
             .setMessage(
-                "ClipCascade can detect verification codes from notifications while the screen is off. " +
-                    "Android requires you to explicitly grant Notification access. " +
-                    "Only the extracted short code is sent through your existing encrypted connection.",
+                "ADB不要のクリップボード共有にはユーザー補助を、" +
+                    "SMS・メール等の認証コード共有には通知アクセスを有効にしてください。",
             )
-            .setPositiveButton("Open settings") { _, _ -> openSettings(context) }
-            .setNegativeButton("Later", null)
+            .setPositiveButton("共有設定を開く") { _, _ -> openSettings(context) }
+            .setNegativeButton("あとで", null)
             .show()
     }
 
     fun openSettings(context: Context) {
-        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+        val intent = Intent(context, RelaySettingsActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(intent)
