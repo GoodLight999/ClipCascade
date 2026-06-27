@@ -15,12 +15,15 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
+import java.text.DateFormat
+import java.util.Date
 
 class RelaySettingsActivity : AppCompatActivity() {
     private lateinit var accessibilityStatus: TextView
     private lateinit var notificationStatus: TextView
     private lateinit var selectedAppsSummary: TextView
     private lateinit var queueStatus: TextView
+    private lateinit var healthStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -130,6 +133,27 @@ class RelaySettingsActivity : AppCompatActivity() {
             }
         })
 
+        content.addView(sectionTitle("最近の診断"))
+        healthStatus = bodyText("")
+        content.addView(healthStatus)
+        content.addView(
+            bodyText(
+                "コピー内容・認証コード・通知本文・利用アプリ名は表示または診断保存しません。",
+            ),
+        )
+        content.addView(Button(this).apply {
+            text = "診断履歴を消去"
+            setOnClickListener {
+                RelayHealthStore.clear(applicationContext)
+                updateStatus()
+                Toast.makeText(
+                    this@RelaySettingsActivity,
+                    "診断履歴を消去しました",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        })
+
         content.addView(sectionTitle("動作確認"))
         content.addView(Button(this).apply {
             text = "テスト文字列をPCへ送る"
@@ -155,6 +179,13 @@ class RelaySettingsActivity : AppCompatActivity() {
                 )
                 if (queued) {
                     ClipboardRelayDispatcher.schedule(applicationContext)
+                    RelayHealthStore.record(
+                        applicationContext,
+                        category = "clipboard",
+                        trigger = "settings_test",
+                        path = "manual_test",
+                        result = "queued",
+                    )
                     Toast.makeText(
                         this@RelaySettingsActivity,
                         "テスト文字列を送信キューへ追加しました",
@@ -204,6 +235,63 @@ class RelaySettingsActivity : AppCompatActivity() {
         queueStatus.text =
             "通常コピー: ${ClipboardRelayStore.count(this)}件 / " +
                 "認証コード: ${OtpRelayStore.pendingCount(this)}件"
+
+        healthStatus.text = listOf(
+            formatHealth("通常コピー", RelayHealthStore.read(this, "clipboard")),
+            formatHealth("認証コード", RelayHealthStore.read(this, "verification")),
+            formatHealth("自動復旧", RelayHealthStore.read(this, "recovery")),
+        ).joinToString("\n")
+    }
+
+    private fun formatHealth(label: String, snapshot: RelayHealthStore.Snapshot?): String {
+        if (snapshot == null) return "$label: 記録なし"
+        val time = DateFormat.getDateTimeInstance(
+            DateFormat.SHORT,
+            DateFormat.MEDIUM,
+        ).format(Date(snapshot.timestamp))
+        return "$label: $time / ${healthLabel(snapshot.trigger)} / " +
+            "${healthLabel(snapshot.path)} / ${healthLabel(snapshot.result)}"
+    }
+
+    private fun healthLabel(value: String): String = when (value) {
+        "service_connected" -> "サービス接続"
+        "service_interrupted" -> "サービス中断"
+        "selection" -> "文字選択"
+        "click" -> "コピーボタン"
+        "announcement" -> "コピー通知"
+        "copy_notice" -> "コピー完了通知"
+        "ctrl_c" -> "Ctrl+C"
+        "settings_test" -> "設定テスト"
+        "listener_connected" -> "通知リスナー接続"
+        "listener_disconnected" -> "通知リスナー切断"
+        "context_match" -> "コード文脈一致"
+        "accessibility" -> "ユーザー補助"
+        "accessibility_selection" -> "選択文字列"
+        "clipboard_manager" -> "クリップボード読取"
+        "selected_text_fallback" -> "選択文字列フォールバック"
+        "clipboard_denied_no_fallback" -> "読取拒否・代替なし"
+        "no_text_available" -> "文字列未取得"
+        "notification_access" -> "通知アクセス"
+        "local_extractor" -> "端末内抽出"
+        "coordinator" -> "復旧調整"
+        "active_react_context" -> "実行中アプリ"
+        "headless_js" -> "バックグラウンド処理"
+        "manual_test" -> "手動テスト"
+        "ready" -> "待機中"
+        "remembered" -> "選択を記憶"
+        "queued" -> "キュー追加"
+        "deduplicated" -> "重複抑止"
+        "retrying" -> "再試行中"
+        "interrupted" -> "中断"
+        "rebind_requested" -> "再接続要求"
+        "requested" -> "復旧要求済み"
+        "declined" -> "OSが開始を拒否"
+        "blocked" -> "バックグラウンド制限"
+        "cooldown" -> "重複復旧を抑止"
+        "sync_disabled" -> "同期OFF"
+        "heartbeat_timeout" -> "応答タイムアウト"
+        "network_available_but_offline" -> "ネット復帰後も未接続"
+        else -> value.ifBlank { "―" }
     }
 
     private fun isAccessibilityEnabled(): Boolean {
