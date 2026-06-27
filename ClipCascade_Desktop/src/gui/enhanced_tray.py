@@ -28,7 +28,13 @@ class EnhancedTaskbarPanel(TaskbarPanel):
         self.root.mainloop()
 
     def _show_status_on_ui_thread(self):
-        show_connection_status(self.ws_interface, self.config)
+        show_connection_status(
+            self.ws_interface,
+            self.config,
+            restart_callback=self.on_restart_callback,
+            connect_callback=self.on_connect_callback,
+            disconnect_callback=self.on_disconnect_callback,
+        )
 
     def _open_status(self, icon=None, menu_item=None):
         self.root.after(0, self._show_status_on_ui_thread)
