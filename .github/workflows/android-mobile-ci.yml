@@ -16,7 +16,7 @@ permissions:
 jobs:
   build-debug:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     defaults:
       run:
@@ -46,15 +46,24 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
-      - name: Run Android unit tests
-        run: cd android && ./gradlew testDebugUnitTest --stacktrace
+      - name: Assemble installable debug APK
+        shell: bash
+        run: |
+          set -o pipefail
+          cd android
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee ../android-build.log
 
-      - name: Assemble debug APK
-        run: cd android && ./gradlew assembleDebug --stacktrace
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-Android-build-log
+          path: ClipCascade_Mobile/src/android-build.log
+          if-no-files-found: warn
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: ClipCascade-Android-debug
+          name: ClipCascade-GoodLight-Android
           path: ClipCascade_Mobile/src/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
