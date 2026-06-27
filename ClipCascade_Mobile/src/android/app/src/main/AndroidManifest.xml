@@ -1,12 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.READ_LOGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
@@ -59,16 +58,6 @@
         android:label="ClipCascade 設定"
         android:exported="false" />
 
-      <activity
-        android:name=".ClipboardFloatingActivity"
-        android:theme="@style/Theme.TransparentActivity"
-        android:exported="false"
-        android:excludeFromRecents="true"
-        android:noHistory="true"
-        android:showWhenLocked="true"
-        android:launchMode="singleTop"
-        android:taskAffinity="com.clipcascade.clipboardhelper" />
-
       <service
         android:name=".ClipboardAccessibilityService"
         android:label="ClipCascade クリップボード共有"
@@ -96,7 +85,7 @@
         android:name="app.notifee.core.ForegroundService"
         android:foregroundServiceType="remoteMessaging"
         android:exported="false"
-        tools:replace="android:foregroundServiceType"/>
+        tools:replace="android:foregroundServiceType" />
 
       <receiver
         android:name=".BootReceiver"
