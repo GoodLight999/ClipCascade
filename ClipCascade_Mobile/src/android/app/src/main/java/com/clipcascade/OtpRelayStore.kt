@@ -16,13 +16,11 @@ object OtpRelayStore {
     data class Item(
         val id: String,
         val code: String,
-        val sourcePackage: String,
         val createdAt: Long,
     ) {
         fun toJson(): JSONObject = JSONObject().apply {
             put("id", id)
             put("code", code)
-            put("sourcePackage", sourcePackage)
             put("createdAt", createdAt)
         }
 
@@ -34,7 +32,6 @@ object OtpRelayStore {
                 return Item(
                     id = id,
                     code = code,
-                    sourcePackage = value.optString("sourcePackage"),
                     createdAt = value.optLong("createdAt"),
                 )
             }
@@ -46,7 +43,6 @@ object OtpRelayStore {
         val items = activeItems(context).toMutableList()
         val duplicate = items.any {
             it.code == item.code &&
-                it.sourcePackage == item.sourcePackage &&
                 item.createdAt - it.createdAt in 0..DEDUP_WINDOW_MS
         }
         if (duplicate) return false
