@@ -1,10 +1,12 @@
 package com.clipcascade
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 
 object ClipboardRelayStore {
+    private const val TAG = "ClipboardRelayStore"
     private const val PREFS = "clipboard_relay_queue"
     private const val KEY_QUEUE = "items"
     private const val MAX_ITEMS = 16
@@ -27,7 +29,6 @@ object ClipboardRelayStore {
         val active = activeItems(context).toMutableList()
         if (active.any {
                 it.text == normalized &&
-                    it.sourcePackage == item.sourcePackage &&
                     item.createdAt - it.createdAt in 0..DEDUP_MS
             }
         ) {
@@ -46,6 +47,11 @@ object ClipboardRelayStore {
     @Synchronized
     fun remove(context: Context, id: String) {
         write(context, activeItems(context).filterNot { it.id == id })
+    }
+
+    @Synchronized
+    fun clear(context: Context) {
+        write(context, emptyList())
     }
 
     @Synchronized
@@ -80,7 +86,8 @@ object ClipboardRelayStore {
                     )
                 }
             }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.w(TAG, "Discarding an unreadable clipboard queue", error)
             emptyList()
         }
     }
@@ -97,7 +104,12 @@ object ClipboardRelayStore {
                 },
             )
         }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY_QUEUE, array.toString()).apply()
+        val committed = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_QUEUE, array.toString())
+            .commit()
+        if (!committed) {
+            Log.w(TAG, "Unable to persist clipboard queue state")
+        }
     }
 }
