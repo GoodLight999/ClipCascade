@@ -1,12 +1,10 @@
 import logging
-import os
 import threading
 import time
 from logging.handlers import RotatingFileHandler
 
 from core.application import Application
-from core.constants import GITHUB_URL, LOG_FORMAT if False else None
-from core.constants import LINUX, MACOS, PLATFORM
+from core.constants import GITHUB_URL, LOG_LEVEL
 from gui.enhanced_tray import EnhancedTaskbarPanel
 
 
@@ -26,9 +24,10 @@ class WindowsApplication(Application):
             encoding="utf-8",
         )
         handler.setFormatter(formatter)
+
         root_logger = logging.getLogger()
         root_logger.handlers.clear()
-        root_logger.setLevel(logging.INFO)
+        root_logger.setLevel(LOG_LEVEL)
         root_logger.addHandler(handler)
 
     def restart_sync(self):
@@ -57,18 +56,19 @@ class WindowsApplication(Application):
             update_available = self.get_version_update_status()
             donation_url = self.get_donation_url()
 
+            manager = self._get_ws_manager()
             sys_tray = EnhancedTaskbarPanel(
-                on_connect_callback=self._get_ws_manager().manual_reconnect,
-                on_disconnect_callback=self._get_ws_manager().disconnect,
+                on_connect_callback=manager.manual_reconnect,
+                on_disconnect_callback=manager.disconnect,
                 on_restart_callback=self.restart_sync,
                 on_logoff_callback=self.logoff_and_exit,
                 new_version_available=update_available,
                 github_url=GITHUB_URL,
                 donation_url=donation_url,
-                ws_interface=self._get_ws_manager(),
+                ws_interface=manager,
                 config=self.config,
             )
-            self._get_ws_manager().set_tray_ref(sys_tray)
+            manager.set_tray_ref(sys_tray)
             sys_tray.run()
         except Exception as error:
             logging.exception("Unexpected Windows application error: %s", error)
@@ -79,11 +79,7 @@ class WindowsApplication(Application):
                 msg_type="error",
             ).mainloop()
         finally:
-            self._get_ws_manager().disconnect()
-            if PLATFORM == MACOS or PLATFORM.startswith(LINUX):
-                if getattr(self, "lock_file", None) is not None:
-                    self.lock_file.close()
-                    try:
-                        os.remove(self.mutex_identifier)
-                    except OSError:
-                        pass
+            try:
+                self._get_ws_manager().disconnect()
+            except Exception:
+                logging.exception("Failed to disconnect during shutdown")
