@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">ClipCascade</string>
+    <string name="app_name">ClipCascade Extended</string>
+    <string name="accessibility_service_description">コピー操作を検出し、選択したテキストをClipCascadeの暗号化接続で他の端末へ共有します。</string>
 </resources>
