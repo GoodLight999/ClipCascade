@@ -1,28 +1,19 @@
 package com.clipcascade
 
 import android.app.AlertDialog
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 
 object NotificationAccessPrompt {
-    private const val PREFS = "clipcascade_notification_access"
-    private const val KEY_PROMPTED = "prompted"
-
-    fun isEnabled(context: Context): Boolean {
-        val component = ComponentName(context, NotificationCodeListenerService::class.java)
-        return NotificationManagerCompat
+    fun isEnabled(context: Context): Boolean =
+        NotificationManagerCompat
             .getEnabledListenerPackages(context)
-            .contains(component.packageName)
-    }
+            .contains(context.packageName)
 
     fun showIfNeeded(context: Context) {
         if (isEnabled(context)) return
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (prefs.getBoolean(KEY_PROMPTED, false)) return
-        prefs.edit().putBoolean(KEY_PROMPTED, true).apply()
 
         AlertDialog.Builder(context)
             .setTitle("Enable notification code relay")
