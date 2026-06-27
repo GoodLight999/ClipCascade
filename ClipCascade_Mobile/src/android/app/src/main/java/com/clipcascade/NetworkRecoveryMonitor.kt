@@ -81,11 +81,17 @@ object NetworkRecoveryMonitor {
         try {
             if (storage.getValue("wsIsRunning") != "true") return
             val status = storage.getValue("wsStatusMessage").orEmpty()
-            if (status.contains("Connected", ignoreCase = true)) return
+            if (isConnectedStatus(status)) return
         } finally {
             storage.disconnect()
         }
 
         RecoveryCoordinator.request(context, "network_available_but_offline")
+    }
+
+    private fun isConnectedStatus(status: String): Boolean {
+        val normalized = status.trim().removePrefix("✅").trimStart()
+        return normalized.equals("Connected", ignoreCase = true) ||
+            normalized.startsWith("Connected -", ignoreCase = true)
     }
 }
