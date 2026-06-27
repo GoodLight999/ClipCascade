@@ -1,41 +1,109 @@
+import threading
+from tkinter import ttk
+
 from gui.info import CustomDialog
 
 
 class LiveStatusDialog(CustomDialog):
-    def __init__(self, manager, config):
+    def __init__(
+        self,
+        manager,
+        config,
+        restart_callback=None,
+        connect_callback=None,
+        disconnect_callback=None,
+    ):
         self.manager = manager
         self.config = config
+        self.restart_callback = restart_callback
+        self.connect_callback = connect_callback
+        self.disconnect_callback = disconnect_callback
         self.refresh_id = None
-        super().__init__(self._build_message(), msg_type="info")
-        self.refresh_id = self.after(1000, self._refresh)
+        self.operation_lock = threading.Lock()
+        self.last_operation = "Ready"
 
-    def _build_message(self):
+        super().__init__(self._build_message(), msg_type="info")
+        self.title("ClipCascade Status")
+        self.geometry("650x390")
+        self.resizable(True, True)
+
+        controls = ttk.Frame(self, padding=(20, 0, 20, 14))
+        controls.pack(fill="x")
+        ttk.Button(
+            controls,
+            text="Restart sync",
+            command=lambda: self._run_operation(
+                self.restart_callback, "Restarting synchronization"
+            ),
+        ).pack(side="left")
+        ttk.Button(
+            controls,
+            text="Reconnect",
+            command=lambda: self._run_operation(
+                self.connect_callback, "Requesting reconnect"
+            ),
+        ).pack(side="left", padx=(8, 0))
+        ttk.Button(
+            controls,
+            text="Disconnect",
+            command=lambda: self._run_operation(
+                self.disconnect_callback, "Disconnecting"
+            ),
+        ).pack(side="left", padx=(8, 0))
+
+        self.refresh_id = self.after(500, self._refresh)
+
+    def _state(self):
         connected = bool(getattr(self.manager, "is_connected", False))
         reconnecting = bool(
             getattr(self.manager, "is_auto_reconnecting", False)
         )
         if connected:
-            state = "Connected"
-        elif reconnecting:
-            state = "Reconnecting"
-        else:
-            state = "Disconnected"
+            return "Connected"
+        if reconnecting:
+            return "Reconnecting"
+        if getattr(self.manager, "disconnected", False):
+            return "Disconnected by user"
+        return "Offline"
 
+    def _build_message(self):
         data = self.config.data if self.config is not None else {}
         stats = self.manager.get_stats() if self.manager is not None else None
         return (
-            f"State: {state}\n"
+            f"State: {self._state()}\n"
             f"Server: {data.get('server_url', 'unknown')}\n"
             f"Mode: {data.get('server_mode', 'unknown')}\n"
-            f"Status: {stats or 'No active transfer'}"
+            f"Transport status: {stats or 'No active transfer'}\n"
+            f"Automatic reconnect: "
+            f"{bool(getattr(self.manager, 'is_auto_reconnecting', False))}\n"
+            f"Last operation: {self.last_operation}"
         )
 
+    def _run_operation(self, callback, description):
+        if callback is None or not self.operation_lock.acquire(blocking=False):
+            return
+        self.last_operation = description
+
+        def worker():
+            try:
+                callback()
+                self.last_operation = description + " — completed"
+            except Exception as error:
+                self.last_operation = description + f" — failed: {error}"
+            finally:
+                self.operation_lock.release()
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _refresh(self):
-        self.text_widget.config(state="normal")
-        self.text_widget.delete("1.0", "end")
-        self.text_widget.insert("1.0", self._build_message())
-        self.text_widget.config(state="disabled")
-        self.refresh_id = self.after(1000, self._refresh)
+        try:
+            self.text_widget.config(state="normal")
+            self.text_widget.delete("1.0", "end")
+            self.text_widget.insert("1.0", self._build_message())
+            self.text_widget.config(state="disabled")
+            self.refresh_id = self.after(1000, self._refresh)
+        except Exception:
+            self.refresh_id = None
 
     def close(self):
         if self.refresh_id is not None:
