@@ -130,7 +130,7 @@ object OtpRelayDispatcher {
         if (storage.getValue("wsIsRunning") != "true") return false
 
         val status = storage.getValue("wsStatusMessage").orEmpty()
-        if (!status.contains("Connected", ignoreCase = true)) return false
+        if (!isConnectedStatus(status)) return false
 
         val mode = storage.getValue("server_mode").orEmpty()
         if (!mode.equals("P2P", ignoreCase = true)) return true
@@ -143,5 +143,11 @@ object OtpRelayDispatcher {
             ?.toIntOrNull()
             ?: 0
         return peers > 0
+    }
+
+    private fun isConnectedStatus(status: String): Boolean {
+        val normalized = status.trim().removePrefix("✅").trimStart()
+        return normalized.equals("Connected", ignoreCase = true) ||
+            normalized.startsWith("Connected -", ignoreCase = true)
     }
 }
