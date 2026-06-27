@@ -1,33 +1,48 @@
 import {
   setDataInAsyncStorage,
   getDataFromAsyncStorage,
-  clearAsyncStorage,
-} from './AsyncStorageManagement'; // persistent storage
-import StartForegroundService from './StartForegroundService'; // foreground service
+} from './AsyncStorageManagement';
+import StartForegroundService from './StartForegroundService';
 
 module.exports = async data => {
   try {
-    const enableForegroundService = async () => {
-      // Get websocket(foreground service) status (enabled/disabled)
-      let wsIsRunning_s = await getDataFromAsyncStorage('wsIsRunning');
-      return wsIsRunning_s === null ? 'false' : wsIsRunning_s;
+    const wsIsEnabled = async () => {
+      const value = await getDataFromAsyncStorage('wsIsRunning');
+      return value === 'true';
     };
 
-    if (data && data['event'] === 'BOOT_COMPLETED') {
-      const relaunch_on_boot = await getDataFromAsyncStorage(
-        'relaunch_on_boot',
-      );
-      if (relaunch_on_boot !== null && relaunch_on_boot === 'true') {
-        if ((await enableForegroundService()) === 'true') {
-          await setDataInAsyncStorage('wsStatusMessage', '');
-          const result = await StartForegroundService();
-          if (result[0] === false) {
-            throw result[1];
-          }
-        }
+    const startSyncService = async () => {
+      if (!(await wsIsEnabled())) {
+        return;
       }
+      await setDataInAsyncStorage('wsStatusMessage', '');
+      await setDataInAsyncStorage('wsForegroundServiceTerminated', 'false');
+      const result = await StartForegroundService();
+      if (result[0] === false) {
+        throw result[1];
+      }
+    };
+
+    if (!data || !data.event) {
+      return;
     }
-  } catch (e) {
-    console.error('Error in Headless JS Task:', e);
+
+    if (data.event === 'BOOT_COMPLETED') {
+      const relaunchOnBoot = await getDataFromAsyncStorage('relaunch_on_boot');
+      if (relaunchOnBoot === 'true') {
+        await startSyncService();
+      }
+      return;
+    }
+
+    if (data.event === 'HEALTH_CHECK_FAILED') {
+      await startSyncService();
+    }
+  } catch (error) {
+    await setDataInAsyncStorage(
+      'wsStatusMessage',
+      'Service restart failed: ' + String(error),
+    );
+    console.error('Error in Headless JS Task:', error);
   }
 };
