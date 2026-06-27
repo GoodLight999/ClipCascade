@@ -17,14 +17,12 @@ object OtpRelayStore {
         val id: String,
         val code: String,
         val sourcePackage: String,
-        val sourceTitle: String,
         val createdAt: Long,
     ) {
         fun toJson(): JSONObject = JSONObject().apply {
             put("id", id)
             put("code", code)
             put("sourcePackage", sourcePackage)
-            put("sourceTitle", sourceTitle)
             put("createdAt", createdAt)
         }
 
@@ -37,7 +35,6 @@ object OtpRelayStore {
                     id = id,
                     code = code,
                     sourcePackage = value.optString("sourcePackage"),
-                    sourceTitle = value.optString("sourceTitle"),
                     createdAt = value.optLong("createdAt"),
                 )
             }
