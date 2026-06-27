@@ -1,6 +1,7 @@
 package com.clipcascade
 
 import android.content.Intent
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -20,6 +21,19 @@ class RelaySettingsModule(
             promise.resolve(true)
         } catch (error: Exception) {
             promise.reject("RELAY_SETTINGS_ERROR", "Unable to open relay settings", error)
+        }
+    }
+
+    @ReactMethod
+    fun getBuildInfo(promise: Promise) {
+        try {
+            val map = Arguments.createMap().apply {
+                putString("versionName", BuildConfig.VERSION_NAME)
+                putString("sourceCommit", BuildConfig.SOURCE_COMMIT)
+            }
+            promise.resolve(map)
+        } catch (error: Exception) {
+            promise.reject("BUILD_INFO_ERROR", "Unable to read build information", error)
         }
     }
 
