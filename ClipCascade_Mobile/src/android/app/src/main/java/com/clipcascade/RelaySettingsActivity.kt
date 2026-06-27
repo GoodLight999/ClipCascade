@@ -12,6 +12,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationManagerCompat
 
@@ -19,6 +20,7 @@ class RelaySettingsActivity : AppCompatActivity() {
     private lateinit var accessibilityStatus: TextView
     private lateinit var notificationStatus: TextView
     private lateinit var selectedAppsSummary: TextView
+    private lateinit var queueStatus: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +48,7 @@ class RelaySettingsActivity : AppCompatActivity() {
             isChecked = RelaySettingsStore.clipboardEnabled(this@RelaySettingsActivity)
             setOnCheckedChangeListener { _, enabled ->
                 RelaySettingsStore.setClipboardEnabled(this@RelaySettingsActivity, enabled)
+                updateStatus()
             }
         }
         content.addView(clipboardSwitch)
@@ -71,6 +74,7 @@ class RelaySettingsActivity : AppCompatActivity() {
             isChecked = RelaySettingsStore.codeRelayEnabled(this@RelaySettingsActivity)
             setOnCheckedChangeListener { _, enabled ->
                 RelaySettingsStore.setCodeRelayEnabled(this@RelaySettingsActivity, enabled)
+                updateStatus()
             }
         }
         content.addView(codeSwitch)
@@ -104,12 +108,43 @@ class RelaySettingsActivity : AppCompatActivity() {
             }
         })
 
+        content.addView(sectionTitle("保留キュー"))
+        queueStatus = bodyText("")
+        content.addView(queueStatus)
+        content.addView(
+            bodyText(
+                "未送信データはアプリ専用領域に一時保存されます。ここでは内容を表示せず件数だけを表示します。",
+            ),
+        )
+        content.addView(Button(this).apply {
+            text = "保留中のデータをすべて消去"
+            setOnClickListener {
+                ClipboardRelayStore.clear(applicationContext)
+                OtpRelayStore.clear(applicationContext)
+                updateStatus()
+                Toast.makeText(
+                    this@RelaySettingsActivity,
+                    "保留キューを消去しました",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        })
+
         content.addView(sectionTitle("動作確認"))
         content.addView(Button(this).apply {
             text = "テスト文字列をPCへ送る"
             setOnClickListener {
+                if (!RelaySettingsStore.clipboardEnabled(this@RelaySettingsActivity)) {
+                    AlertDialog.Builder(this@RelaySettingsActivity)
+                        .setTitle("クリップボード共有がOFFです")
+                        .setMessage("テスト送信の前に「コピーしたテキストを自動送信」をONにしてください。")
+                        .setPositiveButton("OK", null)
+                        .show()
+                    return@setOnClickListener
+                }
+
                 val now = System.currentTimeMillis()
-                ClipboardRelayStore.enqueue(
+                val queued = ClipboardRelayStore.enqueue(
                     applicationContext,
                     ClipboardRelayStore.Item(
                         id = "settings-test:$now",
@@ -118,7 +153,21 @@ class RelaySettingsActivity : AppCompatActivity() {
                         createdAt = now,
                     ),
                 )
-                ClipboardRelayDispatcher.schedule(applicationContext)
+                if (queued) {
+                    ClipboardRelayDispatcher.schedule(applicationContext)
+                    Toast.makeText(
+                        this@RelaySettingsActivity,
+                        "テスト文字列を送信キューへ追加しました",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                } else {
+                    Toast.makeText(
+                        this@RelaySettingsActivity,
+                        "同じテスト文字列がすでに保留中です",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+                updateStatus()
             }
         })
 
@@ -151,6 +200,10 @@ class RelaySettingsActivity : AppCompatActivity() {
         } else {
             "対象: ${selected.size}個の選択済みアプリ"
         }
+
+        queueStatus.text =
+            "通常コピー: ${ClipboardRelayStore.count(this)}件 / " +
+                "認証コード: ${OtpRelayStore.pendingCount(this)}件"
     }
 
     private fun isAccessibilityEnabled(): Boolean {
@@ -168,10 +221,9 @@ class RelaySettingsActivity : AppCompatActivity() {
         val launchIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val entries = packageManager.queryIntentActivities(launchIntent, 0)
             .map {
-                Triple(
+                Pair(
                     it.activityInfo.packageName,
                     it.loadLabel(packageManager).toString(),
-                    it.activityInfo.applicationInfo,
                 )
             }
             .distinctBy { it.first }
