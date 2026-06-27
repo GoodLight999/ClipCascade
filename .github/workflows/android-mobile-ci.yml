@@ -58,6 +58,9 @@ jobs:
       - name: Prepare P2P peer acknowledgement
         run: node scripts/prepare_p2p_peer_ack.js
 
+      - name: Order P2P ACK after validation
+        run: node scripts/prepare_p2p_ack_validation_order.js
+
       - name: Bundle JavaScript into Android assets
         shell: bash
         run: |
