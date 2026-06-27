@@ -21,12 +21,11 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               add(ClipboardListenerPackage())
               add(NativeBridgePackage())
+              add(RelaySettingsPackage())
             }
 
         override fun getJSMainModuleName(): String = "index"
 
-        // GoodLight distribution APKs include index.android.bundle and must
-        // never depend on a Metro development server.
         override fun getUseDeveloperSupport(): Boolean = false
 
         override val isNewArchEnabled: Boolean = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
