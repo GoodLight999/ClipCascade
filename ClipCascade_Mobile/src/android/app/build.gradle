@@ -19,20 +19,20 @@ android {
         applicationId "com.clipcascade"
         minSdkVersion 26
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 320103
-        versionName "3.2.1-goodlight.3"
+        versionCode 320104
+        versionName "3.2.1-extended.1"
     }
 
     buildTypes {
         debug {
-            applicationIdSuffix ".goodlight.standalone"
+            applicationIdSuffix ".extended"
             versionNameSuffix "-standalone"
-            resValue "string", "app_name", "ClipCascade GoodLight"
+            resValue "string", "app_name", "ClipCascade Extended"
         }
         release {
-            applicationIdSuffix ".goodlight"
+            applicationIdSuffix ".extended.release"
             versionNameSuffix "-release"
-            resValue "string", "app_name", "ClipCascade GoodLight"
+            resValue "string", "app_name", "ClipCascade Extended"
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
