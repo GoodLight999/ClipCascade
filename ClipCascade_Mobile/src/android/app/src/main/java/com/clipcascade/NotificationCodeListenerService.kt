@@ -13,11 +13,25 @@ class NotificationCodeListenerService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        RelayHealthStore.record(
+            applicationContext,
+            category = "verification",
+            trigger = "listener_connected",
+            path = "notification_access",
+            result = "ready",
+        )
         OtpRelayDispatcher.schedule(applicationContext)
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        RelayHealthStore.record(
+            applicationContext,
+            category = "verification",
+            trigger = "listener_disconnected",
+            path = "notification_access",
+            result = "rebind_requested",
+        )
         try {
             requestRebind(
                 ComponentName(applicationContext, NotificationCodeListenerService::class.java),
@@ -49,9 +63,17 @@ class NotificationCodeListenerService : NotificationListenerService() {
             createdAt = System.currentTimeMillis(),
         )
 
-        if (OtpRelayStore.enqueue(applicationContext, item)) {
+        val queued = OtpRelayStore.enqueue(applicationContext, item)
+        if (queued) {
             OtpRelayDispatcher.schedule(applicationContext)
         }
+        RelayHealthStore.record(
+            applicationContext,
+            category = "verification",
+            trigger = "context_match",
+            path = "local_extractor",
+            result = if (queued) "queued" else "deduplicated",
+        )
     }
 
     private fun collectNotificationText(notification: Notification): String {
