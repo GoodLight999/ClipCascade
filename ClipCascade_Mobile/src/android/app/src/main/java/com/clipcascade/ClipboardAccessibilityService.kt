@@ -15,14 +15,8 @@ class ClipboardAccessibilityService : AccessibilityService() {
         private const val TAG = "ClipboardAccessibility"
         private const val SELECTION_TTL_MS = 15_000L
         private const val MAX_TEXT_LENGTH = 500_000
-        private val COPY_MARKERS = listOf(
-            "copy",
-            "copied",
-            "copy text",
-            "copy link",
-            "コピー",
-            "コピーしました",
-            "クリップボードにコピー",
+        private val COPY_MARKER_REGEX = Regex(
+            pattern = "(?i)(?:^|[\\s:_-])(?:copy|copied|copy\\s+text|copy\\s+link)(?:$|[\\s:_-])|コピーしました|クリップボードにコピー|(?:^|\\s)コピー(?:$|\\s)",
         )
     }
 
@@ -45,6 +39,13 @@ class ClipboardAccessibilityService : AccessibilityService() {
                 AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
             notificationTimeout = 50
         }
+        RelayHealthStore.record(
+            applicationContext,
+            category = "clipboard",
+            trigger = "service_connected",
+            path = "accessibility",
+            result = "ready",
+        )
         ClipboardRelayDispatcher.schedule(applicationContext)
     }
 
@@ -55,10 +56,12 @@ class ClipboardAccessibilityService : AccessibilityService() {
 
         when (current.eventType) {
             AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> rememberSelection(current)
-            AccessibilityEvent.TYPE_VIEW_CLICKED,
-            AccessibilityEvent.TYPE_ANNOUNCEMENT,
-            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED,
-            -> if (looksLikeCopyConfirmation(current)) scheduleCapture(current)
+            AccessibilityEvent.TYPE_VIEW_CLICKED ->
+                if (looksLikeCopyConfirmation(current)) scheduleCapture(current, "click")
+            AccessibilityEvent.TYPE_ANNOUNCEMENT ->
+                if (looksLikeCopyConfirmation(current)) scheduleCapture(current, "announcement")
+            AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED ->
+                if (looksLikeCopyConfirmation(current)) scheduleCapture(current, "copy_notice")
         }
     }
 
@@ -70,7 +73,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
             current.keyCode == KeyEvent.KEYCODE_C &&
             current.isCtrlPressed
         ) {
-            scheduleCapture(null)
+            scheduleCapture(null, "ctrl_c")
         }
         return false
     }
@@ -96,6 +99,13 @@ class ClipboardAccessibilityService : AccessibilityService() {
             lastSelectedText = selected.take(MAX_TEXT_LENGTH)
             lastSelectionAt = System.currentTimeMillis()
             lastSourcePackage = event.packageName?.toString().orEmpty()
+            RelayHealthStore.record(
+                applicationContext,
+                category = "clipboard",
+                trigger = "selection",
+                path = "accessibility_selection",
+                result = "remembered",
+            )
         }
     }
 
@@ -111,20 +121,29 @@ class ClipboardAccessibilityService : AccessibilityService() {
             append(node?.contentDescription?.toString().orEmpty())
             append(' ')
             append(node?.viewIdResourceName.orEmpty())
-        }.lowercase()
-        return COPY_MARKERS.any(text::contains)
+        }
+        return COPY_MARKER_REGEX.containsMatchIn(text)
     }
 
-    private fun scheduleCapture(event: AccessibilityEvent?) {
+    private fun scheduleCapture(event: AccessibilityEvent?, trigger: String) {
         val sourcePackage = event?.packageName?.toString().orEmpty()
+        val completed = booleanArrayOf(false)
         listOf(80L, 250L, 700L).forEach { delay ->
-            handler.postDelayed({ captureClipboard(sourcePackage) }, delay)
+            handler.postDelayed(
+                {
+                    if (!completed[0]) {
+                        completed[0] = captureClipboard(sourcePackage, trigger)
+                    }
+                },
+                delay,
+            )
         }
     }
 
-    private fun captureClipboard(sourcePackage: String) {
-        if (!RelaySettingsStore.clipboardEnabled(this)) return
+    private fun captureClipboard(sourcePackage: String, trigger: String): Boolean {
+        if (!RelaySettingsStore.clipboardEnabled(this)) return true
 
+        var managerDenied = false
         val fromClipboard = try {
             val manager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = manager.primaryClip
@@ -134,6 +153,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
                 null
             }
         } catch (error: SecurityException) {
+            managerDenied = true
             Log.d(TAG, "ClipboardManager access was denied; using selected text fallback")
             null
         } catch (error: Exception) {
@@ -143,13 +163,31 @@ class ClipboardAccessibilityService : AccessibilityService() {
 
         val now = System.currentTimeMillis()
         val fallback = lastSelectedText?.takeIf {
-            now - lastSelectionAt <= SELECTION_TTL_MS
+            now - lastSelectionAt <= SELECTION_TTL_MS && it.isNotBlank()
         }
-        val value = (fromClipboard ?: fallback)
+        val managerValue = fromClipboard?.takeIf { it.isNotBlank() }
+        val rawValue = managerValue ?: fallback
+        val capturePath = when {
+            managerValue != null -> "clipboard_manager"
+            fallback != null -> "selected_text_fallback"
+            managerDenied -> "clipboard_denied_no_fallback"
+            else -> "no_text_available"
+        }
+        val value = rawValue
             ?.trim()
             ?.take(MAX_TEXT_LENGTH)
             ?.takeIf { it.isNotEmpty() }
-            ?: return
+
+        if (value == null) {
+            RelayHealthStore.record(
+                applicationContext,
+                category = "clipboard",
+                trigger = trigger,
+                path = capturePath,
+                result = "retrying",
+            )
+            return false
+        }
 
         val resolvedPackage = sourcePackage.ifBlank { lastSourcePackage }
         val item = ClipboardRelayStore.Item(
@@ -158,12 +196,27 @@ class ClipboardAccessibilityService : AccessibilityService() {
             sourcePackage = resolvedPackage,
             createdAt = now,
         )
-        if (ClipboardRelayStore.enqueue(applicationContext, item)) {
+        val queued = ClipboardRelayStore.enqueue(applicationContext, item)
+        if (queued) {
             ClipboardRelayDispatcher.schedule(applicationContext)
         }
+        RelayHealthStore.record(
+            applicationContext,
+            category = "clipboard",
+            trigger = trigger,
+            path = capturePath,
+            result = if (queued) "queued" else "deduplicated",
+        )
+        return true
     }
 
     override fun onInterrupt() {
-        // The system calls this when accessibility feedback is interrupted.
+        RelayHealthStore.record(
+            applicationContext,
+            category = "clipboard",
+            trigger = "service_interrupted",
+            path = "accessibility",
+            result = "interrupted",
+        )
     }
 }
