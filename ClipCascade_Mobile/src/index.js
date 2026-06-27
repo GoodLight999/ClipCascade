@@ -4,14 +4,11 @@
  *
  * Author: Sathvik Rao Poladi
  * License: GPL-3.0
- *
- * This file is the entry point for the React Native application.
- *
  */
 
 import {AppRegistry} from 'react-native';
-import App from './App';
+import AppRoot from './AppRoot';
 import {name as appName} from './app.json';
 
-AppRegistry.registerComponent(appName, () => App);
+AppRegistry.registerComponent(appName, () => AppRoot);
 AppRegistry.registerHeadlessTask('Restart', () => require('./HeadlessTask'));
