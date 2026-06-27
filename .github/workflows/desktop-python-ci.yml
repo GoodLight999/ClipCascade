@@ -1,0 +1,31 @@
+name: Desktop Python CI
+
+on:
+  push:
+    branches:
+      - stability-mobile-otp
+  pull_request:
+    paths:
+      - "ClipCascade_Desktop/src/**"
+      - ".github/workflows/desktop-python-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile desktop sources
+        run: python -m compileall -q ClipCascade_Desktop/src
