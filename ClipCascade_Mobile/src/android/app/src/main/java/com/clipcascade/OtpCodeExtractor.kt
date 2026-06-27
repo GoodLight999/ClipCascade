@@ -15,7 +15,11 @@ object OtpCodeExtractor {
     )
 
     private val candidateRegex = Regex(
-        pattern = "(?<![\\p{L}\\p{N}])([A-Z0-9](?:[\\s-]?[A-Z0-9]){3,15})(?![\\p{L}\\p{N}])",
+        pattern = "(?<![\\p{L}\\p{N}])(" +
+            "(?:[A-Z0-9]{2,5}(?:-[A-Z0-9]{2,5}){1,2})" +
+            "|(?:\\d{2,4}(?:[\\s-]\\d{2,4}){1,2})" +
+            "|(?:[A-Z0-9]{4,10})" +
+            ")(?![\\p{L}\\p{N}])",
         option = RegexOption.IGNORE_CASE,
     )
 
@@ -83,7 +87,6 @@ object OtpCodeExtractor {
                 if (value.all(Char::isDigit)) score += 20
                 if (value.length == 6) score += 30
                 if (value.length in 4..8) score += 10
-                if (raw.contains(':')) score += 5
                 candidates += ScoredCandidate(value.uppercase(), score)
             }
         }
