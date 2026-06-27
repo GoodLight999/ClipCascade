@@ -1,4 +1,3 @@
-// android\app\src\main\java\com\clipcascade\MainApplication.kt
 package com.clipcascade
 
 import android.app.Application
@@ -41,5 +40,6 @@ class MainApplication : Application(), ReactApplication {
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       load()
     }
+    NetworkRecoveryMonitor.register(this)
   }
 }
