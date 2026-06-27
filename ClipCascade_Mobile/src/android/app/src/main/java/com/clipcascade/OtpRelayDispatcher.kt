@@ -69,6 +69,14 @@ object OtpRelayDispatcher {
 
     @Synchronized
     fun tryDispatch(context: Context): Int {
+        val applicationContext = context.applicationContext
+        if (!RelaySettingsStore.codeRelayEnabled(applicationContext)) {
+            OtpRelayStore.clear(applicationContext)
+            inFlightId = null
+            inFlightSince = 0L
+            return 0
+        }
+
         val now = System.currentTimeMillis()
         val currentInFlight = inFlightId
         if (currentInFlight != null) {
@@ -78,7 +86,6 @@ object OtpRelayDispatcher {
             inFlightSince = 0L
         }
 
-        val applicationContext = context.applicationContext
         val asyncStorage = AsyncStorageBridge(applicationContext)
         try {
             if (!transportIsReady(asyncStorage)) return 0
