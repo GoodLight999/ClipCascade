@@ -43,6 +43,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
+      - name: Prepare Extended interface
+        run: node scripts/prepare_extended_bundle.js
+
       - name: Bundle JavaScript into Android assets
         shell: bash
         run: |
