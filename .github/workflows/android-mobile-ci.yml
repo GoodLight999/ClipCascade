@@ -71,12 +71,12 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
-      - name: Assemble signed standalone APK
+      - name: Test and assemble standalone APK
         shell: bash
         run: |
           set -o pipefail
           cd android
-          ./gradlew assembleDebug --stacktrace 2>&1 | tee ../android-build.log
+          ./gradlew testDebugUnitTest assembleDebug --stacktrace 2>&1 | tee ../android-build.log
 
       - name: Verify embedded bundle
         shell: bash
@@ -89,6 +89,14 @@ jobs:
         with:
           name: ClipCascade-Android-build-log
           path: ClipCascade_Mobile/src/android-build.log
+          if-no-files-found: warn
+
+      - name: Upload unit-test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-Android-unit-tests
+          path: ClipCascade_Mobile/src/android/app/build/reports/tests/testDebugUnitTest
           if-no-files-found: warn
 
       - name: Upload standalone APK
