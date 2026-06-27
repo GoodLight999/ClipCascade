@@ -41,16 +41,11 @@ class NotificationCodeListenerService : NotificationListenerService() {
 
         val joinedText = collectNotificationText(notification)
         val value = OtpCodeExtractor.extract(joinedText) ?: return
-        val title = notification.extras
-            ?.getCharSequence(Notification.EXTRA_TITLE)
-            ?.toString()
-            .orEmpty()
 
         val item = OtpRelayStore.Item(
             id = "${posted.packageName}:${posted.key}:${posted.postTime}:$value",
             code = value,
             sourcePackage = posted.packageName,
-            sourceTitle = title,
             createdAt = System.currentTimeMillis(),
         )
 
