@@ -1,11 +1,20 @@
 import logging
+import os
 import threading
 import time
 
 from pystray import Menu, MenuItem as item
 
+from core.constants import get_program_files_directory
 from gui.status_dialog import show_connection_status
 from gui.tray import TaskbarPanel
+
+
+SHOW_WINDOW_REQUEST_FILE = "show-window.request"
+
+
+def get_show_window_request_path():
+    return os.path.join(get_program_files_directory(), SHOW_WINDOW_REQUEST_FILE)
 
 
 class EnhancedTaskbarPanel(TaskbarPanel):
@@ -81,9 +90,23 @@ class EnhancedTaskbarPanel(TaskbarPanel):
             except Exception:
                 logging.exception("Failed to update tray state")
 
+    def _consume_show_window_request(self):
+        path = get_show_window_request_path()
+        if not os.path.exists(path):
+            return
+        try:
+            os.remove(path)
+        except OSError:
+            logging.exception("Failed to remove status-window request file")
+        try:
+            self.root.after(0, self._show_status_on_ui_thread)
+        except Exception:
+            logging.exception("Failed to process status-window request")
+
     def _update_stats_thread(self):
         while not self._stop_status_poll.wait(1):
             try:
+                self._consume_show_window_request()
                 self._sync_tray_state()
                 current_stats = self.ws_interface.get_stats()
                 if current_stats is not None and self.previous_stats != current_stats:
