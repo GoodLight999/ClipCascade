@@ -1,227 +1,210 @@
 # Next ChatGPT Thread — Start Here
 
-This file is written so a new ChatGPT thread can continue the work without relying on hidden conversation history.
+This file lets a new ChatGPT thread continue without hidden conversation history.
 
 ## Repository and branch
 
 - Repository: `GoodLight999/ClipCascade`
-- Repository visibility at the time of writing: **public**
+- Repository visibility: **public**
 - Development branch: `stability-mobile-otp`
 - Draft PR: `#1`
 - Base branch: `main`
 
-Because the repository is public, this branch and these documents are also public. Do not add secrets. If private development is required, first move/copy this branch to a private repository.
+A branch in a public repository is public. Do not add credentials, private server details, real notification contents, verification values, or clipboard contents.
 
-## Read these files in order
+## Read in this order
 
-1. `docs/REQUIREMENTS.md` — canonical product requirements and Definition of Done
-2. `docs/CURRENT_STATUS.md` — what is implemented and what is not
-3. `docs/TEST_MATRIX.md` — required real-device and regression tests
-4. This file — continuation instructions
+1. `docs/REQUIREMENTS.md`
+2. `docs/CURRENT_STATUS.md`
+3. `docs/TEST_MATRIX.md`
+4. This file
 
 ## User intent
 
-The user wants a practical daily-use Android ↔ Windows clipboard synchronizer with these defining features:
+Build a practical Android ↔ Windows clipboard synchronizer with:
 
-- No ADB, root, or Shizuku for normal use
-- Accessibility-based ordinary text copy relay from Android to Windows
-- NotificationListenerService-based local extraction of verification codes from SMS/email/app notifications
-- Only the extracted code is sent, not the notification body
-- Screen-off/locked operation on HONOR 400 Pro / Android 16 / MagicOS
-- Persistent queues and recovery after disconnect, sleep, process death, and reboot
-- Visible Windows status/control UI and self-recovery
-- Installable standalone APK and repeatable releases
-- No personal handle in product identity
+- no ADB, root, or Shizuku for normal use
+- AccessibilityService-based ordinary text copy relay
+- local verification-code extraction through user-authorized notification access
+- only the extracted value sent; notification title/body remain local and are not persisted
+- screen-off/locked operation on HONOR 400 Pro / Android 16 / MagicOS
+- persistent queues and recovery after disconnect, sleep, process death, and reboot
+- visible Windows status/control UI and self-recovery
+- standalone APK and repeatable Windows/Android packages
+- no personal handle in product identity
 
-The user strongly dislikes inflated completion claims. Distinguish compile success, implementation, local transport acceptance, peer receipt, and real-device verification.
+The user strongly dislikes inflated completion claims. Distinguish compilation, simulated/unit validation, local transport acceptance, peer clipboard application, and real-device verification.
 
-## Current artifact identity
+## Artifact identity
 
-- App display name: `ClipCascade Extended`
+- App name: `ClipCascade Extended`
 - Android package: `com.clipcascade.extended`
-- Current development version family: `3.2.1-extended.*`
-- Build target: ARM64
+- Version family: `3.2.1-extended.*`
+- Android target artifact: ARM64 standalone APK
 
-Older test packages containing personal branding are obsolete and should not be used.
+Older test packages containing personal branding are obsolete.
 
-## Current branch architecture
+## Current architecture
 
-### Android input sources
+### Android inputs
 
-1. `ClipboardAccessibilityService`
-   - Watches likely copy-related accessibility events.
-   - Attempts ClipboardManager read.
-   - Falls back to recent selected text.
-   - Enqueues into `ClipboardRelayStore`.
+`ClipboardAccessibilityService`
 
-2. `NotificationCodeListenerService`
-   - Reads user-authorized notifications.
-   - Applies optional package filter.
-   - Extracts a code using `OtpCodeExtractor`.
-   - Enqueues only the extracted code into `OtpRelayStore`.
+- detects bounded Japanese/English copy cues, selection events, and Ctrl+C
+- attempts direct ClipboardManager access
+- falls back to recent selected text
+- performs three delayed attempts but stops after first success
+- enqueues into `ClipboardRelayStore`
+- records content-free health state only
 
-### Native queues
+`NotificationCodeListenerService`
 
-- `ClipboardRelayStore`: bounded persistent text queue, TTL, dedupe
-- `OtpRelayStore`: bounded persistent code queue, TTL, dedupe
+- reads user-authorized notifications locally
+- applies optional source-app filter
+- extracts with `OtpCodeExtractor`
+- persists only extracted value, source package, timestamp, and internal ID
+- never persists notification title/body
+- enqueues into `OtpRelayStore`
 
-### Dispatch and acknowledgement
+### Queues and settings
 
-- `ClipboardRelayDispatcher`
-- `OtpRelayDispatcher`
-- `RelaySettingsModule.acknowledgeRelay()`
+- bounded persistent queues with TTL and duplicate suppression
+- synchronous queue persistence
+- disabling a relay clears its pending queue
+- changing notification-source policy clears old verification values
+- settings show queue counts, never contents
+- settings can clear queues and content-free diagnostics
+
+### Acknowledgement
+
+Common local path:
+
+`QUEUED -> NATIVE_IN_FLIGHT -> JS_SEND_ATTEMPT -> LOCAL_TRANSPORT_ACCEPTED`
+
+P2S:
+
+`LOCAL_TRANSPORT_ACCEPTED -> NATIVE_ACK -> DELETE`
+
+P2P with Extended Windows:
+
+`LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_RECEIVED -> WINDOWS_TEXT_APPLIED -> PEER_ACK -> NATIVE_ACK -> DELETE`
+
+P2P with an old/non-Extended peer:
+
+`LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
+
+Relevant files:
+
+- Android dispatchers and `RelaySettingsModule`
 - `scripts/prepare_relay_transport_ack.js`
 - `scripts/prepare_relay_startup_order.js`
+- `scripts/prepare_service_listener_lifecycle.js`
+- `scripts/prepare_p2p_peer_ack.js`
+- `scripts/prepare_p2p_ack_validation_order.js`
+- Windows `scripts/prepare_p2p_peer_ack.py`
 
-Implemented behavior:
-
-1. Native emits one queued item with `relayId` and source metadata but keeps it queued/in-flight.
-2. JavaScript performs the P2S or P2P send.
-3. P2S reports accepted only after an active STOMP client accepts `publish`.
-4. P2P reports accepted only after at least one open DataChannel accepts every fragment.
-5. JavaScript calls the native acknowledgement method only after that accepted-send result.
-6. Native removes the item after acknowledgement.
-7. A missing acknowledgement times out after 15 seconds and the item retries.
-8. Persistent queues resume after `SHARED_TEXT` listener registration.
-
-Remaining limitation:
-
-This is a **local transport acceptance acknowledgement**, not an end-to-end Windows clipboard-applied acknowledgement. A future protocol extension is needed for:
-
-`WINDOWS_RECEIVED -> WINDOWS_CLIPBOARD_APPLIED -> PEER_ACK`
-
-### Android settings
-
-- `RelaySettingsActivity`
-- `RelaySettingsModule` / `RelaySettingsPackage`
-- `AppRoot.js` persistent settings button
+The peer ACK is backward-compatible metadata/control traffic. Windows ACKs only after validated text clipboard application or a duplicate already applied. P2S still lacks peer-level ACK.
 
 ### Recovery
 
-- `HeadlessTask.js`: boot and health-failure entry points
-- `HeadlessTaskService.kt`: 30-second timeout
-- `BootReceiver.kt`: starts Headless task and acquires wake lock
-- `ScheduleService.kt`: heartbeat worker
+- `RecoveryCoordinator.kt`: native request routing and cooldown
+- `RecoveryListener.js`: singleton graceful stop/restart path
+- `ScheduleService.kt`: heartbeat-triggered recovery with notification fallback
+- `NetworkRecoveryMonitor.kt`: queue wake-up and delayed recovery after network return
+- `HeadlessTask.js` / `HeadlessTaskService.kt`: boot/health background path
+- `BootReceiver.kt`: boot event and wake lock
 
-Current gap:
+Recovery asks the old service to terminate, waits up to eight seconds for cleanup, then force-stops only if the old generation is dead. Listener subscriptions are scoped per service generation so old shutdown cannot remove a new generation's listeners.
 
-- `ScheduleService` still notifies after heartbeat failure instead of launching the health-failure task itself.
-- An attempted direct automatic-recovery write was not applied.
-- Foreground-service startup does resume both native relay queues after listener registration.
+### Legacy ADB path removed
+
+- no logcat clipboard parsing
+- no `READ_LOGS`
+- no overlay permission
+- no floating clipboard activity registration
+- text is owned by Accessibility relay when enabled
+- image/file upstream behavior remains
 
 ### Windows
 
-- `WindowsApplication` wrapper
-- Enhanced tray
-- Live status dialog
-- Watchdog and rotating logs
+- visible status/control window
+- restart/reconnect/disconnect/log/diagnostics controls
+- P2P teardown and watchdog recovery
+- rotating logs
+- P2P Extended receiver sends clipboard-applied ACK
 
-## Completed development milestone
+## CI status
 
-### Incremental transport acknowledgement
+P2P peer-ACK implementation passed:
 
-Completed and CI-validated:
+Android run `28291402373`:
 
-- No deletion immediately after React event emission
-- One native in-flight item at a time
-- 15-second retry timeout
-- P2S accepted-send result
-- P2P open-channel/all-fragment accepted-send result
-- JS-to-native ACK
-- Queue resume after listener registration
-- Manual-share behavior preserved separately from background relay
+- all JavaScript transformation steps
+- Hermes bundle
+- app-scoped verification extractor unit tests
+- Kotlin/Java compilation
+- APK build
+- embedded-bundle check
+- test/build/APK artifact uploads
 
-Do not call this end-to-end delivery acknowledgement.
+Windows run `28291402372`:
+
+- P2P ACK patch
+- Python compilation
+- dependency installation
+- PyInstaller build
+- EXE artifact upload
+
+Release workflow has been aligned with the same Android validation-order correction and Windows ACK patch. No release tag has been published.
 
 ## Highest-priority next tasks
 
-### Priority 1 — recovery wiring
+### Priority 1 — target-device test build and guided validation
 
-- Make heartbeat failure launch actual recovery where Android permits.
-- Keep notification/user-action fallback because Android may reject background service starts.
-- Prevent duplicate restart loops.
-- Verify `wsIsRunning` semantics after process death.
-- Ensure clipboard and OTP queues resume after boot, foreground-service replacement, and connectivity recovery.
-- Run CI after each coherent recovery change.
+- download the latest APK and Windows EXE artifacts
+- install current APK on HONOR 400 Pro
+- test settings/test relay first
+- test Chrome, browser/WebView, Gmail, SMS, LINE/Discord/editor copies
+- inspect content-free diagnostics when a copy fails
+- test screen on/background/locked/15–30 minute screen-off
+- test queue delivery after Windows/network returns
+- test process kill and reboot
 
-### Priority 2 — peer-level acknowledgement design
+### Priority 2 — Android 16 notification redaction
 
-- Define a backward-compatible envelope containing a message/relay ID.
-- Windows receiver should ACK only after clipboard application succeeds.
-- Android should retain the queue item until peer ACK or a bounded retry policy.
-- Decide explicit semantics for multiple P2P peers.
-- Do not break older upstream clients without a compatibility mode.
+- measure actual notification fields received from SMS/email apps
+- determine whether OTP content is redacted on the target device
+- do not claim or implement a bypass
+- if redacted, design a legitimate companion-device association or explicit manual fallback
 
-### Priority 3 — accessibility correctness
+### Priority 3 — P2S peer acknowledgement
 
-- Add diagnostics that never log clipboard contents: event type, source package, capture path, queue result, ACK stage.
-- Add per-app compatibility testing.
-- Reduce false positives from generic buttons containing `copy`.
-- Confirm `canRetrieveWindowContent` and service metadata on the target device.
-- Consider a user-triggered accessibility action fallback when automatic detection is impossible.
+- inspect the server relay protocol and compatibility constraints
+- design an optional message ID and receipt path that old clients ignore
+- ACK only after Windows clipboard application
+- do not require a server migration without a compatibility mode
 
-### Priority 4 — Android 16 notification behavior
+### Priority 4 — P2P semantics and behavior tests
 
-Use current official Android documentation and real-device evidence. Determine whether OTP text is redacted for the target notification sources. Do not promise a bypass. If redacted, document which legitimate architecture can satisfy the use case, such as an approved companion-device relationship or user-selected/manual fallback.
+- define first-peer versus all-peer acknowledgement policy
+- add automated tests for ACK envelopes, validation rejection, duplicate ACK, fallback timer, and old-client behavior
+- exercise real Extended Android ↔ Extended Windows P2P
 
 ### Priority 5 — regression and release
 
-- Test P2S and P2P.
-- Test upstream text/image/file paths.
-- Test Windows control/recovery.
-- Publish only after the matrix passes.
+- run upstream text/image/file matrix in P2S and P2P
+- test Windows recovery controls
+- publish only artifacts built from the tested commit
 
-## Latest known CI result
+## Important remaining limitations
 
-Latest code-bearing head documented before this handoff refresh:
+- Accessibility compatibility is not universal until tested per app.
+- Android 16 may redact verification-code notification content.
+- P2S confirms only local STOMP publish, not Windows application.
+- P2P old-client fallback confirms only local DataChannel acceptance.
+- Multiple-P2P-peer ACK semantics are not explicit.
+- Recovery is not proven against MagicOS process management.
 
-`ed42333ec46cf236c52e33f14b13bc36cf555479`
+## Suggested first message for a new thread
 
-Android workflow passed:
-
-- Extended UI preparation
-- Relay transport ACK transformation
-- Relay startup ordering
-- JavaScript/Hermes bundle
-- Gradle APK build
-- Embedded bundle verification
-- Artifact upload
-
-Windows workflow passed:
-
-- Python source compilation
-- Dependency installation
-- PyInstaller executable build
-- Artifact upload
-
-Documentation-only commits may appear after that code-bearing head and can trigger another CI run even though code is unchanged.
-
-## Useful CI files
-
-Android CI workflow: `.github/workflows/android-mobile-ci.yml`
-
-It:
-
-- installs JS dependencies
-- rewrites obsolete ADB instructions for the distributed bundle
-- patches transport acknowledgement behavior
-- orders queue startup after listener registration
-- creates `index.android.bundle`
-- builds signed debug/standalone APK
-- verifies the bundle exists inside the APK
-- uploads `ClipCascade-Extended-standalone`
-
-Release workflow: `.github/workflows/fork-release.yml`
-
-Release tag prefix: `extended-v*`
-
-## Safety and privacy constraints
-
-- Do not commit actual codes, notification contents, credentials, or server details.
-- Do not log clipboard text or notification text.
-- Do not attempt to evade Android platform restrictions.
-- User authorization through Accessibility and Notification Access settings is required.
-
-## Suggested first message for the next ChatGPT thread
-
-> Open `GoodLight999/ClipCascade`, branch `stability-mobile-otp`. Read `docs/progress.md`, `docs/REQUIREMENTS.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_CHATGPT_HANDOFF.md`, and `docs/TEST_MATRIX.md`. Continue Priority 1: recovery wiring. Preserve the transport-ACK behavior already implemented, keep PR #1 draft, and run Android CI after each coherent change.
+> Open `GoodLight999/ClipCascade`, branch `stability-mobile-otp`. Read `docs/progress.md`, `docs/REQUIREMENTS.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_CHATGPT_HANDOFF.md`, and `docs/TEST_MATRIX.md`. Continue Priority 1: fetch the latest Android and Windows artifacts and guide HONOR 400 Pro + Windows testing. Preserve the P2P clipboard-applied ACK, keep PR #1 Draft, and update the test matrix with actual results.
