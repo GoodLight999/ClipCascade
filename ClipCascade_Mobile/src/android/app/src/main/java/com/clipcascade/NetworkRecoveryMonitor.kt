@@ -19,6 +19,9 @@ object NetworkRecoveryMonitor {
     @Volatile
     private var networkGeneration = 0L
 
+    @Volatile
+    private var activeDefaultNetwork: Network? = null
+
     @Synchronized
     fun register(context: Context) {
         if (registered) return
@@ -32,13 +35,22 @@ object NetworkRecoveryMonitor {
             manager.registerDefaultNetworkCallback(
                 object : ConnectivityManager.NetworkCallback() {
                     override fun onAvailable(network: Network) {
-                        val generation = ++networkGeneration
+                        val generation = synchronized(this@NetworkRecoveryMonitor) {
+                            activeDefaultNetwork = network
+                            networkGeneration += 1
+                            networkGeneration
+                        }
+
                         ClipboardRelayDispatcher.schedule(applicationContext)
                         OtpRelayDispatcher.schedule(applicationContext)
 
                         handler.postDelayed(
                             {
-                                if (generation != networkGeneration) return@postDelayed
+                                val isStillCurrent = synchronized(this@NetworkRecoveryMonitor) {
+                                    generation == networkGeneration &&
+                                        activeDefaultNetwork == network
+                                }
+                                if (!isStillCurrent) return@postDelayed
                                 requestRecoveryIfStillOffline(applicationContext)
                             },
                             RECOVERY_GRACE_MS,
@@ -46,7 +58,15 @@ object NetworkRecoveryMonitor {
                     }
 
                     override fun onLost(network: Network) {
-                        networkGeneration += 1
+                        synchronized(this@NetworkRecoveryMonitor) {
+                            // During a default-network handover Android may announce
+                            // the replacement before reporting the old network lost.
+                            // Do not cancel the replacement network's delayed recovery.
+                            if (activeDefaultNetwork == network) {
+                                activeDefaultNetwork = null
+                                networkGeneration += 1
+                            }
+                        }
                     }
                 },
             )
