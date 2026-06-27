@@ -22,4 +22,31 @@ class RelaySettingsModule(
             promise.reject("RELAY_SETTINGS_ERROR", "Unable to open relay settings", error)
         }
     }
+
+    @ReactMethod
+    fun acknowledgeRelay(relayId: String, source: String, promise: Promise) {
+        try {
+            val acknowledged = when (source) {
+                "accessibility_clipboard" ->
+                    ClipboardRelayDispatcher.acknowledge(reactApplicationContext, relayId)
+                "notification_code" ->
+                    OtpRelayDispatcher.acknowledge(reactApplicationContext, relayId)
+                else -> false
+            }
+            promise.resolve(acknowledged)
+        } catch (error: Exception) {
+            promise.reject("RELAY_ACK_ERROR", "Unable to acknowledge relay item", error)
+        }
+    }
+
+    @ReactMethod
+    fun resumeRelayQueues(promise: Promise) {
+        try {
+            ClipboardRelayDispatcher.schedule(reactApplicationContext)
+            OtpRelayDispatcher.schedule(reactApplicationContext)
+            promise.resolve(true)
+        } catch (error: Exception) {
+            promise.reject("RELAY_RESUME_ERROR", "Unable to resume relay queues", error)
+        }
+    }
 }
