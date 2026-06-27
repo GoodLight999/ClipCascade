@@ -66,6 +66,13 @@ object ClipboardRelayDispatcher {
 
     @Synchronized
     private fun tryDispatch(context: Context): Boolean {
+        if (!RelaySettingsStore.clipboardEnabled(context)) {
+            ClipboardRelayStore.clear(context)
+            inFlightId = null
+            inFlightSince = 0L
+            return false
+        }
+
         val now = System.currentTimeMillis()
         val currentInFlight = inFlightId
         if (currentInFlight != null) {
