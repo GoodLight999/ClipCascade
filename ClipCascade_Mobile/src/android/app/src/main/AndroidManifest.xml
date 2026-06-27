@@ -61,7 +61,8 @@
         android:excludeFromRecents="true"
         android:noHistory="true"
         android:showWhenLocked="true"
-        android:launchMode="singleTop" />
+        android:launchMode="singleTop"
+        android:taskAffinity="com.clipcascade.clipboardhelper" />
 
       <service
         android:name="app.notifee.core.ForegroundService"
