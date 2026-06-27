@@ -33,7 +33,7 @@ The user wants a practical daily-use Android ↔ Windows clipboard synchronizer 
 - Installable standalone APK and repeatable releases
 - No personal handle in product identity
 
-The user strongly dislikes inflated completion claims. Distinguish compile success, implementation, and real-device verification.
+The user strongly dislikes inflated completion claims. Distinguish compile success, implementation, local transport acceptance, peer receipt, and real-device verification.
 
 ## Current artifact identity
 
@@ -65,14 +65,30 @@ Older test packages containing personal branding are obsolete and should not be 
 - `ClipboardRelayStore`: bounded persistent text queue, TTL, dedupe
 - `OtpRelayStore`: bounded persistent code queue, TTL, dedupe
 
-### Current dispatchers
+### Dispatch and acknowledgement
 
 - `ClipboardRelayDispatcher`
 - `OtpRelayDispatcher`
+- `RelaySettingsModule.acknowledgeRelay()`
+- `scripts/prepare_relay_transport_ack.js`
+- `scripts/prepare_relay_startup_order.js`
 
-Both wait for React context and local transport-ready state, then emit `SHARED_TEXT`.
+Implemented behavior:
 
-**Known correctness bug:** both delete after local event emission rather than transport or peer acknowledgement.
+1. Native emits one queued item with `relayId` and source metadata but keeps it queued/in-flight.
+2. JavaScript performs the P2S or P2P send.
+3. P2S reports accepted only after an active STOMP client accepts `publish`.
+4. P2P reports accepted only after at least one open DataChannel accepts every fragment.
+5. JavaScript calls the native acknowledgement method only after that accepted-send result.
+6. Native removes the item after acknowledgement.
+7. A missing acknowledgement times out after 15 seconds and the item retries.
+8. Persistent queues resume after `SHARED_TEXT` listener registration.
+
+Remaining limitation:
+
+This is a **local transport acceptance acknowledgement**, not an end-to-end Windows clipboard-applied acknowledgement. A future protocol extension is needed for:
+
+`WINDOWS_RECEIVED -> WINDOWS_CLIPBOARD_APPLIED -> PEER_ACK`
 
 ### Android settings
 
@@ -83,9 +99,15 @@ Both wait for React context and local transport-ready state, then emit `SHARED_T
 ### Recovery
 
 - `HeadlessTask.js`: boot and health-failure entry points
+- `HeadlessTaskService.kt`: 30-second timeout
+- `BootReceiver.kt`: starts Headless task and acquires wake lock
 - `ScheduleService.kt`: heartbeat worker
 
-**Known gap:** worker currently notifies on failure rather than actually launching the health-failure recovery event; queues are not explicitly resumed from every recovery entry point.
+Current gap:
+
+- `ScheduleService` still notifies after heartbeat failure instead of launching the health-failure task itself.
+- An attempted direct automatic-recovery write was not applied.
+- Foreground-service startup does resume both native relay queues after listener registration.
 
 ### Windows
 
@@ -94,36 +116,48 @@ Both wait for React context and local transport-ready state, then emit `SHARED_T
 - Live status dialog
 - Watchdog and rotating logs
 
+## Completed development milestone
+
+### Incremental transport acknowledgement
+
+Completed and CI-validated:
+
+- No deletion immediately after React event emission
+- One native in-flight item at a time
+- 15-second retry timeout
+- P2S accepted-send result
+- P2P open-channel/all-fragment accepted-send result
+- JS-to-native ACK
+- Queue resume after listener registration
+- Manual-share behavior preserved separately from background relay
+
+Do not call this end-to-end delivery acknowledgement.
+
 ## Highest-priority next tasks
 
-### Priority 1 — transport acknowledgement
+### Priority 1 — recovery wiring
 
-Do not delete native queue items directly after `DeviceEventEmitter.emit`.
-
-Recommended incremental design:
-
-1. Native dispatcher emits one item with `relayId` and source metadata but leaves it queued/in-flight.
-2. JavaScript `SHARED_TEXT` handler performs the existing P2S/P2P send.
-3. JavaScript calls a native acknowledgement module only after the actual transport send function accepts the item.
-4. Native store marks/removes the matching item.
-5. Add in-flight timeout so a missing acknowledgement returns the item to retry.
-6. Later, if feasible, extend the wire protocol with peer-level ACK after Windows applies the clipboard.
-
-Inspect `StartForegroundService.js` for `SHARED_TEXT` listener and P2S/P2P send paths before editing. Preserve ordinary manual share behavior.
-
-### Priority 2 — recovery wiring
-
-- Make heartbeat failure launch actual foreground-service recovery.
-- On boot/service start/reconnect, call both queue dispatchers.
+- Make heartbeat failure launch actual recovery where Android permits.
+- Keep notification/user-action fallback because Android may reject background service starts.
 - Prevent duplicate restart loops.
-- Verify `wsIsRunning` semantics so recovery does not incorrectly no-op after process death.
+- Verify `wsIsRunning` semantics after process death.
+- Ensure clipboard and OTP queues resume after boot, foreground-service replacement, and connectivity recovery.
+- Run CI after each coherent recovery change.
+
+### Priority 2 — peer-level acknowledgement design
+
+- Define a backward-compatible envelope containing a message/relay ID.
+- Windows receiver should ACK only after clipboard application succeeds.
+- Android should retain the queue item until peer ACK or a bounded retry policy.
+- Decide explicit semantics for multiple P2P peers.
+- Do not break older upstream clients without a compatibility mode.
 
 ### Priority 3 — accessibility correctness
 
-- Add observable diagnostics that do not log clipboard contents: event type, source package, capture path, queue result.
+- Add diagnostics that never log clipboard contents: event type, source package, capture path, queue result, ACK stage.
 - Add per-app compatibility testing.
 - Reduce false positives from generic buttons containing `copy`.
-- Confirm `canRetrieveWindowContent` and service metadata are sufficient on the target device.
+- Confirm `canRetrieveWindowContent` and service metadata on the target device.
 - Consider a user-triggered accessibility action fallback when automatic detection is impossible.
 
 ### Priority 4 — Android 16 notification behavior
@@ -137,7 +171,32 @@ Use current official Android documentation and real-device evidence. Determine w
 - Test Windows control/recovery.
 - Publish only after the matrix passes.
 
-## Useful commands / CI
+## Latest known CI result
+
+Latest code-bearing head documented before this handoff refresh:
+
+`ed42333ec46cf236c52e33f14b13bc36cf555479`
+
+Android workflow passed:
+
+- Extended UI preparation
+- Relay transport ACK transformation
+- Relay startup ordering
+- JavaScript/Hermes bundle
+- Gradle APK build
+- Embedded bundle verification
+- Artifact upload
+
+Windows workflow passed:
+
+- Python source compilation
+- Dependency installation
+- PyInstaller executable build
+- Artifact upload
+
+Documentation-only commits may appear after that code-bearing head and can trigger another CI run even though code is unchanged.
+
+## Useful CI files
 
 Android CI workflow: `.github/workflows/android-mobile-ci.yml`
 
@@ -145,6 +204,8 @@ It:
 
 - installs JS dependencies
 - rewrites obsolete ADB instructions for the distributed bundle
+- patches transport acknowledgement behavior
+- orders queue startup after listener registration
 - creates `index.android.bundle`
 - builds signed debug/standalone APK
 - verifies the bundle exists inside the APK
@@ -163,4 +224,4 @@ Release tag prefix: `extended-v*`
 
 ## Suggested first message for the next ChatGPT thread
 
-> Open `GoodLight999/ClipCascade`, branch `stability-mobile-otp`. Read `docs/REQUIREMENTS.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_CHATGPT_HANDOFF.md`, and `docs/TEST_MATRIX.md`. Continue Priority 1: implement JS-to-native transport acknowledgement so native clipboard/OTP queues are not deleted merely on React event emission. Keep the PR draft and run Android CI after each coherent change.
+> Open `GoodLight999/ClipCascade`, branch `stability-mobile-otp`. Read `docs/progress.md`, `docs/REQUIREMENTS.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_CHATGPT_HANDOFF.md`, and `docs/TEST_MATRIX.md`. Continue Priority 1: recovery wiring. Preserve the transport-ACK behavior already implemented, keep PR #1 draft, and run Android CI after each coherent change.
