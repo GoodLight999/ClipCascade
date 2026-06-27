@@ -30,7 +30,16 @@ object RecoveryCoordinator {
 
         val storage = AsyncStorageBridge(applicationContext)
         try {
-            if (storage.getValue("wsIsRunning") != "true") return false
+            if (storage.getValue("wsIsRunning") != "true") {
+                RelayHealthStore.record(
+                    applicationContext,
+                    category = "recovery",
+                    trigger = reason,
+                    path = "coordinator",
+                    result = "sync_disabled",
+                )
+                return false
+            }
         } finally {
             storage.disconnect()
         }
@@ -38,11 +47,25 @@ object RecoveryCoordinator {
         val now = SystemClock.elapsedRealtime()
         if (now - lastRequestElapsedMs < MIN_REQUEST_INTERVAL_MS) {
             Log.i(TAG, "Recovery request suppressed by cooldown")
+            RelayHealthStore.record(
+                applicationContext,
+                category = "recovery",
+                trigger = reason,
+                path = "coordinator",
+                result = "cooldown",
+            )
             return true
         }
 
         if (emitToActiveReactContext(applicationContext, reason)) {
             lastRequestElapsedMs = now
+            RelayHealthStore.record(
+                applicationContext,
+                category = "recovery",
+                trigger = reason,
+                path = "active_react_context",
+                result = "requested",
+            )
             return true
         }
 
@@ -54,14 +77,35 @@ object RecoveryCoordinator {
             val component = applicationContext.startService(intent)
             if (component == null) {
                 Log.w(TAG, "Android declined the Headless JS recovery start")
+                RelayHealthStore.record(
+                    applicationContext,
+                    category = "recovery",
+                    trigger = reason,
+                    path = "headless_js",
+                    result = "declined",
+                )
                 false
             } else {
                 HeadlessJsTaskService.acquireWakeLockNow(applicationContext)
                 lastRequestElapsedMs = now
+                RelayHealthStore.record(
+                    applicationContext,
+                    category = "recovery",
+                    trigger = reason,
+                    path = "headless_js",
+                    result = "requested",
+                )
                 true
             }
         } catch (error: Exception) {
             Log.w(TAG, "Background recovery start was not allowed", error)
+            RelayHealthStore.record(
+                applicationContext,
+                category = "recovery",
+                trigger = reason,
+                path = "headless_js",
+                result = "blocked",
+            )
             false
         }
     }
