@@ -108,7 +108,6 @@ object OtpRelayDispatcher {
                     putString("text", item.code)
                     putString("relayId", item.id)
                     putString("source", "notification_code")
-                    putString("sourcePackage", item.sourcePackage)
                 }
                 reactContext
                     .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
