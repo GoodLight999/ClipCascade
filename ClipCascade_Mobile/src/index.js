@@ -9,6 +9,9 @@
 import {AppRegistry} from 'react-native';
 import AppRoot from './AppRoot';
 import {name as appName} from './app.json';
+import {registerRecoveryListener} from './RecoveryListener';
+
+registerRecoveryListener();
 
 AppRegistry.registerComponent(appName, () => AppRoot);
 AppRegistry.registerHeadlessTask('Restart', () => require('./HeadlessTask'));
