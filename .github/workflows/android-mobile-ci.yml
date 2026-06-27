@@ -76,7 +76,7 @@ jobs:
         run: |
           set -o pipefail
           cd android
-          ./gradlew testDebugUnitTest assembleDebug --stacktrace 2>&1 | tee ../android-build.log
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug --stacktrace 2>&1 | tee ../android-build.log
 
       - name: Verify embedded bundle
         shell: bash
