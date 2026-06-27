@@ -1,10 +1,12 @@
 package com.clipcascade
 
 import android.content.Context
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 
 object OtpRelayStore {
+    private const val TAG = "OtpRelayStore"
     private const val PREFS_NAME = "clipcascade_otp_relay"
     private const val KEY_QUEUE = "pending_items"
     private const val MAX_ITEMS = 32
@@ -70,6 +72,11 @@ object OtpRelayStore {
     }
 
     @Synchronized
+    fun clear(context: Context) {
+        writeItems(context, emptyList())
+    }
+
+    @Synchronized
     fun pendingCount(context: Context): Int = activeItems(context).size
 
     private fun activeItems(context: Context): List<Item> {
@@ -96,7 +103,8 @@ object OtpRelayStore {
                     Item.fromJson(value)?.let(::add)
                 }
             }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.w(TAG, "Discarding an unreadable verification queue", error)
             emptyList()
         }
     }
@@ -104,10 +112,13 @@ object OtpRelayStore {
     private fun writeItems(context: Context, items: List<Item>) {
         val array = JSONArray()
         items.forEach { array.put(it.toJson()) }
-        context.applicationContext
+        val committed = context.applicationContext
             .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_QUEUE, array.toString())
-            .apply()
+            .commit()
+        if (!committed) {
+            Log.w(TAG, "Unable to persist verification queue state")
+        }
     }
 }
