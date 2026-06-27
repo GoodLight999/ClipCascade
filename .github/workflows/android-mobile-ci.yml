@@ -17,6 +17,8 @@ jobs:
   build-standalone:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    env:
+      CLIPCASCADE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     defaults:
       run:
@@ -85,7 +87,7 @@ jobs:
           ./gradlew \
             :app:testDebugUnitTest \
             :app:assembleDebug \
-            -PclipcascadeBuildSha="${GITHUB_SHA}" \
+            -PclipcascadeBuildSha="${CLIPCASCADE_SOURCE_SHA}" \
             --stacktrace 2>&1 | tee ../android-build.log
 
       - name: Verify embedded bundle
