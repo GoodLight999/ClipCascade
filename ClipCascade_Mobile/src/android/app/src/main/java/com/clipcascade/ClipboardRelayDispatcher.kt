@@ -10,6 +10,7 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 object ClipboardRelayDispatcher {
     private const val TAG = "ClipboardRelayDispatcher"
     private const val RETRY_DELAY_MS = 3_000L
+    private const val ACK_TIMEOUT_MS = 15_000L
     private val handler = Handler(Looper.getMainLooper())
 
     @Volatile
@@ -17,6 +18,12 @@ object ClipboardRelayDispatcher {
 
     @Volatile
     private var appContext: Context? = null
+
+    @Volatile
+    private var inFlightId: String? = null
+
+    @Volatile
+    private var inFlightSince = 0L
 
     private val retryTask = object : Runnable {
         override fun run() {
@@ -32,6 +39,8 @@ object ClipboardRelayDispatcher {
             } else {
                 scheduled = false
                 appContext = null
+                inFlightId = null
+                inFlightSince = 0L
             }
         }
     }
@@ -44,7 +53,28 @@ object ClipboardRelayDispatcher {
         handler.post(retryTask)
     }
 
+    @Synchronized
+    fun acknowledge(context: Context, relayId: String): Boolean {
+        if (relayId.isBlank()) return false
+        ClipboardRelayStore.remove(context.applicationContext, relayId)
+        if (inFlightId == relayId) {
+            inFlightId = null
+            inFlightSince = 0L
+        }
+        return true
+    }
+
+    @Synchronized
     private fun tryDispatch(context: Context): Boolean {
+        val now = System.currentTimeMillis()
+        val currentInFlight = inFlightId
+        if (currentInFlight != null) {
+            if (now - inFlightSince < ACK_TIMEOUT_MS) return false
+            Log.w(TAG, "Transport acknowledgement timed out; retrying relay item")
+            inFlightId = null
+            inFlightSince = 0L
+        }
+
         val storage = AsyncStorageBridge(context)
         try {
             if (storage.getValue("wsIsRunning") != "true") return false
@@ -71,17 +101,24 @@ object ClipboardRelayDispatcher {
             if (!reactContext.hasActiveCatalystInstance()) return false
 
             val item = ClipboardRelayStore.pending(context) ?: return true
-            val params = Arguments.createMap().apply {
-                putString("text", item.text)
-                putString("source", "accessibility_clipboard")
-                putString("sourcePackage", item.sourcePackage)
-                putString("relayId", item.id)
+            inFlightId = item.id
+            inFlightSince = now
+            return try {
+                val params = Arguments.createMap().apply {
+                    putString("text", item.text)
+                    putString("source", "accessibility_clipboard")
+                    putString("sourcePackage", item.sourcePackage)
+                    putString("relayId", item.id)
+                }
+                reactContext
+                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                    .emit("SHARED_TEXT", params)
+                true
+            } catch (error: Exception) {
+                inFlightId = null
+                inFlightSince = 0L
+                throw error
             }
-            reactContext
-                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                .emit("SHARED_TEXT", params)
-            ClipboardRelayStore.remove(context, item.id)
-            return true
         } catch (error: Exception) {
             Log.w(TAG, "Clipboard relay is not ready", error)
             return false
