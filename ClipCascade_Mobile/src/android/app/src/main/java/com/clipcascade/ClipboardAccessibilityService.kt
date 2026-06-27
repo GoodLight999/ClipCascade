@@ -9,6 +9,7 @@ import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import java.util.UUID
 
 class ClipboardAccessibilityService : AccessibilityService() {
     companion object {
@@ -191,7 +192,7 @@ class ClipboardAccessibilityService : AccessibilityService() {
 
         val resolvedPackage = sourcePackage.ifBlank { lastSourcePackage }
         val item = ClipboardRelayStore.Item(
-            id = "$resolvedPackage:$now:${value.hashCode()}",
+            id = UUID.randomUUID().toString(),
             text = value,
             sourcePackage = resolvedPackage,
             createdAt = now,
