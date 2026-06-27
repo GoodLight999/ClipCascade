@@ -2,6 +2,7 @@ import os
 import threading
 from tkinter import ttk
 
+from core.build_info import SOURCE_COMMIT
 from core.constants import APP_VERSION, LOG_FILE_NAME, get_program_files_directory
 from gui.info import CustomDialog
 
@@ -26,7 +27,7 @@ class LiveStatusDialog(CustomDialog):
 
         super().__init__(self._build_message(), msg_type="info")
         self.title("ClipCascade Status")
-        self.geometry("680x420")
+        self.geometry("680x440")
         self.resizable(True, True)
         self.after(750, self._release_topmost)
 
@@ -75,6 +76,12 @@ class LiveStatusDialog(CustomDialog):
         except Exception:
             pass
 
+    @staticmethod
+    def _build_identity():
+        commit = SOURCE_COMMIT.strip() or "local"
+        short_commit = commit[:8] if commit != "local" else "local"
+        return f"{APP_VERSION} · {short_commit}"
+
     def _state(self):
         connected = bool(getattr(self.manager, "is_connected", False))
         reconnecting = bool(
@@ -92,6 +99,7 @@ class LiveStatusDialog(CustomDialog):
         data = self.config.data if self.config is not None else {}
         stats = self.manager.get_stats() if self.manager is not None else None
         return (
+            f"Build: {self._build_identity()}\n"
             f"State: {self._state()}\n"
             f"Server: {data.get('server_url', 'unknown')}\n"
             f"Mode: {data.get('server_mode', 'unknown')}\n"
@@ -126,6 +134,7 @@ class LiveStatusDialog(CustomDialog):
         return "\n".join(
             (
                 f"ClipCascade version: {APP_VERSION}",
+                f"Source commit: {SOURCE_COMMIT}",
                 f"State: {self._state()}",
                 f"Server: {data.get('server_url', 'unknown')}",
                 f"Mode: {data.get('server_mode', 'unknown')}",
