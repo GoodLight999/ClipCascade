@@ -60,7 +60,6 @@ class NotificationCodeListenerService : NotificationListenerService() {
         val item = OtpRelayStore.Item(
             id = UUID.randomUUID().toString(),
             code = value,
-            sourcePackage = posted.packageName,
             createdAt = System.currentTimeMillis(),
         )
 
