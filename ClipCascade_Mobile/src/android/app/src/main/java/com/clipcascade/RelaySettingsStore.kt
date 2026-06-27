@@ -4,6 +4,27 @@ import android.content.Context
 
 object RelaySettingsStore {
     private const val FILE_NAME = "relay_settings"
+    private const val KEY_SCHEMA_VERSION = "queue_schema_version"
+    private const val CURRENT_SCHEMA_VERSION = 2
+
+    @Synchronized
+    fun ensureCurrentSchema(context: Context) {
+        val applicationContext = context.applicationContext
+        val preferences = applicationContext.getSharedPreferences(
+            FILE_NAME,
+            Context.MODE_PRIVATE,
+        )
+        val storedVersion = preferences.getInt(KEY_SCHEMA_VERSION, 0)
+        if (storedVersion >= CURRENT_SCHEMA_VERSION) return
+
+        // Earlier development builds used meaningful relay IDs containing source
+        // metadata. Clear only pending queues before enabling opaque UUID IDs.
+        ClipboardRelayStore.clear(applicationContext)
+        OtpRelayStore.clear(applicationContext)
+        preferences.edit()
+            .putInt(KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
+            .commit()
+    }
 
     fun clipboardEnabled(context: Context): Boolean =
         context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
