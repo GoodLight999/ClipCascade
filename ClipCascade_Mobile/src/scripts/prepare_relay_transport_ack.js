@@ -220,7 +220,8 @@ replaceRegex(
     `                    }\n` +
     `                    channel.send(messages[index]);\n` +
     `                    if (messages.length > 1) {\n` +
-    `                      sendingFragmentStats = \`${index + 1}/${messages.length}\`;\n` +
+    `                      sendingFragmentStats =\n` +
+    `                        String(index + 1) + '/' + String(messages.length);\n` +
     `                      await p2pStatusMessageChanged();\n` +
     `                    }\n` +
     `                  }\n` +
