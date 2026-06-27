@@ -100,8 +100,8 @@ jobs:
             --assets-dest android/app/src/main/res
           test -s android/app/src/main/assets/index.android.bundle
 
-      - name: Build installable Android APK
-        run: chmod +x android/gradlew && cd android && ./gradlew assembleDebug --stacktrace
+      - name: Test and build installable Android APK
+        run: chmod +x android/gradlew && cd android && ./gradlew testDebugUnitTest assembleDebug --stacktrace
 
       - name: Verify and rename APK
         shell: bash
