@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import java.util.UUID
 
 class NotificationCodeListenerService : NotificationListenerService() {
     companion object {
@@ -57,7 +58,7 @@ class NotificationCodeListenerService : NotificationListenerService() {
         val value = OtpCodeExtractor.extract(joinedText) ?: return
 
         val item = OtpRelayStore.Item(
-            id = "${posted.packageName}:${posted.key}:${posted.postTime}:$value",
+            id = UUID.randomUUID().toString(),
             code = value,
             sourcePackage = posted.packageName,
             createdAt = System.currentTimeMillis(),
