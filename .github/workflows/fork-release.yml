@@ -29,6 +29,9 @@ jobs:
           cache: pip
           cache-dependency-path: ClipCascade_Desktop/src/requirements_win.txt
 
+      - name: Prepare P2P peer acknowledgement
+        run: python scripts/prepare_p2p_peer_ack.py
+
       - name: Install dependencies
         run: python -m pip install --upgrade pip pyinstaller && python -m pip install -r requirements_win.txt
 
@@ -86,6 +89,9 @@ jobs:
 
       - name: Isolate service listener lifecycle
         run: node scripts/prepare_service_listener_lifecycle.js
+
+      - name: Prepare P2P peer acknowledgement
+        run: node scripts/prepare_p2p_peer_ack.js
 
       - name: Bundle JavaScript into Android assets
         shell: bash
