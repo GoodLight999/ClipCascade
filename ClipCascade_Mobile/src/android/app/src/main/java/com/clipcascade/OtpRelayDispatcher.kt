@@ -7,17 +7,11 @@ import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.modules.core.DeviceEventManagerModule
 
-/**
- * Delivers queued verification values through the existing encrypted text path.
- *
- * Values remain queued while the JavaScript runtime or network transport is not
- * ready. A single retry loop wakes every five seconds until the queue is empty
- * or its items expire in OtpRelayStore.
- */
 object OtpRelayDispatcher {
     private const val TAG = "OtpRelayDispatcher"
     private const val EVENT_NAME = "SHARED_TEXT"
     private const val RETRY_DELAY_MS = 5_000L
+    private const val ACK_TIMEOUT_MS = 15_000L
     private const val MAX_BATCH_SIZE = 1
 
     private val handler = Handler(Looper.getMainLooper())
@@ -27,6 +21,12 @@ object OtpRelayDispatcher {
 
     @Volatile
     private var appContext: Context? = null
+
+    @Volatile
+    private var inFlightId: String? = null
+
+    @Volatile
+    private var inFlightSince = 0L
 
     private val retryTask = object : Runnable {
         override fun run() {
@@ -42,6 +42,8 @@ object OtpRelayDispatcher {
             } else {
                 scheduled = false
                 appContext = null
+                inFlightId = null
+                inFlightSince = 0L
             }
         }
     }
@@ -55,7 +57,27 @@ object OtpRelayDispatcher {
     }
 
     @Synchronized
+    fun acknowledge(context: Context, relayId: String): Boolean {
+        if (relayId.isBlank()) return false
+        OtpRelayStore.markDelivered(context.applicationContext, listOf(relayId))
+        if (inFlightId == relayId) {
+            inFlightId = null
+            inFlightSince = 0L
+        }
+        return true
+    }
+
+    @Synchronized
     fun tryDispatch(context: Context): Int {
+        val now = System.currentTimeMillis()
+        val currentInFlight = inFlightId
+        if (currentInFlight != null) {
+            if (now - inFlightSince < ACK_TIMEOUT_MS) return 0
+            Log.w(TAG, "Transport acknowledgement timed out; retrying relay item")
+            inFlightId = null
+            inFlightSince = 0L
+        }
+
         val applicationContext = context.applicationContext
         val asyncStorage = AsyncStorageBridge(applicationContext)
         try {
@@ -71,29 +93,28 @@ object OtpRelayDispatcher {
             val pending = OtpRelayStore.pending(applicationContext, MAX_BATCH_SIZE)
             if (pending.isEmpty()) return 0
 
-            val accepted = mutableListOf<String>()
-            for (item in pending) {
-                try {
-                    val params = Arguments.createMap().apply {
-                        putString("text", item.code)
-                        putString("relayId", item.id)
-                        putString("source", "notification_code")
-                        putString("sourcePackage", item.sourcePackage)
-                    }
-                    reactContext
-                        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                        .emit(EVENT_NAME, params)
-                    accepted += item.id
-                } catch (error: Exception) {
-                    Log.w(TAG, "React event delivery failed; leaving value queued", error)
-                    break
+            val item = pending.first()
+            inFlightId = item.id
+            inFlightSince = now
+            return try {
+                val params = Arguments.createMap().apply {
+                    putString("text", item.code)
+                    putString("relayId", item.id)
+                    putString("source", "notification_code")
+                    putString("sourcePackage", item.sourcePackage)
                 }
+                reactContext
+                    .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                    .emit(EVENT_NAME, params)
+                1
+            } catch (error: Exception) {
+                inFlightId = null
+                inFlightSince = 0L
+                throw error
             }
-
-            // The active foreground service has accepted the event while its
-            // transport reports ready. The existing protocol has no server ACK.
-            OtpRelayStore.markDelivered(applicationContext, accepted)
-            return accepted.size
+        } catch (error: Exception) {
+            Log.w(TAG, "React event delivery failed; leaving value queued", error)
+            return 0
         } finally {
             asyncStorage.disconnect()
         }
