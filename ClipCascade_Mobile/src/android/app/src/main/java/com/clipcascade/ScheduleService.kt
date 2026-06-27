@@ -54,6 +54,7 @@ class ScheduleService(
                 Result.success()
             } else {
                 Log.w(TAG, "Foreground sync service did not answer its heartbeat")
+                RecoveryCoordinator.request(applicationContext, "heartbeat_timeout")
                 if (hasNotificationPermission(applicationContext)) {
                     showNotificationIfNotPresent()
                 }
@@ -115,7 +116,7 @@ class ScheduleService(
         )
             .setSmallIcon(R.drawable.ic_notification_failure)
             .setContentTitle("ClipCascade Service Inactive")
-            .setContentText("ClipCascade monitoring is inactive. Tap to restart.")
+            .setContentText("Automatic recovery was requested. Tap if synchronization stays offline.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
