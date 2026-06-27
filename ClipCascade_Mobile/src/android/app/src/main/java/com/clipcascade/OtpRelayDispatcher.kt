@@ -18,7 +18,7 @@ object OtpRelayDispatcher {
     private const val TAG = "OtpRelayDispatcher"
     private const val EVENT_NAME = "SHARED_TEXT"
     private const val RETRY_DELAY_MS = 5_000L
-    private const val MAX_BATCH_SIZE = 8
+    private const val MAX_BATCH_SIZE = 1
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -90,9 +90,8 @@ object OtpRelayDispatcher {
                 }
             }
 
-            // At this point the active foreground service has accepted the event
-            // while its transport reports ready. End-to-end server acknowledgements
-            // are not available in the existing protocol.
+            // The active foreground service has accepted the event while its
+            // transport reports ready. The existing protocol has no server ACK.
             OtpRelayStore.markDelivered(applicationContext, accepted)
             return accepted.size
         } finally {
