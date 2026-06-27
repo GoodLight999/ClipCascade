@@ -78,6 +78,9 @@ jobs:
       - name: Prepare Extended interface
         run: node scripts/prepare_extended_bundle.js
 
+      - name: Prepare relay transport acknowledgement
+        run: node scripts/prepare_relay_transport_ack.js
+
       - name: Bundle JavaScript into Android assets
         shell: bash
         run: |
