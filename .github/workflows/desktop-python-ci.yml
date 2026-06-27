@@ -33,6 +33,9 @@ jobs:
           cache: pip
           cache-dependency-path: ClipCascade_Desktop/src/requirements_win.txt
 
+      - name: Prepare P2P peer acknowledgement
+        run: python scripts/prepare_p2p_peer_ack.py
+
       - name: Compile desktop sources
         run: python -m compileall -q .
 
