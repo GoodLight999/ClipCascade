@@ -6,7 +6,7 @@ Canonical requirements: `docs/REQUIREMENTS.md`
 
 ## Current high-level state
 
-The branch contains substantial Android and Windows work and both CI workflows have passed on commit `710a81d27b8a27f3015cf3859335eec6b93887df`. This proves the code compiles and the APK contains its JavaScript bundle. It does **not** prove the product requirements are complete.
+The branch contains substantial Android and Windows work. The latest code-bearing head documented here is `ed42333ec46cf236c52e33f14b13bc36cf555479`. Android and Windows CI both passed for that head. This proves the code compiles, the standalone artifacts build, and the APK contains its JavaScript bundle. It does **not** prove the product requirements are complete.
 
 ## Android — implemented
 
@@ -54,6 +54,8 @@ Behavior:
 - Falls back to the most recent selected text when clipboard access is denied.
 - Stores text in a bounded persistent queue with TTL and duplicate suppression.
 - Retries while the local transport is unavailable.
+- Keeps an item queued while waiting for JavaScript transport acknowledgement.
+- Retries an in-flight item after a 15-second acknowledgement timeout.
 
 Important limitation:
 
@@ -75,25 +77,61 @@ Behavior:
 - Applies optional source-package filtering.
 - Extracts a short code only when verification context is present.
 - Queues only the extracted value; notification text is not passed into the relay queue.
-- Uses TTL, deduplication, transport readiness checks, and retry.
+- Uses TTL, deduplication, transport readiness checks, retry, and in-flight acknowledgement timeout.
 
 Important limitations:
 
 - Not tested on Android 16 / MagicOS.
 - Android may redact OTP content from notifications.
-- Queue deletion currently occurs after local React event acceptance, not Windows receipt.
+- Current acknowledgement proves local P2S publish or P2P DataChannel acceptance, not Windows clipboard application.
+
+### Transport acknowledgement
+
+Implemented incremental state machine:
+
+`QUEUED -> NATIVE_IN_FLIGHT -> JS_SEND_ATTEMPT -> LOCAL_TRANSPORT_ACCEPTED -> NATIVE_ACK -> DELETE`
+
+Files and build-time patches:
+
+- `ClipboardRelayDispatcher.kt`
+- `OtpRelayDispatcher.kt`
+- `RelaySettingsModule.kt`
+- `scripts/prepare_relay_transport_ack.js`
+- `scripts/prepare_relay_startup_order.js`
+
+Behavior:
+
+- Native dispatchers no longer delete an item merely after `DeviceEventEmitter.emit`.
+- Each item carries `relayId` and source metadata.
+- P2S returns success only after an active STOMP client accepts `publish`.
+- P2P returns success only when at least one open DataChannel accepts every fragment.
+- JavaScript calls `acknowledgeRelay()` only after that accepted-send result.
+- Native queues keep the item if no acknowledgement arrives within 15 seconds.
+- Persistent queues are resumed only after the `SHARED_TEXT` listener is registered.
+- Manual sharing remains on the upstream path; background relay events avoid writing the same text back to Android clipboard.
+
+Remaining delivery limitation:
+
+There is still no end-to-end peer acknowledgement. Required future direction:
+
+`LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_RECEIVED -> WINDOWS_CLIPBOARD_APPLIED -> PEER_ACK -> DELETE`
+
+The current implementation is materially safer than delete-on-emit, but it cannot prove that Windows applied the clipboard.
 
 ### Android recovery groundwork
 
 - `HeadlessTask.js` handles boot and health-failure events.
+- `HeadlessTaskService.kt` allows up to 30 seconds for recovery work.
+- `BootReceiver.kt` acquires the React Native Headless JS wake lock after boot.
 - `ScheduleService.kt` performs heartbeat checks independently of notification permission.
 - Clipboard helper activity is isolated in its own task.
 - Persistent queues survive ordinary React Native lifecycle loss.
+- Foreground-service startup resumes both persistent relay queues after listeners are installed.
 
 Important limitations:
 
 - `ScheduleService` currently warns/notifies when heartbeat fails; it does not itself dispatch the health-failure headless event.
-- Queue dispatchers are not explicitly restarted from every boot/service recovery path.
+- The attempted automatic heartbeat-to-Headless recovery write was not applied.
 - Real process-death, reboot, MagicOS kill, and connectivity recovery tests are outstanding.
 
 ## Windows — implemented
@@ -124,41 +162,32 @@ Important limitations:
 - The show-window marker still follows the upstream program-directory storage pattern.
 - Existing image/file/P2S/P2P regression matrix has not been run.
 
-## Delivery semantics — current flaw
-
-Both native dispatchers currently remove queued items after emitting `SHARED_TEXT` to React Native while the local transport reports connected.
-
-Current effective state machine:
-
-`QUEUED -> REACT_EVENT_EMITTED -> DELETE`
-
-Required direction:
-
-`QUEUED -> JS_ACCEPTED -> NETWORK_SEND_ACCEPTED -> PEER_RECEIVED/CLIPBOARD_APPLIED -> ACK -> DELETE`
-
-At minimum, the next implementation must add a JS-to-native acknowledgement only after the P2S WebSocket send or P2P DataChannel send path reports that it actually accepted the item. End-to-end peer acknowledgement should follow if protocol changes are feasible.
-
 ## Build status
 
-Latest known successful Android workflow:
+Latest known successful Android workflow for the current code-bearing head:
 
-- UI preparation: success
-- JS bundle: success
+- Extended UI preparation: success
+- Transport-ack patch application: success
+- Relay startup-order patch application: success
+- JavaScript/Hermes bundle: success
 - Gradle standalone APK: success
 - Embedded bundle verification: success
+- Build-log artifact upload: success
 - APK artifact upload: success
 
 Latest known successful Windows workflow:
 
-- Python/Windows packaging CI: success
+- Python source compilation: success
+- Dependency installation: success
+- PyInstaller standalone executable: success
+- Executable artifact upload: success
 
 ## Not yet complete
 
 - Universal/representative ADB-free clipboard operation
 - Screen-off verification-code operation on target hardware
 - Android 16 OTP redaction resolution
-- Transport acknowledgement
-- Automatic queue restart on every recovery path
+- End-to-end Windows clipboard-applied acknowledgement
 - Automatic health-check-triggered restart
 - Target-device test matrix
 - Upstream feature regression tests
@@ -166,4 +195,4 @@ Latest known successful Windows workflow:
 
 ## Do not claim
 
-Do not describe the branch as complete, production-ready, reliably screen-off, universally compatible, or fully acknowledged until the Definition of Done in `docs/REQUIREMENTS.md` is satisfied.
+Do not describe the branch as complete, production-ready, reliably screen-off, universally compatible, or end-to-end acknowledged until the Definition of Done in `docs/REQUIREMENTS.md` is satisfied.
