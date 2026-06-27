@@ -4,18 +4,12 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Small persistent queue for OTPs extracted from notifications.
- *
- * The queue is intentionally independent of React Native/AsyncStorage so a
- * NotificationListenerService can safely enqueue while the JS runtime is
- * suspended or being recreated.
- */
 object OtpRelayStore {
     private const val PREFS_NAME = "clipcascade_otp_relay"
     private const val KEY_QUEUE = "pending_items"
     private const val MAX_ITEMS = 32
     private const val DEDUP_WINDOW_MS = 90_000L
+    private const val ITEM_TTL_MS = 5 * 60_000L
 
     data class Item(
         val id: String,
@@ -37,7 +31,6 @@ object OtpRelayStore {
                 val id = value.optString("id")
                 val code = value.optString("code")
                 if (id.isBlank() || code.isBlank()) return null
-
                 return Item(
                     id = id,
                     code = code,
@@ -51,7 +44,7 @@ object OtpRelayStore {
 
     @Synchronized
     fun enqueue(context: Context, item: Item): Boolean {
-        val items = readItems(context).toMutableList()
+        val items = activeItems(context).toMutableList()
         val duplicate = items.any {
             it.code == item.code &&
                 it.sourcePackage == item.sourcePackage &&
@@ -60,26 +53,34 @@ object OtpRelayStore {
         if (duplicate) return false
 
         items.add(item)
-        while (items.size > MAX_ITEMS) {
-            items.removeAt(0)
-        }
+        while (items.size > MAX_ITEMS) items.removeAt(0)
         writeItems(context, items)
         return true
     }
 
     @Synchronized
     fun pending(context: Context, limit: Int = MAX_ITEMS): List<Item> =
-        readItems(context).take(limit.coerceAtLeast(0))
+        activeItems(context).take(limit.coerceAtLeast(0))
 
     @Synchronized
     fun markDelivered(context: Context, deliveredIds: Collection<String>) {
         if (deliveredIds.isEmpty()) return
-        val idSet = deliveredIds.toHashSet()
-        writeItems(context, readItems(context).filterNot { idSet.contains(it.id) })
+        val ids = deliveredIds.toHashSet()
+        writeItems(context, activeItems(context).filterNot { ids.contains(it.id) })
     }
 
     @Synchronized
-    fun pendingCount(context: Context): Int = readItems(context).size
+    fun pendingCount(context: Context): Int = activeItems(context).size
+
+    private fun activeItems(context: Context): List<Item> {
+        val now = System.currentTimeMillis()
+        val all = readItems(context)
+        val active = all.filter { item ->
+            item.createdAt > 0 && now - item.createdAt in 0..ITEM_TTL_MS
+        }
+        if (active.size != all.size) writeItems(context, active)
+        return active
+    }
 
     private fun readItems(context: Context): List<Item> {
         val raw = context.applicationContext
