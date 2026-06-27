@@ -11,7 +11,6 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
-
     <application
       android:name=".MainApplication"
       android:label="@string/app_name"
@@ -19,7 +18,7 @@
       android:roundIcon="@mipmap/ic_launcher_round"
       android:allowBackup="false"
       android:theme="@style/AppTheme"
-      android:usesCleartextTraffic="true" 
+      android:usesCleartextTraffic="true"
       android:supportsRtl="true">
       <activity
         android:name=".MainActivity"
@@ -33,39 +32,41 @@
           <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
         <intent-filter>
-          <!-- Intent filter for receiving shared text -->
           <action android:name="android.intent.action.SEND" />
           <action android:name="android.intent.action.PROCESS_TEXT" />
           <category android:name="android.intent.category.DEFAULT" />
           <data android:mimeType="text/plain" />
         </intent-filter>
         <intent-filter>
-          <!-- For single image sharing -->
           <action android:name="android.intent.action.SEND" />
           <category android:name="android.intent.category.DEFAULT" />
           <data android:mimeType="image/*" />
         </intent-filter>
         <intent-filter>
-          <!-- For single file sharing -->
           <action android:name="android.intent.action.SEND" />
           <category android:name="android.intent.category.DEFAULT" />
           <data android:mimeType="*/*" />
         </intent-filter>
         <intent-filter>
-          <!-- For multiple files of any type -->
           <action android:name="android.intent.action.SEND_MULTIPLE" />
           <category android:name="android.intent.category.DEFAULT" />
           <data android:mimeType="*/*" />
         </intent-filter>
       </activity>
+
       <activity
         android:name=".ClipboardFloatingActivity"
-        android:theme="@style/Theme.TransparentActivity" />
-      
+        android:theme="@style/Theme.TransparentActivity"
+        android:exported="false"
+        android:excludeFromRecents="true"
+        android:noHistory="true"
+        android:showWhenLocked="true"
+        android:launchMode="singleTop" />
+
       <service
         android:name="app.notifee.core.ForegroundService"
-        android:foregroundServiceType="remoteMessaging" 
-        android:exported="false" 
+        android:foregroundServiceType="remoteMessaging"
+        android:exported="false"
         tools:replace="android:foregroundServiceType"/>
 
       <receiver
@@ -76,6 +77,7 @@
           <action android:name="android.intent.action.BOOT_COMPLETED" />
         </intent-filter>
       </receiver>
+
       <service
         android:name=".HeadlessTaskService"
         android:exported="false" />
