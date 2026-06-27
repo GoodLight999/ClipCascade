@@ -14,12 +14,13 @@ A branch in a public repository is public. Do not add credentials, private serve
 
 ## Read in this order
 
-1. `docs/REQUIREMENTS.md`
-2. `docs/CURRENT_STATUS.md`
-3. `docs/TEST_MATRIX.md`
+1. `docs/progress.md`
+2. `docs/REQUIREMENTS.md`
+3. `docs/CURRENT_STATUS.md`
 4. This file
+5. `docs/TEST_MATRIX.md`
 
-## User intent
+## Non-negotiable user intent
 
 Build a practical Android ↔ Windows clipboard synchronizer with:
 
@@ -27,55 +28,25 @@ Build a practical Android ↔ Windows clipboard synchronizer with:
 - AccessibilityService-based ordinary text copy relay
 - local verification-code extraction through user-authorized notification access
 - only the extracted value sent; notification title/body remain local and are not persisted
-- screen-off/locked operation on HONOR 400 Pro / Android 16 / MagicOS
-- persistent queues and recovery after disconnect, sleep, process death, and reboot
+- **SMS and email verification codes must reach the Windows clipboard while the HONOR 400 Pro is locked and its screen has been off**
+- persistent queues and recovery after disconnect, sleep, process death, reboot, and network handover
 - visible Windows status/control UI and self-recovery
 - standalone APK and repeatable Windows/Android packages
 - no personal handle in product identity
 
+The screen-off SMS/email requirement is already present in the canonical requirements and test matrix. Do not weaken it or claim it is satisfied before real-device testing.
+
 The user strongly dislikes inflated completion claims. Distinguish compilation, simulated/unit validation, local transport acceptance, peer clipboard application, and real-device verification.
 
-## Artifact identity
+## Current code baseline
 
-- App name: `ClipCascade Extended`
-- Android package: `com.clipcascade.extended`
-- Version family: `3.2.1-extended.*`
-- Android target artifact: ARM64 standalone APK
+Latest Android behavior commit at the time of this handoff:
 
-Older test packages containing personal branding are obsolete.
+`230a10562456dc96d0f354e2d78e01123d10a800`
 
-## Current architecture
+Documentation commits follow that code commit. Consult PR #1 for the current branch HEAD before downloading artifacts.
 
-### Android inputs
-
-`ClipboardAccessibilityService`
-
-- detects bounded Japanese/English copy cues, selection events, and Ctrl+C
-- attempts direct ClipboardManager access
-- falls back to recent selected text
-- performs three delayed attempts but stops after first success
-- enqueues into `ClipboardRelayStore`
-- records content-free health state only
-
-`NotificationCodeListenerService`
-
-- reads user-authorized notifications locally
-- applies optional source-app filter
-- extracts with `OtpCodeExtractor`
-- persists only extracted value, source package, timestamp, and internal ID
-- never persists notification title/body
-- enqueues into `OtpRelayStore`
-
-### Queues and settings
-
-- bounded persistent queues with TTL and duplicate suppression
-- synchronous queue persistence
-- disabling a relay clears its pending queue
-- changing notification-source policy clears old verification values
-- settings show queue counts, never contents
-- settings can clear queues and content-free diagnostics
-
-### Acknowledgement
+## Preserved delivery acknowledgement
 
 Common local path:
 
@@ -93,118 +64,122 @@ P2P with an old/non-Extended peer:
 
 `LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
 
-Relevant files:
+Do not remove or bypass:
 
-- Android dispatchers and `RelaySettingsModule`
-- `scripts/prepare_relay_transport_ack.js`
-- `scripts/prepare_relay_startup_order.js`
-- `scripts/prepare_service_listener_lifecycle.js`
-- `scripts/prepare_p2p_peer_ack.js`
-- `scripts/prepare_p2p_ack_validation_order.js`
-- Windows `scripts/prepare_p2p_peer_ack.py`
+- `relayId` / `ackRequested` metadata
+- Windows ACK only after validated text clipboard application or duplicate-already-applied handling
+- Android ACK control-envelope handling before clipboard parsing
+- receive-hash commit only after validation
+- generation-scoped P2P ACK timers
+- queue startup only after the `SHARED_TEXT` listener is installed
 
-The peer ACK is backward-compatible metadata/control traffic. Windows ACKs only after validated text clipboard application or a duplicate already applied. P2S still lacks peer-level ACK.
+The Android stability changes described below did not modify the ACK transformation scripts or Windows ACK receiver.
 
-### Recovery
+## 2026-06-28 Android stability changes
 
-- `RecoveryCoordinator.kt`: native request routing and cooldown
-- `RecoveryListener.js`: singleton graceful stop/restart path
-- `ScheduleService.kt`: heartbeat-triggered recovery with notification fallback
-- `NetworkRecoveryMonitor.kt`: queue wake-up and delayed recovery after network return
-- `HeadlessTask.js` / `HeadlessTaskService.kt`: boot/health background path
-- `BootReceiver.kt`: boot event and wake lock
+### Redundant boot recovery
 
-Recovery asks the old service to terminate, waits up to eight seconds for cleanup, then force-stops only if the old generation is dead. Listener subscriptions are scoped per service generation so old shutdown cannot remove a new generation's listeners.
+Commit `852141452014ea7265ebbf7587f4d56e71f525b8`:
 
-### Legacy ADB path removed
+- preserves the existing Headless JS boot-recovery path
+- checks `relaunch_on_boot` and the enabled sync intent before recovery
+- schedules a delayed one-time WorkManager heartbeat before trying Headless JS
+- leaves the WorkManager path available when Android declines or blocks the direct service start
+- avoids duplicate restart when the foreground service is already healthy
+- records content-free outcomes only
 
-- no logcat clipboard parsing
-- no `READ_LOGS`
-- no overlay permission
-- no floating clipboard activity registration
-- text is owned by Accessibility relay when enabled
-- image/file upstream behavior remains
+Android CI run `28304486580`: success.
 
-### Windows
+### Network handover race
 
-- visible status/control window
-- restart/reconnect/disconnect/log/diagnostics controls
-- P2P teardown and watchdog recovery
-- rotating logs
-- P2P Extended receiver sends clipboard-applied ACK
+Commit `0ec58ffe0facb1934010f0270b8803ea65eb6a15`:
 
-## CI status
+- tracks the actual active default `Network`
+- prevents a late `onLost` callback for the old Wi-Fi/mobile network from cancelling recovery scheduled for its replacement
+- still resumes both persistent queues immediately on `onAvailable`
 
-P2P peer-ACK implementation passed:
+Android CI run `28304554055`: success.
 
-Android run `28291402373`:
+### Strict connected-state parsing
 
-- all JavaScript transformation steps
-- Hermes bundle
-- app-scoped verification extractor unit tests
-- Kotlin/Java compilation
-- APK build
-- embedded-bundle check
-- test/build/APK artifact uploads
+The prior code used `contains("Connected", ignoreCase = true)`. This incorrectly classified `Disconnected` as connected.
 
-Windows run `28291402372`:
+Fixed in:
 
-- P2P ACK patch
-- Python compilation
-- dependency installation
-- PyInstaller build
-- EXE artifact upload
+- `eb8dfe5a3de9d8e00faffbea5fb541b34dd1af5b` — network recovery; Android run `28304618791`: success
+- `1b95ccf7074d614a97521d519f3bb9b842a1f0f6` — clipboard queue dispatch; Android run `28304684578`: success
+- `230a10562456dc96d0f354e2d78e01123d10a800` — verification-code queue dispatch; Android run `28304755556`: success
 
-Release workflow has been aligned with the same Android validation-order correction and Windows ACK patch. No release tag has been published.
+Connected status is now accepted only as `Connected` or `Connected - ...`, optionally following the existing check-mark prefix. `Disconnected` no longer suppresses recovery or starts false in-flight delivery attempts.
 
-## Highest-priority next tasks
+### Corrected investigation note
 
-### Priority 1 — target-device test build and guided validation
+An initial hypothesis that notification-listener rebind logic was absent was wrong. `NotificationCodeListenerService.onListenerDisconnected()` already calls `requestRebind(...)`. Preserve that behavior.
 
-- download the latest APK and Windows EXE artifacts
-- install current APK on HONOR 400 Pro
-- test settings/test relay first
-- test Chrome, browser/WebView, Gmail, SMS, LINE/Discord/editor copies
-- inspect content-free diagnostics when a copy fails
-- test screen on/background/locked/15–30 minute screen-off
-- test queue delivery after Windows/network returns
-- test process kill and reboot
+## CI and artifacts
+
+Every Android code commit above passed Android standalone CI. The matching Windows workflow also passed for each commit.
+
+Before real-device testing:
+
+1. Read PR #1 to obtain the current branch HEAD.
+2. Fetch Android and Windows artifacts built from that same HEAD.
+3. Confirm the APK contains `assets/index.android.bundle`.
+4. Record APK/EXE SHA-256 hashes.
+5. Do not mix an APK from one commit with an EXE from another when validating the P2P peer ACK.
+
+Current CI artifacts are test/debug signed. Installing over an older differently signed test package may require uninstalling that older package.
+
+## Highest-priority next work
+
+### Priority 1 — target-device build and guided validation
+
+- install the current APK on HONOR 400 Pro / Android 16 / MagicOS
+- start with settings status and the synthetic test relay
+- verify P2P Extended Android → Extended Windows delivery and clipboard-applied ACK
+- run Chrome, Gmail, SMS, LINE/Discord/editor copy tests
+- run screen on, background, locked, and 1/15/30+ minute screen-off cases
+- test Windows offline → queued item → Windows returns
+- test Wi-Fi ↔ mobile-data handover
+- test app removal from recents, process kill, and reboot
+- test the delayed WorkManager boot fallback by making the immediate Headless path fail or be killed
+- record only content-free diagnostics and synthetic values
 
 ### Priority 2 — Android 16 notification redaction
 
-- measure actual notification fields received from SMS/email apps
-- determine whether OTP content is redacted on the target device
-- do not claim or implement a bypass
-- if redacted, design a legitimate companion-device association or explicit manual fallback
+- measure actual fields exposed to NotificationListenerService for SMS and email notifications
+- determine whether OTP-like content is redacted on the target HONOR device
+- distinguish absent/redacted notification content from extractor failure and transport failure
+- do not claim or implement an OS-security bypass
+- if redacted, design a legitimate fallback only after recording the actual behavior
 
-### Priority 3 — P2S peer acknowledgement
+### Priority 3 — extraction coverage from real notification layouts
 
-- inspect the server relay protocol and compatibility constraints
-- design an optional message ID and receipt path that old clients ignore
-- ACK only after Windows clipboard application
-- do not require a server migration without a compatibility mode
+If notification text is present but extraction fails:
 
-### Priority 4 — P2P semantics and behavior tests
+- inspect which standard notification extras contain synthetic test text
+- add support for required standard layouts, such as MessagingStyle, without persisting full notification content
+- extend extractor tests with synthetic examples only
+- keep full title/body out of queues, logs, and Windows
 
-- define first-peer versus all-peer acknowledgement policy
-- add automated tests for ACK envelopes, validation rejection, duplicate ACK, fallback timer, and old-client behavior
-- exercise real Extended Android ↔ Extended Windows P2P
+### Priority 4 — remaining protocol and regression work
 
-### Priority 5 — regression and release
-
-- run upstream text/image/file matrix in P2S and P2P
-- test Windows recovery controls
-- publish only artifacts built from the tested commit
+- P2S Windows-applied acknowledgement design
+- explicit multiple-P2P-peer acknowledgement policy
+- automated ACK-envelope and old-client behavior tests
+- upstream text/image/file regression in P2S and P2P
+- Windows recovery-control and watchdog tests
 
 ## Important remaining limitations
 
-- Accessibility compatibility is not universal until tested per app.
 - Android 16 may redact verification-code notification content.
-- P2S confirms only local STOMP publish, not Windows application.
+- Accessibility copy capture remains app-dependent until tested.
+- P2S confirms local STOMP publish, not Windows clipboard application.
 - P2P old-client fallback confirms only local DataChannel acceptance.
 - Multiple-P2P-peer ACK semantics are not explicit.
-- Recovery is not proven against MagicOS process management.
+- Recovery changes are CI/compile validated but not yet proven against MagicOS process management.
+- Screen-off SMS/email delivery is still an unverified requirement, not a completed feature claim.
 
-## Suggested first message for a new thread
+## Pull-request state
 
-> Open `GoodLight999/ClipCascade`, branch `stability-mobile-otp`. Read `docs/progress.md`, `docs/REQUIREMENTS.md`, `docs/CURRENT_STATUS.md`, `docs/NEXT_CHATGPT_HANDOFF.md`, and `docs/TEST_MATRIX.md`. Continue Priority 1: fetch the latest Android and Windows artifacts and guide HONOR 400 Pro + Windows testing. Preserve the P2P clipboard-applied ACK, keep PR #1 Draft, and update the test matrix with actual results.
+Keep PR #1 Draft until the mandatory HONOR 400 Pro tests and upstream regression matrix pass. Do not publish a release tag merely because CI is green.
