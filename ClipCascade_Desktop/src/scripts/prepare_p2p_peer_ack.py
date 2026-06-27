@@ -47,6 +47,7 @@ def main() -> None:
         '                self.clipboard_manager.base64_to_clipboard(\n'
         '                    base64_string=payload, type_=payload_type\n'
         '                )\n',
+        '            previous_hash = self.clipboard_manager.previous_clipboard_hash\n'
         '            changed = self.clipboard_manager.has_clipboard_changed(payload)\n'
         '            clipboard_applied = not changed and payload_type == "text"\n'
         '            if changed:\n'
@@ -58,7 +59,7 @@ def main() -> None:
         '                        self.clipboard_manager.paste(payload, payload_type)\n'
         '                        clipboard_applied = True\n'
         '                    else:\n'
-        '                        self.clipboard_manager.previous_clipboard_hash = 0\n'
+        '                        self.clipboard_manager.previous_clipboard_hash = previous_hash\n'
         '                else:\n'
         '                    self.clipboard_manager.base64_to_clipboard(\n'
         '                        base64_string=payload, type_=payload_type\n'
