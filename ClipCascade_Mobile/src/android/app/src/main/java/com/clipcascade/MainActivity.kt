@@ -43,6 +43,7 @@ class MainActivity : ReactActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         intent?.let { handleIntent(it) }
+        window.decorView.post { NotificationAccessPrompt.showIfNeeded(this) }
 
         try{
             val bridgeData = AsyncStorageBridge(applicationContext)
