@@ -81,6 +81,9 @@ jobs:
       - name: Prepare relay transport acknowledgement
         run: node scripts/prepare_relay_transport_ack.js
 
+      - name: Order relay startup after listeners
+        run: node scripts/prepare_relay_startup_order.js
+
       - name: Bundle JavaScript into Android assets
         shell: bash
         run: |
