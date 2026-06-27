@@ -52,6 +52,9 @@ jobs:
       - name: Order relay startup after listeners
         run: node scripts/prepare_relay_startup_order.js
 
+      - name: Isolate service listener lifecycle
+        run: node scripts/prepare_service_listener_lifecycle.js
+
       - name: Bundle JavaScript into Android assets
         shell: bash
         run: |
