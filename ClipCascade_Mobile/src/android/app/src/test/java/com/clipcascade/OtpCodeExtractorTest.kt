@@ -98,6 +98,26 @@ class OtpCodeExtractorTest {
     }
 
     @Test
+    fun extractsCodeFromJapaneseTransactionNotification() {
+        assertEquals(
+            "246810",
+            OtpCodeExtractor.extract(
+                "決済金額は1,000円です。ワンタイムパスワードは246810です。",
+            ),
+        )
+    }
+
+    @Test
+    fun extractsCodeFromEnglishTransactionNotification() {
+        assertEquals(
+            "884211",
+            OtpCodeExtractor.extract(
+                "A charge of $10.00 was requested. Your security code is 884211.",
+            ),
+        )
+    }
+
+    @Test
     fun requiresVerificationContext() {
         assertNull(OtpCodeExtractor.extract("荷物番号は 123456 です"))
     }
