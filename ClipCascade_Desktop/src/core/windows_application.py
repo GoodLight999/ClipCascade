@@ -9,6 +9,7 @@ from logging.handlers import RotatingFileHandler
 from core.application import Application
 from core.constants import GITHUB_URL, LOG_LEVEL
 from gui.enhanced_tray import EnhancedTaskbarPanel, get_show_window_request_path
+from utils.request_manager import ServerResponseError
 
 
 class WindowsApplication(Application):
@@ -19,6 +20,29 @@ class WindowsApplication(Application):
         self._restart_lock = threading.Lock()
         self._watchdog_stop = threading.Event()
         self._watchdog_thread = None
+
+    def authenticate_and_connect(self):
+        """Keep protocol/login failures inside the login flow instead of exiting."""
+        while True:
+            try:
+                return super().authenticate_and_connect()
+            except ServerResponseError as error:
+                logging.error("Authenticated server API validation failed: %s", error)
+                self.config.data["cookie"] = None
+                self.config.data["csrf_token"] = ""
+                self.request_manager.reset_session()
+
+                from gui.info import CustomDialog
+
+                CustomDialog(
+                    "The login request returned a response, but ClipCascade could not "
+                    "validate the authenticated server API.\n\n"
+                    f"{error}\n\n"
+                    "Likely causes are an intercepted/redirected login, a reverse-proxy "
+                    "rule affecting /server-mode, or a server/client version mismatch. "
+                    "No response body or credentials were written to the log.",
+                    msg_type="error",
+                ).mainloop()
 
     def setup_logging(self):
         formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
