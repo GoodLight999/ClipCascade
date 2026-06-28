@@ -31,7 +31,7 @@ Build a practical Android ↔ Windows clipboard synchronizer with:
 - **SMS and email verification codes must reach the Windows clipboard while the HONOR 400 Pro is locked and its screen has been off**
 - guided permission/background setup that a normal user can follow
 - Japanese and English UI and verification-language support
-- synthetic test notification proving the normal extraction/queue/transport path
+- a synthetic test notification proving the normal extraction/queue/transport path
 - persistent queues and recovery after disconnect, sleep, process death, reboot, and network handover
 - visible Windows status/control UI and self-recovery
 - standalone APK and repeatable Windows/Android packages
@@ -48,15 +48,15 @@ The user has confirmed:
 - Android copied-text relay works through Accessibility in the current test scenario;
 - the current path works without rerunning the old ADB commands.
 
-Do not widen that into universal app compatibility or screen-off OTP reliability. The target-device matrix is still outstanding.
+Do not widen that into universal app compatibility or screen-off OTP reliability. The target-device matrix remains outstanding.
 
 ## Current code baselines
 
 - Android recovery/queue baseline: `230a10562456dc96d0f354e2d78e01123d10a800`
 - Windows authentication repair/tests: `fae212a9fbe127f582e6bdace5c8a0c8f25fb575`
-- Guided setup/localization/synthetic test/extractor: through `bc7cbfc7005fa925662bc0dc3e9969e0b799a9a2`
+- Guided setup/localization/synthetic test/final bilingual extractor: `5433eb8e8ffaae47ed6873af67ea1c1df6824333`
 
-Documentation and CI-fix commits follow. Always read PR #1 for the actual branch HEAD before fetching artifacts.
+Documentation commits follow. Always read PR #1 for the actual branch HEAD before fetching artifacts.
 
 ## Preserved delivery acknowledgement
 
@@ -183,7 +183,8 @@ Current coverage:
 - numeric, compact alphanumeric, prefixed, and grouped formats
 - candidate before or after the authentication phrase
 - standard title/text, BigText, text lines, conversation title, MessagingStyle current/historic messages
-- preserves a legitimate OTP when a separate transaction amount or destination email address is present
+- transaction amount or destination email address may coexist with a separate legitimate OTP
+- `verify <email-address>` is recognized as authentication context
 
 False-positive controls:
 
@@ -197,11 +198,12 @@ False-positive controls:
 
 Important trial and error:
 
-- `000d964408d7f4824cd0f16fb9d47954ccddf425` failed because an over-broad grouped pattern joined prose and following values. It produced candidates such as `ON202606` from date prose and swallowed valid alphanumeric values with preceding words.
+- `000d964408d7f4824cd0f16fb9d47954ccddf425` failed because an over-broad grouped pattern joined prose and following values.
 - `acd5cb9cf0dad674fb58b1d1b691d4f3cdf941ee` restricted spaces to grouped digits and hyphens to grouped alphanumerics.
 - `aa799b3553b2bfa160f793324972b072edead18b` expanded the bilingual corpus; Android run `28307672613` succeeded.
 - `9d06c1b175aaff118f09be7df929486155cc67e9` added transaction-notification positives; Android run `28307814762` succeeded.
-- `cbae051f9b88a3b2f0584f615aabf3b61f61dee3` and `bc7cbfc7005fa925662bc0dc3e9969e0b799a9a2` add generic-code and email-address distinctions. Check the final run before claiming success.
+- `bc7cbfc7005fa925662bc0dc3e9969e0b799a9a2` failed one new `verify <email-address>` positive case in Android run `28308003116`.
+- `5433eb8e8ffaae47ed6873af67ea1c1df6824333` added that context; Android run `28308127548` and Windows run `28308127573` succeeded.
 
 ## CI verification nuance
 
@@ -216,7 +218,7 @@ Commit `9b4e5da9b62c6a3054421c90697cf6363ce67134` moved assertions to transforme
 - obtain current PR head
 - confirm Android and Windows CI success on that exact head
 - fetch Android and Windows artifacts from the same head
-- verify APK contains `assets/index.android.bundle`
+- confirm APK contains `assets/index.android.bundle`
 - record SHA-256 hashes
 - keep PR #1 Draft
 
