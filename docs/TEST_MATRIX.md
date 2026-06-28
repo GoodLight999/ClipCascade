@@ -2,14 +2,36 @@
 
 Record every run with date, commit SHA, Android build/package version, Windows build version, transport mode, locale, and result. Do not mark the project complete from CI alone.
 
-## A. Installation, identity, and localization
+## Recorded evidence as of 2026-06-28
+
+Runtime baseline: `0a570d5b9d0cc7a8fae40cf823696a68c72fa9e3`
+
+- [x] Android CI run `28312648447` passed source transforms, ACK transforms, unit tests, APK assembly, embedded bundle verification, fixed certificate verification, and artifact upload
+- [x] Windows CI run `28312648425` passed authenticated HTTP tests, existing P2P ACK tests, shutdown/status tests, PyInstaller build, and artifact upload
+- [x] APK signer certificate verified as `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- [x] Real Yahoo! JAPAN SMS verification value reached the Windows clipboard
+- [ ] Yahoo! JAPAN SMS result assigned to a known foreground/background/locked/screen-off duration; the successful run's exact screen state was not recorded
+- [ ] First stable-test-signed APK installed after the one-time uninstall migration
+- [ ] A later versionCode installed over the stable-test-signed APK without uninstalling and with retained data/settings
+- [ ] New Windows Quit confirmed to remove the real EXE from Task Manager
+- [ ] Immediate Windows relaunch after Quit confirmed to be free of a stale mutex
+
+The successful real SMS result proves one real notification/extractor/queue/transport/Windows-clipboard path. It does not complete section F.
+
+## A. Installation, identity, update, and localization
 
 - [ ] Install APK without Metro, USB, or developer server
 - [ ] Launch after device reboot
 - [ ] Confirm app name is `ClipCascade Extended`
 - [ ] Confirm package is `com.clipcascade.extended`
+- [ ] Confirm version is `3.2.1-extended.4-standalone`, versionCode `320107`
 - [ ] Confirm no personal handle appears in app UI, package identity, diagnostics, or artifacts
 - [ ] Confirm older official/upstream ClipCascade can coexist if desired
+- [ ] Uninstall the last ephemeral-signed build once and install the first stable-test-signed build
+- [ ] Restore login, Accessibility, notification access, battery/background, and boot-resume settings after migration
+- [ ] Confirm installed certificate matches `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- [ ] Increment versionCode and install the next stable-signed build in place
+- [ ] Confirm in-place update retains Android app data and settings
 - [ ] Japanese system locale shows Japanese Extended settings and primary React UI labels
 - [ ] English system locale shows English Extended settings and primary React UI labels
 - [ ] Accessibility service and notification-listener labels/descriptions follow the system locale
@@ -21,6 +43,9 @@ Start from a fresh install or reset permissions between runs.
 
 - [ ] Persistent Sharing setup button is visible before login
 - [ ] Persistent Sharing setup button is visible while sync is running
+- [ ] Bottom bar does not cover application content
+- [ ] `Resume sync at startup` / `起動時に同期を再開` is always reachable
+- [ ] Boot-resume switch persists after process restart
 - [ ] Guided checklist displays notification permission state
 - [ ] Continue requests Android 13+ notification permission when missing
 - [ ] Continue opens Accessibility settings when clipboard service is missing
@@ -65,7 +90,7 @@ For each:
 
 ## D. Verification-code extraction
 
-Use synthetic values only. Never commit real codes.
+Use synthetic values only in committed tests. Never commit real codes.
 
 Positive Japanese examples:
 
@@ -103,13 +128,15 @@ Negative examples:
 - [ ] Ordinary message containing a six-digit number without verification context
 - [ ] ClipCascade foreground notification
 
-Filter behavior:
+Filter/privacy behavior:
 
 - [ ] Empty filter processes all context-matching apps
 - [ ] Selected filter processes only selected packages
 - [ ] Synthetic ClipCascade test notification bypasses source-app filter only because it is explicitly marked as synthetic
 - [ ] Turning relay off stops processing immediately
+- [ ] Changing source policy clears pending values as documented
 - [ ] Full notification text never appears in Windows clipboard or normal logs
+- [ ] Only extracted value, timestamp, and opaque relay ID are persisted
 
 ## E. Synthetic end-to-end verification test
 
@@ -132,7 +159,7 @@ Run first in Extended P2P with Windows connected.
 
 ## F. Screen-off / lock / MagicOS
 
-On HONOR 400 Pro / Android 16, run both real SMS and real email cases:
+On HONOR 400 Pro / Android 16, run both real SMS and real email cases. Do not store or commit the real values.
 
 - [ ] Screen on, app foreground
 - [ ] Screen on, app background
@@ -146,9 +173,22 @@ On HONOR 400 Pro / Android 16, run both real SMS and real email cases:
 - [ ] App removed from recents
 - [ ] App process killed by system
 - [ ] Device rebooted
-- [ ] Reboot with the immediate Headless JS path blocked/killed; delayed WorkManager heartbeat restores sync
+- [ ] Reboot with immediate Headless JS path blocked/killed; delayed WorkManager heartbeat restores sync
 
-For every SMS/email case, record whether notification text is visible to NotificationListenerService or redacted by Android, whether extraction occurred, whether the item queued, and whether Windows acknowledged it.
+For every SMS/email case, record independently:
+
+- notification delivered by the source app;
+- text visible or redacted to NotificationListenerService;
+- extraction result;
+- persistent queue result;
+- transport result;
+- Windows clipboard application;
+- peer/native acknowledgement and deletion.
+
+Known real result:
+
+- [x] One Yahoo! JAPAN SMS reached Windows end-to-end, screen-state category unknown
+- [ ] Real email OTP reaches Windows
 
 ## G. Network and queue durability
 
@@ -203,7 +243,7 @@ P2P:
 - [ ] Relaunch on boot
 - [ ] Foreground service notification
 
-## J. Windows authentication, UI, and recovery
+## J. Windows authentication, UI, recovery, and shutdown
 
 Authentication/API:
 
@@ -215,7 +255,7 @@ Authentication/API:
 - [ ] HTML/login redirect from `/server-mode` returns to login without terminating the application
 - [ ] Connection/timeout failure from an authenticated endpoint returns to login without an unexpected application crash
 - [ ] Diagnostic log records endpoint/status/content type/body byte count/final path/redirect codes only
-- [ ] Diagnostic log contains no response body, cookie value, credential, or private server URL
+- [ ] Diagnostic log contains no response body, cookie value, credential, private server URL, or clipboard/notification content
 
 UI and recovery:
 
@@ -226,6 +266,9 @@ UI and recovery:
 - [ ] Disconnect
 - [ ] Open Logs
 - [ ] Copy Diagnostics
+- [ ] `Automatic recovery: Standing by` while healthy and not actively retrying
+- [ ] `Automatic recovery: Retrying now` during retry
+- [ ] `Automatic recovery: Paused by user` after explicit disconnect
 - [ ] Second launch focuses existing window
 - [ ] Sleep/resume recovery
 - [ ] Network change recovery
@@ -233,14 +276,37 @@ UI and recovery:
 - [ ] Log rotation
 - [ ] No false healthy status
 
+Shutdown:
+
+- [ ] Tray Quit closes the status dialog
+- [ ] Tray icon disappears
+- [ ] Hidden Tk root is destroyed
+- [ ] Watchdog stops
+- [ ] P2P/STOMP teardown completes
+- [ ] P2P asyncio loop stops and closes
+- [ ] No ClipCascade EXE remains in Task Manager
+- [ ] Immediate relaunch succeeds and shows the normal status window
+- [ ] Repeated Quit signaling does not race or hang
+
 ## K. Release gate
 
-- [ ] Android CI passes on release commit
-- [ ] Windows CI passes on release commit
-- [ ] Bilingual/no-ADB bundle assertions pass
-- [ ] APK hash recorded
-- [ ] Windows archive hash recorded
+Evidence already available for runtime baseline `0a570d5b...`:
+
+- [x] Android CI passed
+- [x] Windows CI passed
+- [x] Bilingual/no-ADB source and bundle assertions passed
+- [x] APK direct hash recorded
+- [x] Windows EXE direct hash recorded
+- [x] APK signer certificate hash recorded and verified
+
+Still required before a release:
+
+- [ ] Mandatory HONOR 400 Pro matrix completed
+- [ ] In-place stable-signed update proven
+- [ ] Windows Quit proven on real EXE
+- [ ] Upstream regression matrix completed
+- [ ] Private production release signing selected and protected
 - [ ] Tested commit tagged `extended-v*`
 - [ ] GitHub Release contains only tested artifacts
 - [ ] Release notes state known limitations
-- [ ] Draft PR remains draft until all mandatory target-device tests pass
+- [ ] Draft PR remains Draft until all mandatory target-device tests pass
