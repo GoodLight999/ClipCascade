@@ -31,6 +31,8 @@ class RequestManagerResponseTests(unittest.TestCase):
                 "server_url": "https://example.test",
                 "cookie": cookie,
                 "ssl_ca_bundle": "",
+                "username": "test-user",
+                "password": "test-password",
             }
         )
         return RequestManager(config)
@@ -95,6 +97,42 @@ class RequestManagerResponseTests(unittest.TestCase):
         manager.session.get = Mock(return_value=make_response('{"mode":"UNKNOWN"}'))
         with self.assertRaises(ServerResponseError):
             manager.get_server_mode()
+
+    def test_authenticated_transport_error_is_normalized(self):
+        manager = self.make_manager()
+        manager.session.get = Mock(side_effect=requests.ConnectionError("private detail"))
+        with self.assertRaises(ServerResponseError) as raised:
+            manager.get_server_mode()
+        message = str(raised.exception)
+        self.assertIn("endpoint=/server-mode", message)
+        self.assertIn("error=ConnectionError", message)
+        self.assertNotIn("private detail", message)
+
+    def test_login_rejects_returned_login_form_even_with_http_200(self):
+        manager = self.make_manager()
+        manager.reset_session = Mock()
+        manager.session = Mock()
+        manager.session.cookies.get_dict.return_value = {"JSESSIONID": "session"}
+        login_form = (
+            '<html><form><input name="username">'
+            '<input name="_csrf" value="token"></form></html>'
+        )
+        manager.session.get.return_value = make_response(
+            login_form,
+            content_type="text/html",
+            url="https://example.test/login",
+        )
+        manager.session.post.return_value = make_response(
+            login_form,
+            content_type="text/html",
+            url="https://example.test/login",
+        )
+
+        success, message, cookie = manager.login()
+
+        self.assertFalse(success)
+        self.assertIn("returned to the login form", message)
+        self.assertIsNone(cookie)
 
 
 if __name__ == "__main__":
