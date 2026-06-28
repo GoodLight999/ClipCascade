@@ -71,6 +71,7 @@ jobs:
           npm ci
           node scripts/prepare_extended_bundle.js
           node scripts/prepare_extended_version.js
+          node scripts/prepare_background_recovery_version.js
           node scripts/prepare_startup_service_recovery.js
           node scripts/prepare_boot_resume_ui.js
           node scripts/prepare_extended_status_i18n.js
