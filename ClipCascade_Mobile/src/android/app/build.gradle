@@ -22,8 +22,8 @@ android {
         applicationId "com.clipcascade"
         minSdkVersion 26
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 320104
-        versionName "3.2.1-extended.1"
+        versionCode 320105
+        versionName "3.2.1-extended.2"
         buildConfigField "String", "SOURCE_COMMIT", quotedBuildSha
     }
 
