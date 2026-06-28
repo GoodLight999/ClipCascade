@@ -1,64 +1,135 @@
 # Next ChatGPT Thread — Start Here
 
-This file lets a new ChatGPT thread continue without hidden conversation history.
+This file is the operational handoff for a new ChatGPT thread. It is designed to be sufficient without hidden conversation history.
 
-## Repository and branch
+## Repository and safety boundary
 
 - Repository: `GoodLight999/ClipCascade`
-- Repository visibility: **public**
+- Visibility: **public**
 - Development branch: `stability-mobile-otp`
 - Draft PR: `#1`
 - Base branch: `main`
 
-A branch in a public repository is public. Do not add credentials, private server details, real notification contents, verification values, clipboard contents, cookies, or response bodies.
+Never commit credentials, cookies, private server URLs/details, response bodies, real notification contents, real verification values, or real clipboard contents. Logs and diagnostics must remain content-free.
 
-## Read in this order
+## Required reading order
 
 1. `docs/progress.md`
 2. `docs/REQUIREMENTS.md`
 3. `docs/CURRENT_STATUS.md`
 4. This file
 5. `docs/TEST_MATRIX.md`
+6. `docs/LATEST_RUNTIME_FIXES_HANDOFF.md`
+
+Then inspect PR #1 and confirm its current head and Draft state before changing code or fetching artifacts.
 
 ## Non-negotiable user intent
 
 Build a practical Android ↔ Windows clipboard synchronizer with:
 
-- no ADB, root, or Shizuku for normal use
-- AccessibilityService-based ordinary text copy relay
-- local verification-code extraction through user-authorized notification access
-- only the extracted value sent; full notification title/body remain transient and are not persisted
-- **SMS and email verification codes must reach the Windows clipboard while the HONOR 400 Pro is locked and its screen has been off**
-- guided permission/background setup that a normal user can follow
-- Japanese and English UI and verification-language support
-- a synthetic test notification proving the normal extraction/queue/transport path
-- persistent queues and recovery after disconnect, sleep, process death, reboot, and network handover
-- visible Windows status/control UI and self-recovery
-- standalone APK and repeatable Windows/Android packages
-- no personal handle in product identity
+- no ADB, root, or Shizuku for ordinary use;
+- AccessibilityService-based copied-text relay;
+- local verification-code extraction through user-authorized notification access;
+- only the extracted value sent; notification title/body remain transient and are not persisted;
+- SMS and email verification values reaching Windows while HONOR 400 Pro is locked and screen-off;
+- guided permission/background setup usable by a normal person;
+- Japanese and English UI/extraction support;
+- persistent queues and recovery across disconnect, sleep, process death, reboot, and handover;
+- visible Windows status/control and self-recovery;
+- standalone repeatable Android and Windows packages;
+- no personal handle in product identity.
 
-The user strongly dislikes inflated completion claims. Distinguish compilation, unit tests, synthetic notification tests, local transport acceptance, peer clipboard application, and real-device screen-off verification.
+The user strongly dislikes inflated completion claims. Always distinguish compile/unit-test success, synthetic notification success, local transport acceptance, Windows clipboard application, peer ACK, and real-device screen-off proof.
 
-## Current real-world validation
+## Current real-world evidence
 
-The user has confirmed:
+Confirmed by the user:
 
-- the repaired Windows artifact logs into the actual deployment;
-- the Windows GUI works;
-- Android copied-text relay works through Accessibility in the current test scenario;
-- the current path works without rerunning the old ADB commands.
+- repaired Windows authentication works against the actual deployment;
+- Windows GUI and synchronization work;
+- Android copied-text relay works via Accessibility in the tested scenario;
+- no old READ_LOGS/overlay/ADB commands are required;
+- a real Yahoo! JAPAN SMS verification value reached the Windows clipboard.
 
-Do not widen that into universal app compatibility or screen-off OTP reliability. The target-device matrix remains outstanding.
+The Yahoo! result is a genuine real-service end-to-end success. Exact lock/screen-off duration was not recorded, so do not count it as completion of the locked or 1/15/30+ minute screen-off matrix.
 
-## Current code baselines
+## Latest synchronized runtime baseline
 
-- Android recovery/queue baseline: `230a10562456dc96d0f354e2d78e01123d10a800`
-- Windows authentication repair/tests: `fae212a9fbe127f582e6bdace5c8a0c8f25fb575`
-- Guided setup/localization/synthetic test/final bilingual extractor: `5433eb8e8ffaae47ed6873af67ea1c1df6824333`
+Runtime/docs baseline before this final handoff documentation:
 
-Documentation commits follow. Always read PR #1 for the actual branch HEAD before fetching artifacts.
+- commit: `0a570d5b9d0cc7a8fae40cf823696a68c72fa9e3`
+- Android CI: `28312648447` — success
+- Windows CI: `28312648425` — success
+- Android artifact ID: `7931441696`
+- Windows artifact ID: `7931437099`
+- Android artifact ZIP digest: `sha256:c16215cd6ed23e28b2e76f131460fbb7ca838fbcba2411a71080f5a1d27487d4`
+- Windows artifact ZIP digest: `sha256:b0a40a83915518a1b59969484caecbe3e656ff4f9f6a427df2397757de2a4e9e`
+- extracted APK SHA-256: `77d0600560c42556eb8dff3edb3564f32268136324598cee251b8d0b4d7f502c`
+- extracted EXE SHA-256: `48d21f7779cfb92aabdf9bef3b5ad403ab3a833334cbb33636531ff8ec7666b1`
 
-## Preserved delivery acknowledgement
+Documentation commits after this point do not change runtime logic, but their embedded build identity differs. Prefer a newly green artifact from the current PR head when available. Never mix Android and Windows artifacts from different runtime heads while diagnosing behavior.
+
+## Android update-conflict repair
+
+Previous CI APKs used runner-local default debug certificates. Successive builds therefore had the same package but different signers, causing Android's package-conflict error.
+
+Current implementation:
+
+- version: `3.2.1-extended.4-standalone`
+- versionCode: `320107`
+- package: `com.clipcascade.extended`
+- deterministic public test signer generated at build time;
+- certificate SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`;
+- CI verifies the completed APK certificate using `apksigner`.
+
+Required migration:
+
+1. uninstall the currently installed old ephemeral-signed APK once;
+2. install the first stable-test-signed `extended.4` APK;
+3. restore login, Accessibility, notification access, battery/background, and boot-resume settings;
+4. on the next versionCode, install over `extended.4` without uninstalling and verify settings/data are retained.
+
+The signer is intentionally public and for repeatable personal/test builds only. Do not represent it as production publisher authentication.
+
+## Windows Quit repair
+
+Reported defect: tray Quit removed visible state but left the PyInstaller EXE running until Task Manager killed it.
+
+Current shutdown path:
+
+- closes active status dialog;
+- stops accepting tray/status/reconnect work;
+- stops tray icon;
+- quits and destroys the Tk root on the Tk thread;
+- stops and joins the watchdog;
+- awaits P2P/STOMP teardown;
+- stops, joins, and closes the P2P asyncio loop;
+- flushes logging;
+- after graceful cleanup, explicit Quit applies a final process-exit guarantee.
+
+`tests/test_windows_shutdown.py` verifies idempotent Quit signaling and status/root/icon closure. HTTP authentication and P2P ACK tests remain mandatory.
+
+Required real test:
+
+1. kill the old lingering process once;
+2. start the new EXE;
+3. choose tray Quit;
+4. confirm no ClipCascade process remains in Task Manager;
+5. relaunch immediately and confirm no stale mutex blocks startup.
+
+## Automatic recovery wording
+
+Old `Automatic reconnect: False` did **not** mean recovery was disabled. It meant the manager was not currently inside a reconnect attempt, which is normal while connected.
+
+Current display:
+
+- `Automatic recovery: Standing by`
+- `Automatic recovery: Retrying now`
+- `Automatic recovery: Paused by user`
+
+This is display-only and does not alter transport or ACK behavior.
+
+## Delivery acknowledgement — do not break
 
 Common local path:
 
@@ -72,198 +143,127 @@ P2P with Extended Windows:
 
 `LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_RECEIVED -> WINDOWS_TEXT_APPLIED -> PEER_ACK -> NATIVE_ACK -> DELETE`
 
-P2P with an old/non-Extended peer:
+P2P with old/non-Extended peer:
 
 `LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
 
-Do not remove or bypass:
+Preserve:
 
-- `relayId` / `ackRequested` metadata
-- Windows ACK only after validated text clipboard application or duplicate-already-applied handling
-- Android ACK control-envelope handling before clipboard parsing
-- receive-hash commit only after validation
-- generation-scoped P2P ACK timers
-- queue startup only after the `SHARED_TEXT` listener is installed
+- `relayId` / `ackRequested` metadata;
+- Windows ACK only after validated text clipboard application or duplicate-already-applied handling;
+- Android ACK envelope handling before clipboard parsing;
+- receive-hash commit only after validation;
+- generation-scoped ACK timers;
+- queue startup only after the `SHARED_TEXT` listener is installed.
 
-The synthetic test uses this existing ACK path. There is no test-only queue deletion shortcut.
+Do not describe P2S or old-peer fallback as Windows-applied acknowledgement.
 
-## Android stability already present
+## Android features already implemented
 
-- redundant boot recovery: immediate Headless JS plus delayed WorkManager heartbeat
-- replacement-network tracking so a late old-network `onLost` does not cancel recovery
-- strict connected-state parsing; `Disconnected` is never accepted as `Connected`
-- notification-listener rebind request after listener disconnection
-- persistent clipboard and verification queues
-- content-free recovery diagnostics
+- ADB-free copied-text relay with recent-selection fallback;
+- persistent clipboard and verification queues;
+- bilingual extractor and UI;
+- guided five-step setup;
+- persistent Sharing setup and boot-resume bottom bar;
+- synthetic local notification full-path test;
+- notification-listener rebind request;
+- strict connected-state handling;
+- immediate Headless JS plus delayed WorkManager boot recovery;
+- replacement-network tracking;
+- content-free diagnostics.
 
-These paths are CI validated but still require MagicOS process-kill, reboot, sleep, and handover tests.
+## Windows features already implemented
 
-## Windows authentication repair
+- persistent authenticated `requests.Session` and all-cookie preservation;
+- safe validation of authenticated API responses;
+- visible status/control window;
+- restart, reconnect, disconnect, logs, diagnostics;
+- rotating logs;
+- second-launch activation;
+- watchdog and complete P2P restart teardown;
+- Windows clipboard-applied P2P ACK;
+- explicit Quit cleanup and process-exit guarantee.
 
-The former artifact logged HTTP 200 login success and then crashed decoding `/csrf-token` and `/server-mode`.
+## Trial-and-error that must not be repeated
 
-Repairs retain one `requests.Session`, preserve all server/proxy cookies, validate authenticated JSON responses, reject HTTP-200 login-form returns, add bounded timeouts, and return failed sessions to the login flow with content-free response metadata.
+- Do not broaden grouped OTP patterns so prose/date fragments become candidates.
+- Do not grep raw Japanese text in the Metro bundle; Metro escapes Unicode. Validate transformed source.
+- Preserve `verify <email-address>` context support while excluding digits inside the address itself.
+- Do not use a broad regex around the boot checkbox; isolate the unique `relaunch_on_boot` marker.
+- Do not rely on GitHub runner default debug signing.
+- Do not commit a binary or encoded private-key blob; deterministic test signing is generated in ignored build output.
+- `apksigner` certificate output may contain multiple colon-delimited fields; parse the final field, not field 2.
+- `NotificationCodeListenerService.onListenerDisconnected()` already calls `requestRebind`; do not "fix" it by duplicating rebind behavior.
 
-Windows CI runs HTTP handling tests and existing P2P ACK tests before PyInstaller. The user confirmed the repair works against the real deployment.
+## Immediate next work, in order
 
-## Guided bilingual setup
+### Priority 1 — migrate and verify the latest builds
 
-Files:
+- confirm current PR head and both CIs;
+- fetch matching Android and Windows artifacts;
+- one-time uninstall and stable-signed Android installation;
+- restore permissions/settings;
+- test Windows tray Quit and immediate relaunch;
+- record results in `docs/progress.md`, `docs/CURRENT_STATUS.md`, and `docs/TEST_MATRIX.md`.
 
-- `RelaySettingsActivity.kt`
-- `SetupPermissionHelper.kt`
-- `NotificationAccessPrompt.kt`
-- `RelaySettingsStore.kt`
-- `res/values/strings.xml`
-- `res/values-ja/strings.xml`
-- `RelaySettingsModule.kt`
-- `AppRoot.js`
-- `scripts/prepare_extended_bundle.js`
-- `scripts/prepare_extended_status_i18n.js`
+### Priority 2 — guided setup and synthetic path on HONOR
 
-Five setup steps:
+- fresh/reset permission run through all five setup steps;
+- verify Japanese and English UI;
+- start Extended P2P with matching Windows build;
+- run synthetic notification;
+- verify posted -> detected -> queued -> Windows clipboard -> acknowledged;
+- repeat with Windows offline and after reconnect.
 
-1. Android 13+ runtime notification permission
-2. Accessibility clipboard-sharing service
-3. notification-listener access
-4. battery-optimization exemption
-5. HONOR/MagicOS background/auto-launch confirmation
+### Priority 3 — stable update proof
 
-`Continue setup` opens the next missing setting. The MagicOS text explicitly names auto-launch, secondary launch, and background execution. The final manufacturer-specific step is user-confirmed because Android does not expose one reliable cross-vendor query API.
+- increment Android versionCode for the next build;
+- install over `extended.4` without uninstalling;
+- prove login/settings/permissions that Android retains are still present;
+- do not rotate the test signer.
 
-The distributed Extended UI uses the system locale:
+### Priority 4 — real SMS/email and recovery matrix
 
-- default resources: English
-- `values-ja`: Japanese
-- service labels/descriptions: localized
-- persistent Sharing setup entry: localized
-- primary React labels: transformed to Japanese/English at build time
-- connection/login/P2P status: translated only when displayed; internal protocol/storage tokens remain unchanged
+- SMS and email with screen on, background, locked;
+- screen off 1, 15, and 30+ minutes;
+- record Android redaction separately from extractor/queue/transport/ACK;
+- MagicOS battery default and relaxed;
+- auto-launch/secondary launch/background execution enabled;
+- remove from recents, process kill, reboot, delayed fallback;
+- Wi-Fi/mobile handover and offline queues.
 
-Old READ_LOGS and overlay commands are removed from the transformed UI. CI asserts their absence and asserts bilingual transformed source before Metro bundling.
+### Priority 5 — regressions/protocol debt
 
-## Synthetic verification notification test
+- representative app copy matrix;
+- Android ↔ Windows text regression;
+- image/file paths;
+- P2S Windows-applied ACK design;
+- explicit multiple-peer ACK policy;
+- private production signing and tested tagged release only after mandatory validation.
 
-Files:
+## CI discipline
 
-- `OtpTestNotificationManager.kt`
-- `OtpTestStatusStore.kt`
-- `NotificationCodeListenerService.kt`
-- `OtpRelayDispatcher.kt`
-- `RelaySettingsActivity.kt`
+- preserve existing transport ACK tests;
+- run Android and Windows CI for every branch change;
+- record failed attempts and their actual cause;
+- keep PR #1 Draft;
+- do not publish/tag merely because CI is green;
+- when work stops, update all handoff documents so a new thread can continue without inference.
 
-Flow:
+## Current limitations
 
-`REAL LOCAL TEST NOTIFICATION -> NotificationListenerService -> OtpCodeExtractor -> OtpRelayStore -> OtpRelayDispatcher -> React transport -> existing native ACK`
-
-Behavior:
-
-- fresh random fake six-digit value
-- localized notification/channel text
-- explicitly marked synthetic extra
-- bypasses optional source-app filter only for the marked synthetic test
-- ordinary ClipCascade foreground notifications remain ignored
-- verifies extracted value equals the expected synthetic value before queueing
-- status: posted, detected, queued, extraction failed, deduplicated, post failed, acknowledged
-- settings refreshes status every second while visible
-- status/value expires after five minutes
-- test requires verification relay, notification permission, and notification access
-- Extended P2P acknowledgement follows validated Windows clipboard application
-- P2S still provides only its documented local transport acceptance
-
-The test path is compiled and CI validated but has not yet been run on HONOR 400 Pro.
-
-## Verification-code extractor
-
-Current coverage:
-
-- Japanese authentication/confirmation/login/sign-in/one-time/identity/two-step/security language
-- English OTP/one-time/verification/security/auth/login/sign-in/confirmation/access/two-factor language
-- full-width normalization
-- numeric, compact alphanumeric, prefixed, and grouped formats
-- candidate before or after the authentication phrase
-- standard title/text, BigText, text lines, conversation title, MessagingStyle current/historic messages
-- transaction amount or destination email address may coexist with a separate legitimate OTP
-- `verify <email-address>` is recognized as authentication context
-
-False-positive controls:
-
-- dates, times, years
-- monetary values adjacent to a candidate
-- phone numbers
-- tracking/delivery references
-- candidate substrings inside URLs/email addresses
-- generic postal, promotion, and error codes
-- ordinary numbers without authentication context
-
-Important trial and error:
-
-- `000d964408d7f4824cd0f16fb9d47954ccddf425` failed because an over-broad grouped pattern joined prose and following values.
-- `acd5cb9cf0dad674fb58b1d1b691d4f3cdf941ee` restricted spaces to grouped digits and hyphens to grouped alphanumerics.
-- `aa799b3553b2bfa160f793324972b072edead18b` expanded the bilingual corpus; Android run `28307672613` succeeded.
-- `9d06c1b175aaff118f09be7df929486155cc67e9` added transaction-notification positives; Android run `28307814762` succeeded.
-- `bc7cbfc7005fa925662bc0dc3e9969e0b799a9a2` failed one new `verify <email-address>` positive case in Android run `28308003116`.
-- `5433eb8e8ffaae47ed6873af67ea1c1df6824333` added that context; Android run `28308127548` and Windows run `28308127573` succeeded.
-
-## CI verification nuance
-
-Commit `abb9ca720ab728c56d8ee490132f0c9c1f6ae572` failed only because CI grepped raw Japanese text inside a Metro bundle that escaped Unicode. It did not prove a product failure.
-
-Commit `9b4e5da9b62c6a3054421c90697cf6363ce67134` moved assertions to transformed `App.js`/`AppRoot.js`. Run `28307959797` completed status localization, bilingual/no-ADB assertions, bundling, unit tests, APK assembly, embedded-bundle verification, and artifact upload successfully.
-
-## Highest-priority next work
-
-### Priority 1 — final CI and matching artifacts
-
-- obtain current PR head
-- confirm Android and Windows CI success on that exact head
-- fetch Android and Windows artifacts from the same head
-- confirm APK contains `assets/index.android.bundle`
-- record SHA-256 hashes
-- keep PR #1 Draft
-
-### Priority 2 — guided setup and synthetic test on HONOR
-
-- install current APK
-- start from fresh install or reset permissions
-- follow all five setup steps
-- confirm Japanese UI under Japanese locale and English UI under English locale
-- start Extended P2P with matching Windows build
-- post synthetic notification
-- confirm status reaches posted -> detected -> queued -> acknowledged
-- confirm Windows clipboard equals the displayed synthetic value
-- repeat with Windows offline and after reconnect
-
-### Priority 3 — real SMS/email screen-off matrix
-
-- SMS and email with screen on/background/locked
-- screen off 1, 15, and 30+ minutes
-- MagicOS battery default and relaxed
-- auto-launch/secondary launch/background execution enabled
-- app removed from recents, process killed, device rebooted
-- record notification visibility/redaction, extractor result, queue result, transport result, and ACK independently
-
-### Priority 4 — remaining regression/protocol work
-
-- representative app copy matrix
-- Wi-Fi/mobile handover
-- delayed boot fallback
-- P2S Windows-applied acknowledgement design
-- explicit multiple-P2P-peer ACK policy
-- upstream text/image/file regression
-- Windows sleep/resume/watchdog controls
-
-## Remaining limitations
-
-- synthetic notification test is not yet target-device validated
-- Android 16 may redact real SMS/email verification content
-- screen-off SMS/email delivery is unverified
-- Accessibility capture remains app-dependent outside the user's current successful scenario
-- P2S ACK is not Windows-applied
-- old-peer P2P fallback is not Windows-applied
-- multiple-peer ACK semantics are not explicit
-- no empirical comparison against OTP Helper has been completed; the implementation now has broader designed coverage and stronger staged diagnostics, but superiority must be demonstrated by a shared corpus/device matrix
+- first stable-signer migration not yet performed on device;
+- next-build in-place update not yet proven;
+- Windows Quit fix not yet verified against a real lingering EXE;
+- synthetic full-path test not yet run on HONOR;
+- complete locked/screen-off SMS/email matrix not done;
+- Android 16 redaction not measured;
+- MagicOS process-death/reboot/handover not verified;
+- representative app and image/file regression incomplete;
+- P2S is not Windows-applied ACK;
+- multiple-peer ACK policy remains implicit;
+- no private production release signer.
 
 ## Pull-request state
 
-Keep PR #1 Draft until mandatory HONOR 400 Pro tests and upstream regressions pass. Do not tag or publish a release merely because CI is green.
+PR #1 must remain Draft until mandatory target-device and upstream regression tests pass. The accurate product description is: **working personal beta with one successful real Yahoo! JAPAN SMS verification flow, with durability and broad compatibility still under validation**.
