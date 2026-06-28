@@ -11,13 +11,40 @@ function replaceRequired(before, after) {
   source = source.replace(before, after);
 }
 
+function replaceRegexRequired(pattern, after, expectedCount) {
+  const matches = source.match(pattern) || [];
+  if (matches.length !== expectedCount) {
+    throw new Error(
+      `Expected ${expectedCount} App.js matches for ${pattern}, found ${matches.length}`,
+    );
+  }
+  source = source.replace(pattern, after);
+}
+
 replaceRequired(
   "const APP_VERSION = '3.2.0';",
-  "const APP_VERSION = '3.2.1-extended.2';",
+  "const APP_VERSION = '3.2.1-extended.3';",
 );
 replaceRequired(
   "const APP_NAME = 'ClipCascade';",
   "const APP_NAME = 'ClipCascade Extended';",
+);
+replaceRequired(
+  `  const VERSION_URL =
+    'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/version.json';
+  const GITHUB_URL = 'https://github.com/Sathvik-Rao/ClipCascade';
+  const RELEASE_URL =
+    'https://github.com/Sathvik-Rao/ClipCascade/releases/latest';
+  const APP_NAME = 'ClipCascade Extended';
+  const HELP_URL = \`${'${GITHUB_URL}'}/blob/main/README.md\`;
+  const METADATA_URL =
+    'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/metadata.json';`,
+  `  const APP_NAME = 'ClipCascade Extended';`,
+);
+replaceRequired(
+  `  const [newVersionAvailable, setNewVersionAvailable] = useState([false, '']);
+  const [donateUrl, setDonateUrl] = useState(null);`,
+  `  // Extended builds do not query or advertise upstream releases/funding.`,
 );
 replaceRequired(
   '  const { NativeBridgeModule } = NativeModules;',
@@ -29,6 +56,64 @@ replaceRequired(
 replaceRequired(
   '  PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);',
   '  // Notification permission is requested by the guided Sharing setup flow.',
+);
+replaceRequired(
+  `        // check for new version
+        try {
+          const response = await fetchTimeout(VERSION_URL);
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          const data = await response.json();
+          if (data && data.android !== APP_VERSION) {
+            setNewVersionAvailable([true, data.android]);
+          }
+        } catch (e) {
+          // Silent catch
+        }
+
+        try {
+          const response = await fetchTimeout(METADATA_URL);
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          const data = await response.json();
+          if (data) {
+            setDonateUrl(data.funding);
+          }
+        } catch (e) {
+          // Silent catch
+        }`,
+  `        // Extended builds intentionally perform no upstream update or funding lookup.`,
+);
+replaceRequired(
+  `            {/* new version display message */}
+            {newVersionAvailable[0] && (
+              <TouchableOpacity
+                onPress={() => Linking.openURL(RELEASE_URL)}
+                style={{ marginTop: 10 }}
+              >
+                <Text
+                  style={[
+                    styles.message,
+                    {
+                      color: '#008080',
+                      fontWeight: 'bold',
+                      textDecorationLine: 'underline',
+                    },
+                  ]}
+                >
+                  New version available! 🚀 Click here to update ({APP_VERSION}{' '}
+                  ➞ {newVersionAvailable[1]})
+                </Text>
+              </TouchableOpacity>
+            )}`,
+  `            {/* Extended releases are distributed explicitly; no upstream update banner. */}`,
+);
+replaceRegexRequired(
+  /\n\s*\{\/\* Footer \*\/\}\n\s*<View style=\{styles\.footerContainer\}>[\s\S]*?\n\s*<\/View>/g,
+  '',
+  2,
 );
 
 const replacements = [
@@ -65,20 +150,34 @@ const replacements = [
     "<Text style={styles.label}>{tr('ソルト:', 'Salt:')}</Text>",
   ],
   [
-    `                  Store Password Locally (not recommended; only works if\n                  encryption is disabled):`,
-    `                  {tr(\n                    'パスワードを端末内に保存（非推奨・暗号化OFF時のみ）:',\n                    'Store password locally (not recommended; encryption must be off):',\n                  )}`,
+    `                  Store Password Locally (not recommended; only works if
+                  encryption is disabled):`,
+    `                  {tr(
+                    'パスワードを端末内に保存（非推奨・暗号化OFF時のみ）:',
+                    'Store password locally (not recommended; encryption must be off):',
+                  )}`,
   ],
   [
     `                  Maximum Clipboard Size Local Limit (in bytes):`,
-    `                  {tr(\n                    'クリップボードの端末側上限（バイト）:',\n                    'Local clipboard size limit (bytes):',\n                  )}`,
+    `                  {tr(
+                    'クリップボードの端末側上限（バイト）:',
+                    'Local clipboard size limit (bytes):',
+                  )}`,
   ],
   [
-    `                  Run on system startup (disable if the READ_LOGS permission is\n                  granted):`,
-    `                  {tr(\n                    '端末起動時に同期を再開:',\n                    'Resume synchronization after device startup:',\n                  )}`,
+    `                  Run on system startup (disable if the READ_LOGS permission is
+                  granted):`,
+    `                  {tr(
+                    '端末起動後に同期を自動再開:',
+                    'Automatically resume synchronization after device startup:',
+                  )}`,
   ],
   [
     `                  Enable WebSocket Status Notification:`,
-    `                  {tr(\n                    '接続状態の通知を表示:',\n                    'Show connection status notification:',\n                  )}`,
+    `                  {tr(
+                    '接続状態の通知を表示:',
+                    'Show connection status notification:',
+                  )}`,
   ],
   [
     '<Text style={styles.label}>Enable Periodic Checks:</Text>',
@@ -113,16 +212,27 @@ const replacements = [
     "                  {tr('Androidでの自動クリップボード共有:', 'Automatic clipboard sharing on Android:')}",
   ],
   [
-    `                  On Android 10 and above, clipboard monitoring has been\n                  restricted for privacy reasons. To share clipboard content\n                  using ClipCascade:`,
-    `                  {tr(\n                    'ユーザー補助を有効にすると、ADBなしで明示的なコピー操作を検出できます。手動共有も引き続き利用できます。',\n                    'Enable Accessibility to detect explicit copy actions without ADB. Manual sharing remains available.',\n                  )}`,
+    `                  On Android 10 and above, clipboard monitoring has been
+                  restricted for privacy reasons. To share clipboard content
+                  using ClipCascade:`,
+    `                  {tr(
+                    'ユーザー補助を有効にすると、ADBなしで明示的なコピー操作を検出できます。手動共有も引き続き利用できます。',
+                    'Enable Accessibility to detect explicit copy actions without ADB. Manual sharing remains available.',
+                  )}`,
   ],
   [
     `                    1. Select the text, image, or file(s) you want to copy.`,
-    `                    {tr(\n                      '1. テキスト・画像・ファイルを選択します。',\n                      '1. Select the text, image, or file(s).',\n                    )}`,
+    `                    {tr(
+                      '1. テキスト・画像・ファイルを選択します。',
+                      '1. Select the text, image, or file(s).',
+                    )}`,
   ],
   [
     `                    2. Tap 'Share', select 'ClipCascade'.`,
-    `                    {tr(\n                      '2. 「共有」からClipCascadeを選びます。',\n                      "2. Tap 'Share' and select ClipCascade.",\n                    )}`,
+    `                    {tr(
+                      '2. 「共有」からClipCascadeを選びます。',
+                      "2. Tap 'Share' and select ClipCascade.",
+                    )}`,
   ],
   [
     "<Text style={[styles.label, { marginLeft: 15 }]}>(or)</Text>",
@@ -130,27 +240,43 @@ const replacements = [
   ],
   [
     `                    Tap 'ClipCascade' instead of 'Copy'.`,
-    `                    {tr(\n                      '対応アプリでは「コピー」の代わりにClipCascadeを選べます。',\n                      'In supported apps, choose ClipCascade instead of Copy.',\n                    )}`,
+    `                    {tr(
+                      '対応アプリでは「コピー」の代わりにClipCascadeを選べます。',
+                      'In supported apps, choose ClipCascade instead of Copy.',
+                    )}`,
   ],
   [
-    `                  There's also a workaround to enable clipboard sharing in the\n                  background. Scroll down for setup instructions.`,
-    `                  {tr(\n                    '右下の「共有設定」から、ユーザー補助・通知アクセス・バックグラウンド動作を順番に設定してください。',\n                    'Open Sharing setup at the bottom-right and complete Accessibility, notification access, and background operation.',\n                  )}`,
+    `                  There's also a workaround to enable clipboard sharing in the
+                  background. Scroll down for setup instructions.`,
+    `                  {tr(
+                    '画面下部の「共有設定」から、ユーザー補助・通知アクセス・バックグラウンド動作を順番に設定してください。',
+                    'Open Sharing setup at the bottom and complete Accessibility, notification access, and background operation.',
+                  )}`,
   ],
   [
     '                  Background Clipboard Reception:',
     "                  {tr('バックグラウンド受信:', 'Background clipboard reception:')}",
   ],
   [
-    `                  ClipCascade automatically receives clipboard content in the\n                  background. No manual action is required to receive data.`,
-    `                  {tr(\n                    '同期を開始すると、他端末のクリップボードをバックグラウンドで受信します。',\n                    'After synchronization starts, clipboard content from other devices is received in the background.',\n                  )}`,
+    `                  ClipCascade automatically receives clipboard content in the
+                  background. No manual action is required to receive data.`,
+    `                  {tr(
+                    '同期を開始すると、他端末のクリップボードをバックグラウンドで受信します。',
+                    'After synchronization starts, clipboard content from other devices is received in the background.',
+                  )}`,
   ],
   [
     '                  Important Note:',
     "                  {tr('バックグラウンド動作:', 'Background operation:')}",
   ],
   [
-    `                  To ensure uninterrupted performance, please disable battery\n                  optimization for ClipCascade. This will prevent the system\n                  from stopping the app when it's running in the foreground.`,
-    `                  {tr(\n                    '安定動作のため、共有設定の案内に従ってバッテリー制限とメーカー独自の自動起動制限を解除してください。',\n                    'For reliable operation, follow Sharing setup to remove battery restrictions and manufacturer-specific auto-launch limits.',\n                  )}`,
+    `                  To ensure uninterrupted performance, please disable battery
+                  optimization for ClipCascade. This will prevent the system
+                  from stopping the app when it's running in the foreground.`,
+    `                  {tr(
+                    '安定動作のため、共有設定の案内に従ってバッテリー制限とメーカー独自の自動起動制限を解除してください。',
+                    'For reliable operation, follow Sharing setup to remove battery restrictions and manufacturer-specific auto-launch limits.',
+                  )}`,
   ],
   [
     '                  Battery Optimization Settings',
@@ -165,8 +291,12 @@ const replacements = [
     "                  {tr('ADB不要の共有設定:', 'ADB-free sharing setup:')}",
   ],
   [
-    `                  On rooted/non-rooted devices, to enable automatic clipboard\n                  monitoring you need to execute these 3 ADB commands:`,
-    `                  {tr(\n                    'ADBコマンドは不要です。右下の共有設定を開き、次の案内を順に完了してください。',\n                    'No ADB command is required. Open Sharing setup at the bottom-right and follow the guided steps.',\n                  )}`,
+    `                  On rooted/non-rooted devices, to enable automatic clipboard
+                  monitoring you need to execute these 3 ADB commands:`,
+    `                  {tr(
+                    'ADBコマンドは不要です。画面下部の共有設定を開き、次の案内を順に完了してください。',
+                    'No ADB command is required. Open Sharing setup at the bottom and follow the guided steps.',
+                  )}`,
   ],
   [
     '                    1. Enable the READ_LOGS permission:',
@@ -177,8 +307,12 @@ const replacements = [
     "{tr('旧READ_LOGS権限は使用しません。', 'The legacy READ_LOGS permission is not used.')}",
   ],
   [
-    `                    2. Allow "Drawing over other apps", also accessible from\n                    Settings:`,
-    `                    {tr(\n                      '2. SMS・メールの認証コード用に通知アクセスを許可',\n                      '2. Allow notification access for SMS and email verification codes',\n                    )}`,
+    `                    2. Allow "Drawing over other apps", also accessible from
+                    Settings:`,
+    `                    {tr(
+                      '2. SMS・メールの認証コード用に通知アクセスを許可',
+                      '2. Allow notification access for SMS and email verification codes',
+                    )}`,
   ],
   [
     '{`> adb -d shell appops set com.clipcascade SYSTEM_ALERT_WINDOW allow`}',
@@ -223,4 +357,4 @@ for (const [before, after] of replacements) {
 }
 
 fs.writeFileSync(appPath, source, 'utf8');
-console.log('Prepared bilingual ClipCascade Extended interface for bundling.');
+console.log('Prepared bilingual ClipCascade Extended interface without upstream promotion.');
