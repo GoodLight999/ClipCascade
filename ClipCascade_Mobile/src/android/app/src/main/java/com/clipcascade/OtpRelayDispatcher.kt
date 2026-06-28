@@ -59,7 +59,18 @@ object OtpRelayDispatcher {
     @Synchronized
     fun acknowledge(context: Context, relayId: String): Boolean {
         if (relayId.isBlank()) return false
-        OtpRelayStore.markDelivered(context.applicationContext, listOf(relayId))
+        val applicationContext = context.applicationContext
+        OtpRelayStore.markDelivered(applicationContext, listOf(relayId))
+        if (relayId.startsWith(OtpTestStatusStore.RELAY_ID_PREFIX)) {
+            OtpTestStatusStore.acknowledged(applicationContext, relayId)
+            RelayHealthStore.record(
+                applicationContext,
+                category = "verification",
+                trigger = "test_notification",
+                path = "local_extractor",
+                result = "test_acknowledged",
+            )
+        }
         if (inFlightId == relayId) {
             inFlightId = null
             inFlightSince = 0L
