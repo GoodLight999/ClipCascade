@@ -1,5 +1,5 @@
 <resources>
-    <string name="boot_resume_enable">Resume sync at startup</string>
-    <string name="boot_resume_explanation">Resume synchronization after the device starts.</string>
-    <string name="boot_resume_save_failed">Unable to save the setting.</string>
+    <string name="boot_resume_enable">起動時に同期を再開</string>
+    <string name="boot_resume_explanation">この設定を有効にすると、端末を起動した後にClipCascadeの同期を再開します。Androidがすぐに開始できない場合は、30秒後にもう一度確認します。</string>
+    <string name="boot_resume_save_failed">設定を保存できませんでした。</string>
 </resources>
