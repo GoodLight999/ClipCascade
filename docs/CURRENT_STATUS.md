@@ -5,118 +5,119 @@ Draft PR: `#1`
 Repository: `GoodLight999/ClipCascade` (public)  
 Canonical requirements: `docs/REQUIREMENTS.md`
 
+## Critical status correction — 2026-06-28
+
+Earlier Android outbound successes were misattributed to ClipCascade because Microsoft Phone Link clipboard synchronization was active on Windows.
+
+With Phone Link excluded, the user found:
+
+- peer -> Android reception works while ClipCascade is backgrounded and apparently while the screen is off;
+- Android -> peer sending does not work when ClipCascade is not visible;
+- the old claim that Accessibility copied-text relay worked on the target device is invalid;
+- the old claim that a Yahoo! JAPAN SMS verification value reached Windows through ClipCascade is invalid.
+
+No Android foreground/background/locked/screen-off outbound success is currently proven. Read `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md` before making or testing further changes.
+
+PR #1 must remain Draft.
+
 ## Current high-level state
 
-ClipCascade Extended now has a working Windows client, ADB-free Android copied-text relay, bilingual guided setup, persistent verification-code relay, synthetic full-path notification test, bounded recovery, and Extended P2P Windows-applied acknowledgement.
+Windows authentication, GUI, inbound synchronization, P2P transport, Windows-applied ACK, diagnostics, packaging, and automated tests are substantially implemented.
 
-The user has successfully used a real Yahoo! JAPAN SMS verification notification: the extracted value reached the Windows clipboard. This is the first real-service verification-code success. The exact lock/screen-off duration was not recorded, so it does **not** complete the locked or 1/15/30+ minute screen-off matrix.
+Android has:
 
-The project is suitable for personal beta use, but is not yet production-ready. PR #1 must remain Draft until the mandatory HONOR 400 Pro and regression matrix passes.
+- a user-authorized AccessibilityService;
+- a user-authorized NotificationListenerService;
+- persistent clipboard and verification-code queues;
+- bilingual guided setup and diagnostics;
+- deterministic development/test signing;
+- boot/network/heartbeat recovery infrastructure;
+- Extended P2P peer acknowledgement.
 
-## Current branch/artifact baseline
+However, the mandatory Android outbound requirement is still unproven. A new repair attempts to remove foreground-only clipboard behavior by recovering the selected range through Accessibility rather than relying on background `ClipboardManager` access.
 
-Latest fully synchronized documentation handoff begins after code/docs head:
+## Android platform constraint
 
-- runtime implementation and artifact baseline: `0a570d5b9d0cc7a8fae40cf823696a68c72fa9e3`
-- Android CI run `28312648447`: success
-- Windows CI run `28312648425`: success
-- Android artifact ID `7931441696`
-- Windows artifact ID `7931437099`
+Android 10 and later do not return clipboard data to an ordinary app unless it is the default input method editor or currently has input focus.
 
-Always read PR #1 for the actual current branch HEAD before changing code or fetching new artifacts. Documentation-only commits after this baseline do not change runtime behavior, but branch-head build identity will differ.
+Consequences for this project:
 
-## User-validated facts
+- a foreground service alone does not make `ClipboardManager.primaryClip` reliable in the background;
+- Accessibility must capture the selected text around an explicit Copy action;
+- using Accessibility merely as a trigger and then reading the global clipboard reproduces the old foreground-only behavior;
+- future implementation and tests must distinguish copy-cue detection, selected-text recovery, native queueing, transport, peer clipboard application, and acknowledgement.
 
-- repaired Windows authentication works against the real deployment;
-- Windows GUI and synchronization work;
-- Android copied-text relay works through Accessibility in the user's current scenario;
-- no old READ_LOGS/overlay/ADB setup is required;
-- a real Yahoo! JAPAN SMS verification value reached the Windows clipboard;
-- prior Windows builds could remain alive after tray Quit;
-- prior Android CI builds frequently conflicted because each runner used a different debug certificate.
+## Current Android repair build
 
-## Android package and update identity
+Prepared identity:
 
 - app name: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- current version: `3.2.1-extended.4-standalone`
-- versionCode: `320107`
-- standalone APK embeds `assets/index.android.bundle`
-- Gradle uses a deterministic public development/test signer
-- signer certificate SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- CI verifies the completed APK certificate with `apksigner`
+- versionName: `3.2.1-extended.5-standalone`
+- versionCode: `320109`
+- deterministic public test signer certificate SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 
-Migration rule:
+The build is intended to update stable-signed versionCode `320107` or `320108` in place. The signer is public and suitable only for repeatable development/personal test builds, not publisher authentication.
 
-- the currently installed ephemeral-signed APK must be uninstalled once;
-- install the first `extended.4` stable-test-signed APK and redo app permissions/settings;
-- subsequent builds with the same signer and increasing versionCode should update in place and retain data;
-- that in-place update/data-retention behavior still requires one real-device proof with the next versionCode.
+## Accessibility outbound capture repair
 
-The deterministic signer is intentionally public. It is appropriate for repeatable personal/test builds, not publisher authentication or a public production release.
+`ClipboardAccessibilityService` now:
 
-## Guided Android setup and localization
+- listens for selection changes, copy-button/context clicks, announcements, notification-state changes, and copy-related window changes;
+- includes non-important Accessibility views so floating/system toolbar nodes are less likely to be omitted;
+- accepts `AccessibilityNodeInfo.ACTION_COPY` as an explicit copy cue;
+- attempts capture immediately before the selection can collapse, followed by bounded delayed attempts;
+- retains selected text for 60 seconds rather than 15 seconds;
+- scans all interactive Accessibility windows for a node with an active selected range if the remembered selection is absent;
+- queues only the selected substring;
+- does not send merely because text was selected; an explicit Copy cue is still required.
 
-The always-reachable Sharing setup flow covers:
+Target-device proof is pending.
 
-1. Android 13+ notification permission
-2. Accessibility clipboard-sharing service
-3. notification-listener access
-4. battery-optimization exemption
-5. HONOR/MagicOS auto-launch, secondary launch, and background-execution confirmation
+## Native queue and recovery repair
 
-Default resources are English; `values-ja` supplies Japanese. Native settings, service labels, primary React labels, and displayed status follow the system locale. Internal protocol/storage tokens remain stable English.
+Previously, clipboard and OTP queues could retry indefinitely without asking the background transport to recover when React/JS state was unavailable.
 
-The persistent bottom bar exposes:
+Current implementation requests bounded recovery when synchronization intent is enabled but:
 
-- Sharing setup
-- `Resume sync at startup` / `起動時に同期を再開`
+- transport status is offline;
+- the React application/context is absent;
+- React event delivery fails.
 
-The boot switch writes the same `relaunch_on_boot` value used by `BootReceiver`. Immediate Headless JS recovery and the delayed WorkManager fallback are preserved.
+A healthy P2P signaling connection with zero remote peers remains a normal queued condition and does not trigger restarts.
 
-Fresh-install guided setup, bottom-bar layout, locale switching, and boot-switch persistence still require target-device testing.
+`RecoveryCoordinator` now:
 
-## Accessibility clipboard relay
+- does not suppress the first request merely because the device has been up for less than 60 seconds;
+- records the attempt before active-React or Headless JS recovery so OS-rejected starts remain rate-limited;
+- preserves user synchronization intent after a failed background recovery.
 
-Implemented:
+The transformed startup path now attempts to recreate a missing prior foreground-service generation instead of changing synchronization to OFF and leaving `Foreground service stopped running` as a terminal state.
 
-- user-authorized AccessibilityService copy-cue detection;
-- direct ClipboardManager read with recent-selection fallback;
-- bounded persistent queue with TTL and duplicate suppression;
-- dispatch only in a genuinely connected state;
-- no queue deletion merely because React emitted an event;
-- old logcat/READ_LOGS/overlay path removed.
+Android 12+ restricts starting foreground services from the background. Recovery can still be rejected by the OS outside permitted cases; battery exemption and HONOR/MagicOS background permissions remain part of the mandatory setup and test matrix.
 
-The user confirmed ordinary copied text works in the current scenario. Representative application compatibility remains untested.
+## Target-neutral Android UI
+
+The manual clipboard test now says:
+
+- Japanese: `接続中の端末へテスト文字列を送る`
+- English: `Send a test string to connected devices`
+
+The setup introduction also describes connected devices rather than Windows specifically.
 
 ## Verification-code notification relay
 
-Implemented:
+Implemented in code:
 
-- user-authorized NotificationListenerService;
-- `requestRebind` after listener disconnection;
+- local extraction through NotificationListenerService;
 - optional source-package filter;
-- transient combination of standard text, BigText, text lines, conversation title, and MessagingStyle current/historic messages;
+- standard text, expanded text, text lines, conversation title, and MessagingStyle inspection;
 - persistence of only extracted value, timestamp, and opaque relay ID;
-- bounded persistent queue, TTL, deduplication, retry, and acknowledgement timeout;
-- queue clearing when relay/source policy changes;
-- dispatch only in an actual connected state.
+- bounded queue, TTL, deduplication, retry, and ACK timeout;
+- synthetic local notification test;
+- Japanese and English extraction rules with false-positive controls.
 
-Extractor coverage includes Japanese and English authentication language, numeric/alphanumeric/prefixed/grouped/full-width values, code-before/code-after patterns, transaction notifications containing a separate amount, and verification addressed to an email address. False-positive controls cover dates, times, years, amounts, phones, tracking IDs, URL/email substrings, and unrelated numbers.
-
-Real Yahoo! JAPAN SMS succeeded once. Gmail/Outlook/email formats, Android 16 redaction, and long screen-off behavior remain unverified.
-
-## Synthetic end-to-end notification test
-
-The settings screen can post a real local notification containing a fresh synthetic six-digit value.
-
-Normal path:
-
-`LOCAL_NOTIFICATION -> NOTIFICATION_LISTENER -> EXTRACTOR -> PERSISTENT_QUEUE -> REACT_TRANSPORT -> EXISTING_ACK -> DELETE`
-
-Status states include posted, detected, queued, extraction failed, deduplicated, post failed, and acknowledged. The optional source-app filter is bypassed only for the explicitly marked synthetic test. Ordinary ClipCascade notifications remain ignored. Test value/status expire after five minutes.
-
-The code path and unit tests pass CI, but the synthetic test has not yet been run end-to-end on the HONOR 400 Pro.
+No real SMS/email end-to-end result is currently valid because the prior result was contaminated by Phone Link. The synthetic and real screen-state matrix must be repeated with all other clipboard synchronizers disabled.
 
 ## Delivery acknowledgement — preserve exactly
 
@@ -128,9 +129,9 @@ P2S completion:
 
 `LOCAL_TRANSPORT_ACCEPTED -> NATIVE_ACK -> DELETE`
 
-P2P with Extended Windows:
+P2P with Extended peer:
 
-`LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_RECEIVED -> WINDOWS_TEXT_APPLIED -> PEER_ACK -> NATIVE_ACK -> DELETE`
+`LOCAL_TRANSPORT_ACCEPTED -> PEER_RECEIVED -> PEER_TEXT_APPLIED -> PEER_ACK -> NATIVE_ACK -> DELETE`
 
 P2P with old/non-Extended peer:
 
@@ -139,109 +140,93 @@ P2P with old/non-Extended peer:
 Do not remove or bypass:
 
 - `relayId` / `ackRequested` metadata;
-- Windows ACK only after validated text clipboard application or duplicate-already-applied handling;
-- Android ACK control-envelope handling before clipboard parsing;
+- peer ACK only after validated text application or duplicate-already-applied handling;
+- Android ACK-envelope handling before clipboard parsing;
 - receive-hash commit only after validation;
-- generation-scoped P2P ACK timers;
-- queue startup only after the `SHARED_TEXT` listener is installed.
+- generation-scoped ACK timers;
+- queue startup only after `SHARED_TEXT` listener registration.
 
-Limitations remain: P2S and old-peer fallback are not Windows-applied acknowledgement; multiple-peer completion occurs on the first valid ACK.
+P2S and old-peer fallback are not peer-applied acknowledgement. Multiple-peer completion still occurs on the first valid ACK.
 
-## Android recovery
+## Windows status
 
-Implemented and CI-tested:
+User-validated:
 
-- heartbeat-triggered bounded recovery;
-- immediate Headless JS boot recovery;
-- delayed one-time WorkManager heartbeat fallback;
-- generation-scoped listener lifecycle;
-- replacement-network tracking so late old-network `onLost` cannot cancel the new network;
-- clipboard and verification queues resume on network availability;
-- strict connected-state parsing;
-- content-free diagnostics.
-
-MagicOS process kill, long sleep, reboot, delayed fallback, and Wi-Fi/mobile handover remain unverified.
-
-## Windows authentication and API handling
-
-Implemented and user-validated:
-
-- one persistent `requests.Session` across login and authenticated APIs;
-- preservation of all server/proxy cookies;
-- rejection of HTTP-200 login-form false positives;
-- bounded timeouts;
-- explicit validation of empty, HTML, non-JSON, non-object, redirected, and unsupported-mode responses;
-- rejected authenticated sessions return to login rather than terminating startup;
-- diagnostics expose metadata only, never response bodies, credentials, cookie values, private URLs, or real clipboard/notification content.
-
-CI runs authenticated HTTP tests before packaging.
-
-## Windows status, recovery, and Quit
+- authentication works against the actual deployment;
+- Windows GUI and synchronization work;
+- Windows -> Android reception works while Android is backgrounded and apparently screen-off.
 
 Implemented:
 
+- persistent authenticated HTTP session and all-cookie preservation;
+- validated authenticated API responses;
 - visible status/control window;
-- restart, reconnect, disconnect, logs, and diagnostics controls;
-- second-launch window activation;
-- watchdog for persistent offline and signaling-connected/DataChannel-dead states;
-- rotating logs;
+- restart/reconnect/disconnect/log/diagnostic controls;
+- rotating logs and second-launch activation;
 - complete P2P teardown before replacement;
-- Extended P2P clipboard-applied ACK receiver.
+- Windows-applied P2P ACK;
+- explicit Quit cleanup and final process-exit guarantee.
 
-The ambiguous `Automatic reconnect: False` display was replaced by:
+The supplied log showed failed `169.254.*` candidate binds followed by a successful candidate and `ICE completed`. The watchdog warning was emitted too early during normal ICE negotiation. It now waits ten seconds before reporting a persistent unhealthy state; the full restart threshold remains 25 seconds.
 
-- `Automatic recovery: Standing by`
-- `Automatic recovery: Retrying now`
-- `Automatic recovery: Paused by user`
+Real Task Manager proof for Quit and immediate relaunch is still pending.
 
-Explicit tray Quit now:
+## CI and trial record
 
-- closes the active status window;
-- stops the tray and destroys the Tk root on the UI thread;
-- stops and joins the watchdog;
-- awaits transport teardown;
-- stops, joins, and closes the P2P asyncio loop;
-- flushes logging;
-- applies a final explicit-exit guarantee after graceful cleanup.
+- Prior ACK, authenticated HTTP, shutdown/status, extractor, package, and signing tests remain mandatory.
+- Android run `28316609479` failed during AAPT resource linking because the XML event flag was written as `typeViewContextClicked`; the valid XML enum is `typeContextClicked`. Kotlin's constant remains `TYPE_VIEW_CONTEXT_CLICKED`.
+- Commit `f3ca3b45c51a48f18e9811b06786c030a7b818bb` corrects the XML spelling.
+- This failure was a build-resource naming error, not a transport or ACK regression.
 
-Shutdown/status tests pass CI. Real Windows validation still must confirm that no EXE remains in Task Manager and that immediate relaunch is not blocked by a stale mutex.
+See `docs/progress.md` and `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md` for the complete chronology.
 
-## Important trial-and-error record
+## Mandatory next proof
 
-- grouped OTP regex initially joined prose/date/code tokens; narrowed patterns fixed it;
-- raw Japanese grep against Metro output was invalid because Metro escaped Unicode; checks moved to transformed source;
-- `verify <email-address>` initially lacked context support; extractor corpus and implementation were extended;
-- broad boot-control transformation consumed unrelated login rows; replaced with index-based isolation around the unique storage marker;
-- direct binary/encoded test-key commit was blocked; signer is now deterministically generated in the ignored build directory;
-- first signer CI check falsely failed because `apksigner` output contains multiple colon fields; expected/generated/APK certificate digests were identical, and parsing was corrected to use the final field.
+Before testing:
 
-Full details are in `docs/progress.md` and `docs/LATEST_RUNTIME_FIXES_HANDOFF.md`.
+1. disable Phone Link clipboard synchronization;
+2. stop every other clipboard synchronization utility;
+3. use matching current Android and peer builds;
+4. use synthetic non-secret text.
 
-## Highest-priority next work
+Test separately:
 
-1. Install the first stable-test-signed `extended.4` APK after one final uninstall and restore permissions/settings.
-2. Run the new Windows EXE, select tray Quit, confirm the process disappears, then relaunch immediately.
-3. Run the guided setup and synthetic notification test in Extended P2P on HONOR 400 Pro.
-4. Build the next Android versionCode and prove in-place update plus retained settings.
-5. Execute real SMS and email tests with screen on/background/locked and screen off for 1, 15, and 30+ minutes.
-6. Execute process-kill, reboot, delayed WorkManager fallback, Wi-Fi/mobile handover, and queue durability tests.
-7. Execute representative app copy and upstream text/image/file regressions.
+1. Android app visible;
+2. Android app backgrounded for at least 30 seconds;
+3. app removed from recents;
+4. device locked and screen off;
+5. synthetic OTP notification;
+6. real SMS and email without recording the value.
+
+After each failure, record:
+
+- clipboard diagnostic trigger/path/result;
+- pending clipboard queue count;
+- recovery diagnostic trigger/path/result;
+- whether peer -> Android reception still works.
+
+Interpretation:
+
+- no clipboard diagnostic and queue count zero: Accessibility missed the copy cue or selection;
+- `no_text_available` or `clipboard_denied_no_fallback`: the cue was observed but no selected range was available;
+- queue count greater than zero: capture succeeded but outbound transport/ACK is blocked;
+- queue drains and exact peer clipboard update plus peer ACK occurs: full outbound success.
 
 ## Not yet complete
 
-- one-time stable-signer migration on the device;
-- in-place update/data retention proof;
-- Windows Quit real-process proof;
-- guided setup and synthetic full-path test on target device;
-- representative application compatibility;
-- complete screen-off SMS/email matrix;
+- Android background outbound proof with Phone Link disabled;
+- Accessibility compatibility across representative applications;
+- synthetic OTP full-path proof;
+- real SMS/email foreground/background/locked/screen-off matrix;
 - Android 16 notification redaction measurement;
 - MagicOS process-death/reboot/handover recovery;
-- P2S Windows-applied acknowledgement;
+- one-time signer migration and subsequent update-retention proof;
+- Windows Quit real-process proof;
+- image/file regression;
+- P2S peer-applied acknowledgement;
 - explicit multiple-peer ACK policy;
-- complete upstream regression matrix;
-- private production release signing and tested tagged release.
+- private production signing and tested tagged release.
 
 ## Do not claim
 
-Do not describe the branch as complete, production-ready, universally compatible, or reliably screen-off until the mandatory target-device and regression matrix passes. It is accurate to describe it as a working personal beta with one successful real Yahoo! JAPAN SMS verification flow.
+Do not describe Android outbound synchronization as working, beta-ready, screen-off capable, or real-SMS validated until it succeeds with Phone Link and every other competing synchronizer disabled.
