@@ -52,6 +52,9 @@ jobs:
       - name: Prepare Extended version identity
         run: node scripts/prepare_extended_version.js
 
+      - name: Prepare Android package version
+        run: node scripts/prepare_background_recovery_version.js
+
       - name: Prepare startup service recovery and target-neutral wording
         run: node scripts/prepare_startup_service_recovery.js
 
@@ -80,12 +83,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.4" App.js
+          grep -q "3.2.1-extended.5" App.js
+          grep -q "versionCode 320109" android/app/build.gradle
+          grep -q "versionName \"3.2.1-extended.5\"" android/app/build.gradle
           grep -q "ユーザー名" App.js
           grep -q "Username" App.js
           grep -q "未接続" App.js
           grep -q "foregroundServiceNeedsRestart" App.js
           grep -q "Restarting background synchronization" App.js
+          grep -q "RecoveryCoordinator.request(context, \"clipboard_transport_not_ready\")" android/app/src/main/java/com/clipcascade/ClipboardRelayDispatcher.kt
+          grep -q "RecoveryCoordinator.request(applicationContext, \"otp_transport_not_ready\")" android/app/src/main/java/com/clipcascade/OtpRelayDispatcher.kt
+          grep -q "lastRequestElapsedMs > 0L" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q "接続中の端末へテスト文字列を送る" android/app/src/main/res/values-ja/strings.xml
           grep -q "Send a test string to connected devices" android/app/src/main/res/values/strings.xml
           grep -q "共有設定" AppRoot.js
