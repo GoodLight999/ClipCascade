@@ -1,0 +1,142 @@
+<resources>
+    <string name="app_name">ClipCascade Extended</string>
+    <string name="relay_settings_title">ClipCascade 設定</string>
+    <string name="accessibility_service_label">ClipCascade クリップボード共有</string>
+    <string name="notification_listener_label">ClipCascade 認証コード共有</string>
+    <string name="accessibility_service_description">明示的なコピー操作を検出し、選択したテキストをClipCascade経由で他の端末へ共有します。</string>
+
+    <string name="background_sharing_title">バックグラウンド共有</string>
+    <string name="background_sharing_body">ADBを使わずにAndroidの権限を設定します。通常のコピーはユーザー補助、認証コードは通知アクセスから取得してWindowsへ送ります。</string>
+
+    <string name="setup_title">かんたんセットアップ</string>
+    <string name="setup_body">上から順に設定してください。「セットアップを続ける」を押すと、次に必要なAndroid設定を開きます。</string>
+    <string name="setup_progress">必須項目 %1$d / %2$d 完了</string>
+    <string name="setup_line_ready">✓ %1$s</string>
+    <string name="setup_line_missing">○ %1$s</string>
+    <string name="setup_step_notifications">ClipCascadeの通知を許可</string>
+    <string name="setup_step_accessibility">ユーザー補助で「クリップボード共有」を有効化</string>
+    <string name="setup_step_notification_access">認証コード取得のため通知アクセスを許可</string>
+    <string name="setup_step_battery">バッテリー使用を「制限なし」に設定</string>
+    <string name="setup_step_background">バックグラウンド動作・自動起動を許可</string>
+    <string name="setup_continue">セットアップを続ける</string>
+    <string name="setup_complete">セットアップ完了</string>
+    <string name="setup_complete_message">必要な権限とバックグラウンド設定はすべて完了しています。</string>
+    <string name="setup_notification_permission_denied">通知権限が許可されませんでした。常駐サービスとテスト通知に必要です。</string>
+    <string name="setup_background_confirm">バックグラウンド動作・自動起動を許可した</string>
+    <string name="setup_background_open">アプリのバックグラウンド設定を開く</string>
+    <string name="setup_background_dialog_title">バックグラウンド動作を許可</string>
+    <string name="setup_background_dialog_message">アプリ設定を開き、バックグラウンド動作を「制限なし」にしてください。HONOR/MagicOSでは、表示される場合に「自動起動」「他のアプリからの起動」「バックグラウンドで実行」も有効にします。設定後、この画面へ戻って確認スイッチをONにしてください。</string>
+    <string name="setup_open_settings">設定を開く</string>
+    <string name="setup_not_yet">まだ設定しない</string>
+    <string name="setup_manual_honesty">メーカー独自の自動起動スイッチをAndroidから確実に判定する共通APIがないため、最後の項目だけはユーザー確認式です。</string>
+
+    <string name="clipboard_section">通常のクリップボード共有</string>
+    <string name="clipboard_enable">コピーしたテキストを自動送信</string>
+    <string name="accessibility_open">ユーザー補助設定を開く</string>
+    <string name="accessibility_explanation">コピー操作・選択テキスト・コピー完了通知を検出します。クリップボードを直接読めないアプリでは、直近の選択テキストを代替利用します。</string>
+    <string name="accessibility_status_enabled">状態: ユーザー補助の「クリップボード共有」は有効です</string>
+    <string name="accessibility_status_disabled">状態: 無効です。自動クリップボード共有には有効化が必要です</string>
+
+    <string name="otp_section">通知から認証コードを取得</string>
+    <string name="otp_enable">通知から認証コードだけを抽出して送信</string>
+    <string name="notification_access_open">通知へのアクセス設定を開く</string>
+    <string name="notification_explanation">通知本文は端末内だけで解析し、抽出した短い認証値だけを送信キューへ入れます。</string>
+    <string name="notification_status_enabled">状態: 通知アクセスは有効です</string>
+    <string name="notification_status_disabled">状態: 無効です。SMS・メール等の認証コード取得には許可が必要です</string>
+
+    <string name="otp_apps_section">認証コードを読むアプリ</string>
+    <string name="otp_apps_choose">対象アプリを選ぶ</string>
+    <string name="otp_apps_reset">すべてのアプリを対象に戻す</string>
+    <string name="otp_apps_all">対象: すべてのアプリ。ただし認証文脈がある通知だけを採用します</string>
+    <string name="otp_apps_selected">対象: %1$d個の選択済みアプリ</string>
+    <string name="otp_apps_picker_title">認証コード通知の対象アプリ</string>
+
+    <string name="otp_test_section">認証コードのエンドツーエンドテスト</string>
+    <string name="otp_test_body">ランダムな架空コードを含む本物のローカル通知を送ります。通知リスナー、抽出器、永続キュー、通信、Windows側のACKまで通常と同じ経路で確認します。</string>
+    <string name="otp_test_send">認証コードのテスト通知を送る</string>
+    <string name="otp_test_channel_name">認証コードの動作テスト</string>
+    <string name="otp_test_channel_description">ClipCascadeの認証コード抽出と配送を確認する架空のテスト通知です。</string>
+    <string name="otp_test_notification_title">ClipCascade 認証コードテスト</string>
+    <string name="otp_test_notification_text">認証コードは %1$s です。Windowsのクリップボードに届くことを確認してください。</string>
+    <string name="otp_test_notification_subtext">架空のテストです。実在するアカウントのコードではありません</string>
+    <string name="otp_test_status_none">認証コードテストはまだ実行されていません。</string>
+    <string name="otp_test_status_posted">テスト通知を送信しました。期待するコード: %1$s</string>
+    <string name="otp_test_status_detected">通知を受信し、コードを抽出しました: %1$s</string>
+    <string name="otp_test_status_queued">コードを抽出し、Windows向けキューへ追加しました: %1$s</string>
+    <string name="otp_test_status_acknowledged">成功: %1$s のACKを確認しました。ExtendedのP2Pモードでは、Windowsのクリップボード適用まで完了しています。</string>
+    <string name="otp_test_status_extract_failed">テスト通知は届きましたが、期待するコードを抽出できませんでした。</string>
+    <string name="otp_test_status_deduplicated">コードは検出しましたが、直近のテスト値と重複しました。もう一度実行してください。</string>
+    <string name="otp_test_status_post_failed">テスト通知を送れませんでした: %1$s</string>
+    <string name="otp_test_missing_setup_title">セットアップが未完了です</string>
+    <string name="otp_test_missing_setup_message">エンドツーエンドテストの前に、通知権限と通知アクセスを完了してください。</string>
+    <string name="otp_test_posted_toast">コード %1$s のテスト通知を送りました</string>
+
+    <string name="clipboard_test_section">クリップボード配送テスト</string>
+    <string name="clipboard_test_send">テスト文字列をWindowsへ送る</string>
+    <string name="clipboard_test_disabled_title">クリップボード共有がOFFです</string>
+    <string name="clipboard_test_disabled_message">テスト前に「コピーしたテキストを自動送信」をONにしてください。</string>
+    <string name="clipboard_test_value">ClipCascade clipboard relay test</string>
+    <string name="clipboard_test_queued">テスト文字列を送信キューへ追加しました</string>
+    <string name="clipboard_test_duplicate">同じテスト文字列がすでに保留中です</string>
+
+    <string name="queue_section">保留キュー</string>
+    <string name="queue_summary">通常コピー: %1$d件 / 認証コード: %2$d件</string>
+    <string name="queue_body">未送信データはアプリ専用領域に一時保存されます。ここでは内容を表示せず件数だけを表示します。</string>
+    <string name="queue_clear">保留中のデータをすべて消去</string>
+    <string name="queue_cleared">保留キューを消去しました</string>
+
+    <string name="health_section">最近の診断</string>
+    <string name="health_body">コピー内容・認証コード・通知本文・利用アプリ名は表示または診断保存しません。</string>
+    <string name="health_clear">診断履歴を消去</string>
+    <string name="health_cleared">診断履歴を消去しました</string>
+    <string name="health_none">%1$s: 記録なし</string>
+    <string name="health_format">%1$s: %2$s / %3$s / %4$s / %5$s</string>
+    <string name="health_clipboard">通常コピー</string>
+    <string name="health_verification">認証コード</string>
+    <string name="health_recovery">自動復旧</string>
+
+    <string name="health_service_connected">サービス接続</string>
+    <string name="health_service_interrupted">サービス中断</string>
+    <string name="health_selection">文字選択</string>
+    <string name="health_click">コピーボタン</string>
+    <string name="health_announcement">コピー通知</string>
+    <string name="health_copy_notice">コピー完了通知</string>
+    <string name="health_ctrl_c">Ctrl+C</string>
+    <string name="health_settings_test">設定テスト</string>
+    <string name="health_listener_connected">通知リスナー接続</string>
+    <string name="health_listener_disconnected">通知リスナー切断</string>
+    <string name="health_context_match">コード文脈一致</string>
+    <string name="health_accessibility">ユーザー補助</string>
+    <string name="health_accessibility_selection">選択文字列</string>
+    <string name="health_clipboard_manager">クリップボード読取</string>
+    <string name="health_selected_text_fallback">選択文字列フォールバック</string>
+    <string name="health_clipboard_denied_no_fallback">読取拒否・代替なし</string>
+    <string name="health_no_text_available">文字列未取得</string>
+    <string name="health_notification_access">通知アクセス</string>
+    <string name="health_local_extractor">端末内抽出</string>
+    <string name="health_coordinator">復旧調整</string>
+    <string name="health_active_react_context">実行中アプリ</string>
+    <string name="health_headless_js">バックグラウンド処理</string>
+    <string name="health_manual_test">手動テスト</string>
+    <string name="health_ready">待機中</string>
+    <string name="health_remembered">選択を記憶</string>
+    <string name="health_queued">キュー追加</string>
+    <string name="health_deduplicated">重複抑止</string>
+    <string name="health_retrying">再試行中</string>
+    <string name="health_interrupted">中断</string>
+    <string name="health_rebind_requested">再接続要求</string>
+    <string name="health_requested">復旧要求済み</string>
+    <string name="health_declined">OSが開始を拒否</string>
+    <string name="health_blocked">バックグラウンド制限</string>
+    <string name="health_cooldown">重複復旧を抑止</string>
+    <string name="health_sync_disabled">同期OFF</string>
+    <string name="health_heartbeat_timeout">応答タイムアウト</string>
+    <string name="health_network_available_but_offline">ネット復帰後も未接続</string>
+    <string name="health_test_notification">テスト通知</string>
+    <string name="health_test_extracted">テストコード抽出</string>
+    <string name="health_test_acknowledged">テストACK確認</string>
+
+    <string name="generic_ok">OK</string>
+    <string name="generic_save">保存</string>
+    <string name="generic_cancel">キャンセル</string>
+</resources>
