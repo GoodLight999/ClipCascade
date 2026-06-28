@@ -45,7 +45,10 @@ object RecoveryCoordinator {
         }
 
         val now = SystemClock.elapsedRealtime()
-        if (now - lastRequestElapsedMs < MIN_REQUEST_INTERVAL_MS) {
+        if (
+            lastRequestElapsedMs > 0L &&
+            now - lastRequestElapsedMs < MIN_REQUEST_INTERVAL_MS
+        ) {
             Log.i(TAG, "Recovery request suppressed by cooldown")
             RelayHealthStore.record(
                 applicationContext,
@@ -57,8 +60,12 @@ object RecoveryCoordinator {
             return true
         }
 
+        // Bound all attempts, including OS-rejected starts. Without this assignment,
+        // a dead background transport could cause every queue retry to start another
+        // recovery request and flood the process with failures.
+        lastRequestElapsedMs = now
+
         if (emitToActiveReactContext(applicationContext, reason)) {
-            lastRequestElapsedMs = now
             RelayHealthStore.record(
                 applicationContext,
                 category = "recovery",
@@ -87,7 +94,6 @@ object RecoveryCoordinator {
                 false
             } else {
                 HeadlessJsTaskService.acquireWakeLockNow(applicationContext)
-                lastRequestElapsedMs = now
                 RelayHealthStore.record(
                     applicationContext,
                     category = "recovery",
