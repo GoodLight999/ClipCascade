@@ -53,6 +53,9 @@ jobs:
       - name: Test P2P peer acknowledgement
         run: python -m unittest tests.test_p2p_peer_ack -v
 
+      - name: Test Windows shutdown and status wording
+        run: python -m unittest tests.test_windows_shutdown -v
+
       - name: Build standalone executable
         run: python -m PyInstaller --clean ClipCascade_win.spec
 
