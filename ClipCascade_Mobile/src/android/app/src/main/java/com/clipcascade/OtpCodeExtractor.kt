@@ -22,9 +22,9 @@ object OtpCodeExtractor {
             "sign[\\s-]?in\\s+|confirmation\\s+|access\\s+)?(?:code|passcode)" +
             "|use\\s+(?:this\\s+)?(?:code|passcode)" +
             "|enter\\s+(?:the\\s+)?(?:code|passcode)" +
-            "|(?:code|passcode)\\s+(?:is|for|to)" +
+            "|passcode\\s+(?:is|for|to)" +
             "|認証(?:コード|番号|キー)?" +
-            "|確認(?:コード|番号)?" +
+            "|確認(?:コード|番号)" +
             "|ログイン(?:コード|認証番号|認証コード)?" +
             "|サインイン(?:コード|認証番号|認証コード)?" +
             "|ワンタイム(?:パスワード|パスコード|コード|暗証番号)?" +
@@ -69,7 +69,9 @@ object OtpCodeExtractor {
         "(?i)(expires?|valid\\s+for|minutes?|seconds?|do\\s+not\\s+share|" +
             "有効|期限|分以内|秒以内|共有しない|教えない)",
     )
-    private val urlContext = Regex("(?i)(https?://|www\\.|[A-Z0-9._%+-]+@[A-Z0-9.-]+)")
+    private val urlOrEmail = Regex(
+        "(?i)(https?://\\S+|www\\.\\S+|[A-Z0-9._%+-]+@[A-Z0-9.-]+)",
+    )
     private val explicitSeparator = Regex(
         "(?i)^[\\s:：=\\-–—]*(?:is|is\\s+your|は|が|です|になります)?" +
             "[\\s:：=\\-–—]*$",
@@ -198,11 +200,11 @@ object OtpCodeExtractor {
         val contextStart = (start - 40).coerceAtLeast(0)
         val contextEnd = (end + 40).coerceAtMost(text.lastIndex)
         val context = text.substring(contextStart, contextEnd + 1)
-        val closeContextStart = (start - 12).coerceAtLeast(0)
-        val closeContextEnd = (end + 12).coerceAtMost(text.lastIndex)
+        val closeContextStart = (start - 6).coerceAtLeast(0)
+        val closeContextEnd = (end + 6).coerceAtMost(text.lastIndex)
         val closeContext = text.substring(closeContextStart, closeContextEnd + 1)
 
-        if (urlContext.containsMatchIn(context)) return true
+        if (overlapsStructuredToken(text, start, end, urlOrEmail)) return true
         if (value.all(Char::isDigit) && amountContext.containsMatchIn(closeContext)) return true
         if (value.length >= 7 && phoneContext.containsMatchIn(context)) return true
         if (value.length >= 8 && trackingContext.containsMatchIn(context)) return true
@@ -217,6 +219,21 @@ object OtpCodeExtractor {
             return true
         }
         return false
+    }
+
+    private fun overlapsStructuredToken(
+        text: String,
+        candidateStart: Int,
+        candidateEnd: Int,
+        pattern: Regex,
+    ): Boolean {
+        val from = (candidateStart - 64).coerceAtLeast(0)
+        val to = (candidateEnd + 64).coerceAtMost(text.lastIndex)
+        return pattern.findAll(text.substring(from, to + 1)).any { match ->
+            val matchStart = from + match.range.first
+            val matchEnd = from + match.range.last
+            candidateStart <= matchEnd && candidateEnd >= matchStart
+        }
     }
 
     private fun distanceBetween(
