@@ -99,14 +99,38 @@ object OtpRelayDispatcher {
 
         val asyncStorage = AsyncStorageBridge(applicationContext)
         try {
-            if (!transportIsReady(asyncStorage)) return 0
+            if (!transportIsEnabled(asyncStorage)) return 0
 
-            val application = applicationContext as? MainApplication ?: return 0
+            val status = asyncStorage.getValue("wsStatusMessage").orEmpty()
+            if (!isConnectedStatus(status)) {
+                RecoveryCoordinator.request(applicationContext, "otp_transport_not_ready")
+                return 0
+            }
+
+            val mode = asyncStorage.getValue("server_mode").orEmpty()
+            if (mode.equals("P2P", ignoreCase = true)) {
+                val p2pStatus = asyncStorage.getValue("p2pStatusMessage").orEmpty()
+                val peers = Regex("Peers:\\s*(\\d+)")
+                    .find(p2pStatus)
+                    ?.groupValues
+                    ?.getOrNull(1)
+                    ?.toIntOrNull()
+                    ?: 0
+                if (peers <= 0) return 0
+            }
+
+            val application = applicationContext as? MainApplication
+            if (application == null) {
+                RecoveryCoordinator.request(applicationContext, "otp_application_context_missing")
+                return 0
+            }
             val reactContext = application.reactNativeHost
                 .reactInstanceManager
                 .currentReactContext
-                ?: return 0
-            if (!reactContext.hasActiveCatalystInstance()) return 0
+            if (reactContext == null || !reactContext.hasActiveCatalystInstance()) {
+                RecoveryCoordinator.request(applicationContext, "otp_react_context_missing")
+                return 0
+            }
 
             val pending = OtpRelayStore.pending(applicationContext, MAX_BATCH_SIZE)
             if (pending.isEmpty()) return 0
@@ -127,6 +151,7 @@ object OtpRelayDispatcher {
             } catch (error: Exception) {
                 inFlightId = null
                 inFlightSince = 0L
+                RecoveryCoordinator.request(applicationContext, "otp_react_event_failed")
                 throw error
             }
         } catch (error: Exception) {
@@ -137,24 +162,8 @@ object OtpRelayDispatcher {
         }
     }
 
-    private fun transportIsReady(storage: AsyncStorageBridge): Boolean {
-        if (storage.getValue("wsIsRunning") != "true") return false
-
-        val status = storage.getValue("wsStatusMessage").orEmpty()
-        if (!isConnectedStatus(status)) return false
-
-        val mode = storage.getValue("server_mode").orEmpty()
-        if (!mode.equals("P2P", ignoreCase = true)) return true
-
-        val p2pStatus = storage.getValue("p2pStatusMessage").orEmpty()
-        val peers = Regex("Peers:\\s*(\\d+)")
-            .find(p2pStatus)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.toIntOrNull()
-            ?: 0
-        return peers > 0
-    }
+    private fun transportIsEnabled(storage: AsyncStorageBridge): Boolean =
+        storage.getValue("wsIsRunning") == "true"
 
     private fun isConnectedStatus(status: String): Boolean {
         val normalized = status.trim().removePrefix("✅").trimStart()
