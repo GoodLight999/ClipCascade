@@ -1,8 +1,8 @@
 # Validation and Regression Matrix
 
-Record every run with date, commit SHA, Android build/package version, Windows build version, transport mode, and result. Do not mark the project complete from CI alone.
+Record every run with date, commit SHA, Android build/package version, Windows build version, transport mode, locale, and result. Do not mark the project complete from CI alone.
 
-## A. Installation and identity
+## A. Installation, identity, and localization
 
 - [ ] Install APK without Metro, USB, or developer server
 - [ ] Launch after device reboot
@@ -10,18 +10,33 @@ Record every run with date, commit SHA, Android build/package version, Windows b
 - [ ] Confirm package is `com.clipcascade.extended`
 - [ ] Confirm no personal handle appears in app UI, package identity, diagnostics, or artifacts
 - [ ] Confirm older official/upstream ClipCascade can coexist if desired
+- [ ] Japanese system locale shows Japanese Extended settings and primary React UI labels
+- [ ] English system locale shows English Extended settings and primary React UI labels
+- [ ] Accessibility service and notification-listener labels/descriptions follow the system locale
+- [ ] Distributed UI contains no obsolete READ_LOGS, overlay, or ADB setup command
 
-## B. Settings UX
+## B. Guided Android setup
 
-- [ ] `⚙ 共有設定` is visible before login
-- [ ] `⚙ 共有設定` is visible while sync is running
+Start from a fresh install or reset permissions between runs.
+
+- [ ] Persistent Sharing setup button is visible before login
+- [ ] Persistent Sharing setup button is visible while sync is running
+- [ ] Guided checklist displays notification permission state
+- [ ] Continue requests Android 13+ notification permission when missing
+- [ ] Continue opens Accessibility settings when clipboard service is missing
+- [ ] Accessibility state updates after returning to the app
+- [ ] Continue opens Notification access settings when listener access is missing
+- [ ] Notification-access state updates after returning to the app
+- [ ] Continue opens battery exemption flow when optimization remains enabled
+- [ ] Battery state updates after returning to the app
+- [ ] Background settings guidance explicitly covers HONOR/MagicOS auto-launch, secondary launch, and background execution
+- [ ] Manual background confirmation persists after process restart
+- [ ] Completed checklist reports all five steps complete
 - [ ] Clipboard relay switch persists after process restart
 - [ ] Verification-code relay switch persists after process restart
-- [ ] Accessibility status updates after returning from Android settings
-- [ ] Notification access status updates after returning from Android settings
 - [ ] Source-app picker saves and reloads selections
 - [ ] Reset-to-all clears the source filter
-- [ ] Test relay action reaches Windows
+- [ ] Clipboard test relay reaches Windows
 
 ## C. ADB-free text copy compatibility
 
@@ -46,24 +61,45 @@ For each:
 - [ ] Different text copied quickly preserves order
 - [ ] Source app returning no selection text is handled honestly
 - [ ] Large text respects configured/local limits
+- [ ] No old READ_LOGS or overlay permission is needed
 
 ## D. Verification-code extraction
 
-Use synthetic test notifications where possible. Never commit real codes.
+Use synthetic values only. Never commit real codes.
 
-Positive examples:
+Positive Japanese examples:
 
 - [ ] `認証コードは 123456 です`
-- [ ] `確認コード: 9876`
+- [ ] `本人確認番号：482901`
+- [ ] `2段階認証コード 7314`
+- [ ] Full-width/grouped one-time password
+- [ ] Notification containing both transaction amount and a separate one-time password
+
+Positive English examples:
+
 - [ ] `Your verification code is A1B2C3`
-- [ ] Multi-line notification with title and big text
+- [ ] Code before `sign-in code`
+- [ ] `Use ... to verify your email address`
+- [ ] Prefixed code such as `G-123456`
+- [ ] Notification containing both a transaction amount and a separate security code
+
+Notification layouts:
+
+- [ ] Standard title + text
+- [ ] BigTextStyle
+- [ ] `EXTRA_TEXT_LINES`
+- [ ] MessagingStyle current messages
+- [ ] MessagingStyle historic messages
+- [ ] Multi-line email notification
 
 Negative examples:
 
-- [ ] Price/amount notification
+- [ ] Price/amount notification without an actual code
 - [ ] Date/time notification
+- [ ] Year near generic verification-service text
 - [ ] Phone number
-- [ ] Delivery tracking number
+- [ ] Delivery/tracking identifier
+- [ ] Email address containing digits
 - [ ] Ordinary message containing a six-digit number without verification context
 - [ ] ClipCascade foreground notification
 
@@ -71,12 +107,32 @@ Filter behavior:
 
 - [ ] Empty filter processes all context-matching apps
 - [ ] Selected filter processes only selected packages
+- [ ] Synthetic ClipCascade test notification bypasses source-app filter only because it is explicitly marked as synthetic
 - [ ] Turning relay off stops processing immediately
 - [ ] Full notification text never appears in Windows clipboard or normal logs
 
-## E. Screen-off / lock / MagicOS
+## E. Synthetic end-to-end verification test
 
-On HONOR 400 Pro / Android 16:
+Run first in Extended P2P with Windows connected.
+
+- [ ] Test is blocked with a clear action when notification permission is missing
+- [ ] Test is blocked with a clear action when notification access is missing
+- [ ] Button posts a visible localized notification with a fresh synthetic code
+- [ ] Settings status changes from posted to detected
+- [ ] Settings status changes from detected to queued
+- [ ] Windows clipboard becomes exactly the synthetic code
+- [ ] Settings status changes to acknowledged after Windows clipboard application in Extended P2P
+- [ ] Queue item is removed only after the existing ACK path
+- [ ] Source-app filter does not suppress the explicitly marked synthetic test
+- [ ] Ordinary ClipCascade foreground notifications remain ignored
+- [ ] Test status and displayed synthetic value expire after five minutes
+- [ ] Repeated test produces a new code and does not become permanently deduplicated
+- [ ] Windows offline leaves the test queued; Windows return drains it
+- [ ] P2S result is not described as Windows-applied acknowledgement
+
+## F. Screen-off / lock / MagicOS
+
+On HONOR 400 Pro / Android 16, run both real SMS and real email cases:
 
 - [ ] Screen on, app foreground
 - [ ] Screen on, app background
@@ -86,14 +142,15 @@ On HONOR 400 Pro / Android 16:
 - [ ] Device locked
 - [ ] MagicOS battery optimization default
 - [ ] MagicOS battery optimization manually relaxed
+- [ ] Auto-launch / secondary launch / background execution enabled
 - [ ] App removed from recents
 - [ ] App process killed by system
 - [ ] Device rebooted
 - [ ] Reboot with the immediate Headless JS path blocked/killed; delayed WorkManager heartbeat restores sync
 
-For SMS and email sources, record whether notification text is visible to NotificationListenerService or redacted by Android.
+For every SMS/email case, record whether notification text is visible to NotificationListenerService or redacted by Android, whether extraction occurred, whether the item queued, and whether Windows acknowledged it.
 
-## F. Network and queue durability
+## G. Network and queue durability
 
 - [ ] Android online, Windows online
 - [ ] Android online, Windows offline, then Windows returns
@@ -112,7 +169,7 @@ For SMS and email sources, record whether notification text is visible to Notifi
 - [ ] In-flight timeout and retry
 - [ ] No item deletion before defined ACK
 
-## G. P2S and P2P
+## H. P2S and P2P
 
 Run all relevant relay tests in both modes.
 
@@ -121,16 +178,18 @@ P2S:
 - [ ] WebSocket connected status accurate
 - [ ] Send failure retains queue item
 - [ ] Reconnect drains queue once
+- [ ] UI/documentation identifies acknowledgement as local transport acceptance
 
 P2P:
 
 - [ ] Signaling connected but zero DataChannels does not delete queued item
-- [ ] One live peer drains queue once
+- [ ] One live Extended peer drains queue once after Windows clipboard application
 - [ ] Multiple peers have defined behavior
+- [ ] Old/non-Extended peer uses documented compatibility fallback
 - [ ] Old WebRTC session is fully torn down before restart
 - [ ] Watchdog does not create overlapping sessions
 
-## H. Upstream regression
+## I. Upstream regression
 
 - [ ] Manual text sharing Android → Windows
 - [ ] Text sharing Windows → Android
@@ -144,7 +203,7 @@ P2P:
 - [ ] Relaunch on boot
 - [ ] Foreground service notification
 
-## I. Windows authentication, UI, and recovery
+## J. Windows authentication, UI, and recovery
 
 Authentication/API:
 
@@ -174,10 +233,11 @@ UI and recovery:
 - [ ] Log rotation
 - [ ] No false healthy status
 
-## J. Release gate
+## K. Release gate
 
 - [ ] Android CI passes on release commit
 - [ ] Windows CI passes on release commit
+- [ ] Bilingual/no-ADB bundle assertions pass
 - [ ] APK hash recorded
 - [ ] Windows archive hash recorded
 - [ ] Tested commit tagged `extended-v*`
