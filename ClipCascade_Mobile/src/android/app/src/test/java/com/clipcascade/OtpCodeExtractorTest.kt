@@ -62,6 +62,16 @@ class OtpCodeExtractorTest {
     }
 
     @Test
+    fun extractsCodeWhenDestinationEmailIsPresent() {
+        assertEquals(
+            "462881",
+            OtpCodeExtractor.extract(
+                "Use 462881 to verify user1234@example.com.",
+            ),
+        )
+    }
+
+    @Test
     fun extractsPrefixedCode() {
         assertEquals(
             "G123456",
@@ -120,6 +130,21 @@ class OtpCodeExtractorTest {
     @Test
     fun requiresVerificationContext() {
         assertNull(OtpCodeExtractor.extract("荷物番号は 123456 です"))
+    }
+
+    @Test
+    fun rejectsGenericPostalCode() {
+        assertNull(OtpCodeExtractor.extract("Your postal code is 12345"))
+    }
+
+    @Test
+    fun rejectsGenericPromotionCode() {
+        assertNull(OtpCodeExtractor.extract("Promotion code is SAVE20"))
+    }
+
+    @Test
+    fun rejectsGenericErrorCode() {
+        assertNull(OtpCodeExtractor.extract("Error code is E12345"))
     }
 
     @Test
