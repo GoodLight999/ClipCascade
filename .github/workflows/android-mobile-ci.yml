@@ -66,7 +66,7 @@ jobs:
       - name: Order P2P ACK after validation
         run: node scripts/prepare_p2p_ack_validation_order.js
 
-      - name: Verify transformed bilingual no-ADB source
+      - name: Verify transformed Extended source
         shell: bash
         run: |
           set -euo pipefail
@@ -75,12 +75,26 @@ jobs:
           grep -q "未接続" App.js
           grep -q "共有設定" AppRoot.js
           grep -q "Sharing setup" AppRoot.js
+          grep -q "settingsBar" AppRoot.js
+          grep -q "端末起動後に同期を自動再開" App.js
           if grep -q "pm grant com.clipcascade android.permission.READ_LOGS" App.js; then
             echo "Legacy READ_LOGS setup command remains in transformed App.js" >&2
             exit 1
           fi
           if grep -q "SYSTEM_ALERT_WINDOW allow" App.js; then
             echo "Legacy overlay setup command remains in transformed App.js" >&2
+            exit 1
+          fi
+          if grep -q "Sathvik-Rao/ClipCascade" App.js; then
+            echo "Upstream project promotion remains in transformed App.js" >&2
+            exit 1
+          fi
+          if grep -q "New version available" App.js; then
+            echo "Upstream update banner remains in transformed App.js" >&2
+            exit 1
+          fi
+          if grep -qE ">DONATE<|>HOMEPAGE<|>GITHUB<|>HELP<" App.js; then
+            echo "Removed upstream footer remains in transformed App.js" >&2
             exit 1
           fi
 
