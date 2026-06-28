@@ -9,8 +9,35 @@ Resume work in this order:
 5. `docs/LATEST_RUNTIME_FIXES_HANDOFF.md`
 6. `docs/LATEST_PRIORITY1_VALIDATION_HANDOFF.md`
 7. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
+8. `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`
 
-Current phase: repair and prove Android outbound sending while the app is backgrounded. PR #1 remains Draft.
+Current phase: prove Android outbound sending, initialization stability, and exactly-once relay behavior on the target device. PR #1 remains Draft.
+
+## 2026-06-28 — Android initialization and duplicate-send repair
+
+User-observed failures:
+
+- first launch could show `Cannot perform this operation because the connection pool has been closed`;
+- reopening the application cleared the error;
+- one copied value could be sent twice.
+
+Confirmed causes and repairs:
+
+1. `AsyncStorageBridge.disconnect()` closed React Native AsyncStorage's shared singleton database. The build transform now removes that close call and CI rejects it if it remains.
+2. After failed initialization/reopen, more than one JavaScript service listener could process the same native queue event. Native `RelaySettingsModule` now atomically claims each relay ID; only one listener may send it. Failed sends release the claim, native acknowledgement releases it, and stale claims expire after five seconds.
+3. Persistent queue, relay IDs, Extended P2P peer-applied acknowledgement, delayed compatibility fallback, and native acknowledgement-based deletion were preserved.
+
+Repair build:
+
+- version: `3.2.1-extended.6-standalone`
+- versionCode: `320110`
+- code/release-workflow commit: `fb31ebca8fc99a7ff9504163cf584f35e52127ba`
+- Android CI `28317382119`: success
+- Windows CI `28317382112`: success
+- Android artifact ID `7933086597`
+- Windows artifact ID `7933081818`
+
+Exact hashes and the real-device test procedure are in `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`.
 
 ## 2026-06-28 — Android background-send failure
 
@@ -42,7 +69,6 @@ Future validation must disable Phone Link and every other clipboard synchronizat
 - Startup now attempts to restart a missing previous service generation.
 - Test wording targets connected devices rather than Windows.
 - Windows watchdog delays its unhealthy warning for ten seconds while retaining the 25-second restart threshold.
-- Android repair identity is `3.2.1-extended.5-standalone`, versionCode `320109`, using the existing deterministic test signer.
 
 ### Failed attempt recorded
 
@@ -64,12 +90,12 @@ The following remain intact:
 
 ### Mandatory next proof
 
-1. Obtain a green Android and Windows artifact from the same current runtime head.
-2. Disable Phone Link clipboard sync and every competing clipboard utility.
-3. Update the stable-signed Android app in place.
-4. Test Android outbound with the app visible, backgrounded for 30 seconds, removed from recents, locked, and screen-off.
-5. Record clipboard diagnostics, pending queue count, recovery diagnostics, exact peer clipboard application, and ACK result.
-6. Do not restore an Android success claim until the isolated test passes.
+1. Disable Phone Link clipboard sync and every competing clipboard utility.
+2. Update the stable-signed Android app to versionCode `320110` without uninstalling.
+3. Cold-launch repeatedly and confirm no connection-pool initialization error.
+4. Test exactly one outbound application per Copy action while visible, backgrounded, reopened, removed from recents, locked, and screen-off.
+5. Record queue count, diagnostics, exact peer clipboard application, and ACK result.
+6. Do not restore an Android success claim until the isolated tests pass.
 
 ## Earlier work retained
 
