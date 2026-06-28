@@ -35,3 +35,19 @@ def show_connection_status(
         dialog.mainloop()
     finally:
         _active_dialog = None
+
+
+def close_connection_status():
+    """Close the active status window from the Tk UI thread during app shutdown."""
+    global _active_dialog
+
+    dialog = _active_dialog
+    _active_dialog = None
+    if dialog is None:
+        return
+    try:
+        if dialog.winfo_exists():
+            dialog.close()
+    except Exception:
+        # The window may already be in the middle of its WM_DELETE teardown.
+        pass
