@@ -1,25 +1,48 @@
 package com.clipcascade
 
 import java.text.Normalizer
+import kotlin.math.abs
 
 /**
- * Conservative verification-value extractor for notification text.
+ * Conservative bilingual verification-value extractor for notification text.
  *
- * A candidate must be close to an authentication-related phrase. Date, time,
- * amount, phone-number, and tracking/order patterns are rejected locally so
- * unrelated notification data never enters the relay queue.
+ * Candidates are ranked only when they occur close to Japanese or English
+ * authentication language. Dates, times, amounts, phone numbers, card/account
+ * identifiers, delivery references, URLs, and other structured values are
+ * rejected locally before anything enters the relay queue.
  */
 object OtpCodeExtractor {
     private val keywordRegex = Regex(
-        pattern = "(?i)(otp|one[\\s-]?time(?:\\s+(?:password|passcode|code))?|verification(?:\\s+code)?|security\\s+code|authentication\\s+code|auth\\s+code|login\\s+code|confirmation\\s+code|your\\s+code|use\\s+(?:this\\s+)?code|enter\\s+(?:the\\s+)?code|passcode|認証(?:コード|番号)?|確認コード|ログインコード|ワンタイム(?:パスワード|コード)?|暗証番号|セキュリティコード)",
+        pattern = "(?i)(" +
+            "otp" +
+            "|one[\\s-]?time(?:\\s+(?:password|passcode|pin|code))?" +
+            "|(?:verification|security|authentication|auth|login|sign[\\s-]?in|" +
+            "confirmation|access|two[\\s-]?(?:factor|step)|2fa)" +
+            "(?:\\s+(?:code|number|passcode|password|pin))" +
+            "|verify\\s+(?:your\\s+)?(?:account|email|e-mail|phone|number|identity)" +
+            "|(?:your|this)\\s+(?:verification\\s+|security\\s+|login\\s+|" +
+            "sign[\\s-]?in\\s+|confirmation\\s+|access\\s+)?(?:code|passcode)" +
+            "|use\\s+(?:this\\s+)?(?:code|passcode)" +
+            "|enter\\s+(?:the\\s+)?(?:code|passcode)" +
+            "|(?:code|passcode)\\s+(?:is|for|to)" +
+            "|認証(?:コード|番号|キー)?" +
+            "|確認(?:コード|番号)?" +
+            "|ログイン(?:コード|認証番号|認証コード)?" +
+            "|サインイン(?:コード|認証番号|認証コード)?" +
+            "|ワンタイム(?:パスワード|パスコード|コード|暗証番号)?" +
+            "|本人確認(?:コード|番号)?" +
+            "|(?:二|2)段階認証(?:コード|番号)?" +
+            "|セキュリティ(?:コード|番号)" +
+            "|暗証番号" +
+            ")",
     )
 
     private val candidateRegex = Regex(
-        pattern = "(?<![\\p{L}\\p{N}])(" +
-            "(?:[A-Z0-9]{2,5}(?:-[A-Z0-9]{2,5}){1,2})" +
-            "|(?:\\d{2,4}(?:[\\s-]\\d{2,4}){1,2})" +
+        pattern = "(?<![A-Z0-9])(" +
+            "(?:[A-Z]-\\d{4,8})" +
+            "|(?:[A-Z0-9]{1,5}(?:[\\s\\-–—][A-Z0-9]{2,8}){1,2})" +
             "|(?:[A-Z0-9]{4,10})" +
-            ")(?![\\p{L}\\p{N}])",
+            ")(?![A-Z0-9])",
         option = RegexOption.IGNORE_CASE,
     )
 
@@ -29,11 +52,38 @@ object OtpCodeExtractor {
     )
     private val timePattern = Regex("^\\d{1,2}:\\d{2}(?::\\d{2})?$")
     private val amountContext = Regex(
-        "(?i)([¥￥$€£]|円|jpy|usd|eur|gbp|dollars?|yen|amount|price|料金|金額|残高)",
+        "(?i)([¥￥$€£]|円|jpy|usd|eur|gbp|dollars?|yen|amount|price|fee|" +
+            "料金|金額|残高|支払|決済|購入)",
     )
-    private val phoneContext = Regex("(?i)(phone|tel|mobile|電話|携帯|連絡先)")
+    private val phoneContext = Regex(
+        "(?i)(phone|tel|telephone|mobile|call|電話|携帯|連絡先)",
+    )
     private val trackingContext = Regex(
-        "(?i)(tracking|shipment|delivery|order(?:\\s+(?:id|number))?|追跡|配送|注文番号)",
+        "(?i)(tracking|shipment|delivery|parcel|order(?:\\s+(?:id|number|no))?|" +
+            "reference(?:\\s+(?:id|number|no))?|追跡|配送|荷物|注文番号|受付番号)",
+    )
+    private val accountContext = Regex(
+        "(?i)(account(?:\\s+(?:id|number|no))?|card|credit|debit|member(?:ship)?|" +
+            "口座|カード|会員番号|お客様番号)",
+    )
+    private val calendarContext = Regex(
+        "(?i)(date|year|scheduled|schedule|appointment|expires?\\s+on|" +
+            "日付|年|予定|予約|有効期限)",
+    )
+    private val expiryContext = Regex(
+        "(?i)(expires?|valid\\s+for|minutes?|seconds?|do\\s+not\\s+share|" +
+            "有効|期限|分以内|秒以内|共有しない|教えない)",
+    )
+    private val urlContext = Regex("(?i)(https?://|www\\.|[A-Z0-9._%+-]+@[A-Z0-9.-]+)")
+    private val explicitSeparator = Regex(
+        "(?i)^[\\s:：=\\-–—]*(?:is|is\\s+your|は|が|です|になります)?" +
+            "[\\s:：=\\-–—]*$",
+    )
+
+    private data class ScoredCandidate(
+        val value: String,
+        val score: Int,
+        val start: Int,
     )
 
     fun extract(text: String): String? {
@@ -46,18 +96,16 @@ object OtpCodeExtractor {
         val keywordMatches = keywordRegex.findAll(normalizedText).toList()
         if (keywordMatches.isEmpty()) return null
 
-        data class ScoredCandidate(val value: String, val score: Int)
-        val candidates = mutableListOf<ScoredCandidate>()
-
+        val candidatesByPosition = linkedMapOf<String, ScoredCandidate>()
         for (keyword in keywordMatches) {
-            val from = (keyword.range.first - 32).coerceAtLeast(0)
-            val to = (keyword.range.last + 64).coerceAtMost(normalizedText.lastIndex)
+            val from = (keyword.range.first - 48).coerceAtLeast(0)
+            val to = (keyword.range.last + 96).coerceAtMost(normalizedText.lastIndex)
             if (to < from) continue
 
             val window = normalizedText.substring(from, to + 1)
             candidateRegex.findAll(window).forEach { match ->
                 val raw = match.groupValues[1].trim()
-                val value = raw.replace(" ", "").replace("-", "")
+                val value = normalizeCandidate(raw)
                 val absoluteStart = from + match.range.first
                 val absoluteEnd = from + match.range.last
 
@@ -68,34 +116,53 @@ object OtpCodeExtractor {
                         normalizedText,
                         absoluteStart,
                         absoluteEnd,
+                        raw,
                         value,
                     )
                 ) {
                     return@forEach
                 }
 
-                val distance = when {
-                    absoluteStart > keyword.range.last ->
-                        absoluteStart - keyword.range.last
-                    absoluteEnd < keyword.range.first ->
-                        keyword.range.first - absoluteEnd
-                    else -> 0
+                val distance = distanceBetween(
+                    absoluteStart,
+                    absoluteEnd,
+                    keyword.range.first,
+                    keyword.range.last,
+                )
+                var score = 170 - distance.coerceAtMost(130)
+                if (absoluteStart > keyword.range.last) score += 15
+                if (sameLine(normalizedText, absoluteStart, keyword.range.first)) score += 10
+                if (hasExplicitRelation(normalizedText, keyword, absoluteStart, absoluteEnd)) {
+                    score += 35
                 }
-
-                var score = 120 - distance.coerceAtMost(100)
-                if (absoluteStart > keyword.range.last) score += 20
                 if (value.all(Char::isDigit)) score += 20
-                if (value.length == 6) score += 30
-                if (value.length in 4..8) score += 10
-                candidates += ScoredCandidate(value.uppercase(), score)
+                if (value.length == 6) score += 35
+                if (value.length == 4 || value.length == 8) score += 15
+                if (value.any(Char::isLetter) && value.any(Char::isDigit)) score += 15
+                if (expiryNear(normalizedText, absoluteStart, absoluteEnd)) score += 8
+                if (strongKeyword(keyword.value)) score += 10
+
+                val candidate = ScoredCandidate(value.uppercase(), score, absoluteStart)
+                val key = "$absoluteStart:${candidate.value}"
+                val previous = candidatesByPosition[key]
+                if (previous == null || candidate.score > previous.score) {
+                    candidatesByPosition[key] = candidate
+                }
             }
         }
 
-        return candidates.maxByOrNull { it.score }?.value
+        return candidatesByPosition.values
+            .filter { it.score >= 80 }
+            .sortedWith(compareByDescending<ScoredCandidate> { it.score }.thenBy { it.start })
+            .firstOrNull()
+            ?.value
     }
 
+    private fun normalizeCandidate(raw: String): String =
+        raw.replace(Regex("[\\s\\-–—]"), "")
+
     private fun isValidCandidate(value: String): Boolean {
-        if (!value.all { it.isLetterOrDigit() }) return false
+        if (!value.all { it in 'A'..'Z' || it in 'a'..'z' || it.isDigit() }) return false
         if (!value.any(Char::isDigit)) return false
 
         val digitsOnly = value.all(Char::isDigit)
@@ -103,7 +170,6 @@ object OtpCodeExtractor {
         if (!digitsOnly && value.length !in 5..10) return false
         if (!digitsOnly && !value.any(Char::isLetter)) return false
 
-        val lower = value.lowercase()
         val blockedWords = setOf(
             "code",
             "codes",
@@ -111,15 +177,16 @@ object OtpCodeExtractor {
             "passcode",
             "security",
             "verify",
+            "login",
         )
-        return lower !in blockedWords
+        return value.lowercase() !in blockedWords
     }
 
     private fun looksLikeStructuredNonCode(raw: String, value: String): Boolean {
         if (datePatterns.any { it.matches(raw) }) return true
         if (timePattern.matches(raw)) return true
 
-        val separators = raw.count { it == '-' || it == ' ' }
+        val separators = raw.count { it == '-' || it == ' ' || it == '–' || it == '—' }
         if (value.all(Char::isDigit) && separators >= 2 && value.length >= 8) {
             return true
         }
@@ -130,21 +197,78 @@ object OtpCodeExtractor {
         text: String,
         start: Int,
         end: Int,
+        raw: String,
         value: String,
     ): Boolean {
-        val contextStart = (start - 24).coerceAtLeast(0)
-        val contextEnd = (end + 24).coerceAtMost(text.lastIndex)
+        val contextStart = (start - 40).coerceAtLeast(0)
+        val contextEnd = (end + 40).coerceAtMost(text.lastIndex)
         val context = text.substring(contextStart, contextEnd + 1)
 
-        if (value.all(Char::isDigit) && amountContext.containsMatchIn(context)) {
-            return true
-        }
-        if (value.length >= 7 && phoneContext.containsMatchIn(context)) {
-            return true
-        }
-        if (value.length >= 8 && trackingContext.containsMatchIn(context)) {
+        if (urlContext.containsMatchIn(context)) return true
+        if (value.all(Char::isDigit) && amountContext.containsMatchIn(context)) return true
+        if (value.length >= 7 && phoneContext.containsMatchIn(context)) return true
+        if (value.length >= 8 && trackingContext.containsMatchIn(context)) return true
+        if (accountContext.containsMatchIn(context)) return true
+
+        val numeric = value.toIntOrNull()
+        if (
+            raw.length == 4 &&
+            numeric != null &&
+            numeric in 1900..2099 &&
+            calendarContext.containsMatchIn(context)
+        ) {
             return true
         }
         return false
+    }
+
+    private fun distanceBetween(
+        firstStart: Int,
+        firstEnd: Int,
+        secondStart: Int,
+        secondEnd: Int,
+    ): Int = when {
+        firstStart > secondEnd -> firstStart - secondEnd
+        firstEnd < secondStart -> secondStart - firstEnd
+        else -> 0
+    }
+
+    private fun sameLine(text: String, first: Int, second: Int): Boolean {
+        val from = minOf(first, second)
+        val to = maxOf(first, second)
+        return !text.substring(from, to).contains('\n')
+    }
+
+    private fun hasExplicitRelation(
+        text: String,
+        keyword: MatchResult,
+        candidateStart: Int,
+        candidateEnd: Int,
+    ): Boolean {
+        val between = when {
+            candidateStart > keyword.range.last ->
+                text.substring(keyword.range.last + 1, candidateStart)
+            candidateEnd < keyword.range.first ->
+                text.substring(candidateEnd + 1, keyword.range.first)
+            else -> return true
+        }
+        return between.length <= 24 && explicitSeparator.matches(between)
+    }
+
+    private fun expiryNear(text: String, start: Int, end: Int): Boolean {
+        val from = (start - 24).coerceAtLeast(0)
+        val to = (end + 64).coerceAtMost(text.lastIndex)
+        return expiryContext.containsMatchIn(text.substring(from, to + 1))
+    }
+
+    private fun strongKeyword(value: String): Boolean {
+        val normalized = value.lowercase()
+        return normalized.contains("otp") ||
+            normalized.contains("verification") ||
+            normalized.contains("one-time") ||
+            normalized.contains("one time") ||
+            value.contains("認証") ||
+            value.contains("ワンタイム") ||
+            value.contains("本人確認")
     }
 }
