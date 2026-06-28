@@ -101,6 +101,9 @@ jobs:
       - name: Prepare Extended interface
         run: node scripts/prepare_extended_bundle.js
 
+      - name: Prepare Extended version identity
+        run: node scripts/prepare_extended_version.js
+
       - name: Prepare canonical boot-resume control
         run: node scripts/prepare_boot_resume_ui.js
 
