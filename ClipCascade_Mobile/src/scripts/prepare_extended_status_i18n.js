@@ -62,10 +62,6 @@ const replacements = [
     '<Text style={styles.loadingText}>Init Error: {initError[1]}</Text>',
     "<Text style={styles.loadingText}>{tr('初期化エラー: ', 'Init error: ')}{localizeStatus(initError[1])}</Text>",
   ],
-  [
-    `                  New version available! 🚀 Click here to update ({APP_VERSION}{' '}\n                  ➞ {newVersionAvailable[1]})`,
-    `                  {tr('新しいバージョンがあります。タップして更新', 'New version available. Tap to update')} ({APP_VERSION}{' '}\n                  ➞ {newVersionAvailable[1]})`,
-  ],
 ];
 
 for (const [before, after] of replacements) {
