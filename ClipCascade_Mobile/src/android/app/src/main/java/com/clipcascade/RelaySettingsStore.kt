@@ -6,6 +6,7 @@ object RelaySettingsStore {
     private const val FILE_NAME = "relay_settings"
     private const val KEY_SCHEMA_VERSION = "queue_schema_version"
     private const val KEY_BACKGROUND_CONFIRMED = "background_operation_confirmed"
+    private const val KEY_RELAUNCH_ON_BOOT = "relaunch_on_boot"
     private const val CURRENT_SCHEMA_VERSION = 2
 
     @Synchronized
@@ -78,5 +79,23 @@ object RelaySettingsStore {
             .edit()
             .putBoolean(KEY_BACKGROUND_CONFIRMED, confirmed)
             .commit()
+    }
+
+    fun relaunchOnBootEnabled(context: Context): Boolean {
+        val storage = AsyncStorageBridge(context.applicationContext)
+        return try {
+            storage.getValue(KEY_RELAUNCH_ON_BOOT) == "true"
+        } finally {
+            storage.disconnect()
+        }
+    }
+
+    fun setRelaunchOnBootEnabled(context: Context, enabled: Boolean): Boolean {
+        val storage = AsyncStorageBridge(context.applicationContext)
+        return try {
+            storage.setValue(KEY_RELAUNCH_ON_BOOT, enabled.toString())
+        } finally {
+            storage.disconnect()
+        }
     }
 }
