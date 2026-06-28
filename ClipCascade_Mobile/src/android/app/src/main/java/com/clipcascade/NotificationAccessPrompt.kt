@@ -1,38 +1,25 @@
 package com.clipcascade
 
 import android.app.AlertDialog
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
-import androidx.core.app.NotificationManagerCompat
 
 object NotificationAccessPrompt {
-    private fun notificationAccessEnabled(context: Context): Boolean =
-        NotificationManagerCompat.getEnabledListenerPackages(context)
-            .contains(context.packageName)
-
-    private fun accessibilityEnabled(context: Context): Boolean {
-        val expected = ComponentName(context, ClipboardAccessibilityService::class.java)
-            .flattenToString()
-        val enabled = Settings.Secure.getString(
-            context.contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ).orEmpty()
-        return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
-    }
+    private fun setupComplete(context: Context): Boolean =
+        SetupPermissionHelper.notificationPermissionGranted(context) &&
+            SetupPermissionHelper.accessibilityEnabled(context) &&
+            SetupPermissionHelper.notificationAccessEnabled(context) &&
+            SetupPermissionHelper.unrestrictedBattery(context) &&
+            RelaySettingsStore.backgroundOperationConfirmed(context)
 
     fun showIfNeeded(context: Context) {
-        if (notificationAccessEnabled(context) && accessibilityEnabled(context)) return
+        if (setupComplete(context)) return
 
         AlertDialog.Builder(context)
-            .setTitle("バックグラウンド共有の設定")
-            .setMessage(
-                "ADB不要のクリップボード共有にはユーザー補助を、" +
-                    "SMS・メール等の認証コード共有には通知アクセスを有効にしてください。",
-            )
-            .setPositiveButton("共有設定を開く") { _, _ -> openSettings(context) }
-            .setNegativeButton("あとで", null)
+            .setTitle(R.string.setup_title)
+            .setMessage(R.string.background_sharing_body)
+            .setPositiveButton(R.string.setup_continue) { _, _ -> openSettings(context) }
+            .setNegativeButton(R.string.setup_not_yet, null)
             .show()
     }
 
