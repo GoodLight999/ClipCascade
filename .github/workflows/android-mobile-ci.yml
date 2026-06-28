@@ -165,7 +165,7 @@ jobs:
           test -x "${apksigner}"
           "${apksigner}" verify --print-certs "${apk}" | tee "${log}"
           generated_digest="$(openssl x509 -in "${cert}" -outform DER | sha256sum | awk '{print $1}')"
-          signer_digest="$(awk -F': ' '/certificate SHA-256 digest/ {print $2; exit}' "${log}" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          signer_digest="$(awk -F': ' '/certificate SHA-256 digest/ {print $NF; exit}' "${log}" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
           {
             echo "expected=${EXTENDED_TEST_CERT_SHA256}"
             echo "generated=${generated_digest}"
