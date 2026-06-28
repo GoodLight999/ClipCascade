@@ -44,6 +44,19 @@ Existing transport, relay queues, relay claims, and P2P peer-applied acknowledge
 - package: `com.clipcascade.extended`
 - deterministic test signer unchanged
 
+## Green verification
+
+Runtime/documentation HEAD:
+
+- commit: `46fa2ca2534046ca8d43431266eb0451456655a0`
+- Android CI: `28320055547` — success
+- Windows CI: `28320055544` — success
+- Android artifact ID: `7933940349`
+- artifact ZIP SHA-256: `c85ab2503e23ca9a2280efd6daca73058353244e03184da2e022f88e850e3af8`
+- extracted APK SHA-256: `874d22d06095bab2d4801231fefe4cf14a77c228a69a49e552e98d8f8b93b453`
+
+Android CI verifies the runtime-state transform, version identity, JavaScript bundle, Android unit tests, Kotlin/resource compilation, APK assembly, embedded bundle, and deterministic signer. Windows CI remains green on the same HEAD.
+
 ## Mandatory real-device validation
 
 1. Install versionCode `320111` over the existing stable-signed build.
