@@ -1,4 +1,142 @@
 <resources>
     <string name="app_name">ClipCascade Extended</string>
-    <string name="accessibility_service_description">コピー操作を検出し、選択したテキストをClipCascadeの暗号化接続で他の端末へ共有します。</string>
+    <string name="relay_settings_title">ClipCascade Settings</string>
+    <string name="accessibility_service_label">ClipCascade Clipboard Sharing</string>
+    <string name="notification_listener_label">ClipCascade Verification Code Sharing</string>
+    <string name="accessibility_service_description">Detects explicit copy actions and shares the selected text with your other devices through ClipCascade.</string>
+
+    <string name="background_sharing_title">Background sharing</string>
+    <string name="background_sharing_body">Set up Android permissions without ADB. Clipboard text is captured through Accessibility, while verification codes are read from notifications and relayed to Windows.</string>
+
+    <string name="setup_title">Guided setup</string>
+    <string name="setup_body">Complete the steps in order. The Continue button opens the next required Android setting.</string>
+    <string name="setup_progress">%1$d of %2$d required steps complete</string>
+    <string name="setup_line_ready">✓ %1$s</string>
+    <string name="setup_line_missing">○ %1$s</string>
+    <string name="setup_step_notifications">Allow ClipCascade notifications</string>
+    <string name="setup_step_accessibility">Enable Clipboard Sharing in Accessibility</string>
+    <string name="setup_step_notification_access">Allow notification access for verification codes</string>
+    <string name="setup_step_battery">Allow unrestricted battery use</string>
+    <string name="setup_step_background">Allow background activity / auto-launch</string>
+    <string name="setup_continue">Continue setup</string>
+    <string name="setup_complete">Setup complete</string>
+    <string name="setup_complete_message">All required permissions and background settings have been completed.</string>
+    <string name="setup_notification_permission_denied">Notification permission was not granted. It is required for the foreground service and the test notification.</string>
+    <string name="setup_background_confirm">I allowed background activity / auto-launch</string>
+    <string name="setup_background_open">Open app background settings</string>
+    <string name="setup_background_dialog_title">Allow background operation</string>
+    <string name="setup_background_dialog_message">Open the app settings and allow unrestricted background activity. On HONOR/MagicOS, also enable Auto-launch, Secondary launch, and Run in background when those switches are shown. Return here and enable the confirmation switch.</string>
+    <string name="setup_open_settings">Open settings</string>
+    <string name="setup_not_yet">Not yet</string>
+    <string name="setup_manual_honesty">Android does not expose a reliable API for checking every manufacturer-specific auto-launch switch, so the final step is confirmed by you.</string>
+
+    <string name="clipboard_section">Clipboard sharing</string>
+    <string name="clipboard_enable">Automatically send copied text</string>
+    <string name="accessibility_open">Open Accessibility settings</string>
+    <string name="accessibility_explanation">Detects copy actions, selected text, and copy-complete announcements. If direct clipboard access is unavailable, the latest selected text is used as a fallback.</string>
+    <string name="accessibility_status_enabled">Status: Clipboard Sharing is enabled in Accessibility</string>
+    <string name="accessibility_status_disabled">Status: Disabled. Enable it for automatic clipboard sharing</string>
+
+    <string name="otp_section">Verification codes from notifications</string>
+    <string name="otp_enable">Extract and send only verification codes</string>
+    <string name="notification_access_open">Open Notification access settings</string>
+    <string name="notification_explanation">Notification text is analyzed only on this phone. Only the short extracted verification value enters the relay queue.</string>
+    <string name="notification_status_enabled">Status: Notification access is enabled</string>
+    <string name="notification_status_disabled">Status: Disabled. Allow it to read verification codes from SMS and email notifications</string>
+
+    <string name="otp_apps_section">Apps allowed for verification-code detection</string>
+    <string name="otp_apps_choose">Choose source apps</string>
+    <string name="otp_apps_reset">Use all apps</string>
+    <string name="otp_apps_all">Sources: all apps, but only notifications with verification context are accepted</string>
+    <string name="otp_apps_selected">Sources: %1$d selected apps</string>
+    <string name="otp_apps_picker_title">Verification-code source apps</string>
+
+    <string name="otp_test_section">End-to-end verification-code test</string>
+    <string name="otp_test_body">Posts a real local notification containing a random synthetic code. The notification listener, extractor, persistent queue, transport, and Windows acknowledgement are exercised through the normal path.</string>
+    <string name="otp_test_send">Post test verification-code notification</string>
+    <string name="otp_test_channel_name">Verification-code tests</string>
+    <string name="otp_test_channel_description">Synthetic notifications used to verify ClipCascade code extraction and relay.</string>
+    <string name="otp_test_notification_title">ClipCascade verification-code test</string>
+    <string name="otp_test_notification_text">Your verification code is %1$s. Confirm that it appears on the Windows clipboard.</string>
+    <string name="otp_test_notification_subtext">Synthetic test — not a real account code</string>
+    <string name="otp_test_status_none">No verification-code test has been run.</string>
+    <string name="otp_test_status_posted">Test notification posted. Expected code: %1$s</string>
+    <string name="otp_test_status_detected">Notification received and code extracted: %1$s</string>
+    <string name="otp_test_status_queued">Code extracted and queued for Windows: %1$s</string>
+    <string name="otp_test_status_acknowledged">Success: %1$s was acknowledged. In Extended P2P mode, Windows applied it to the clipboard.</string>
+    <string name="otp_test_status_extract_failed">The test notification arrived, but the expected code was not extracted.</string>
+    <string name="otp_test_status_deduplicated">The code was detected but matched a recently queued test value. Run the test again.</string>
+    <string name="otp_test_status_post_failed">The test notification could not be posted: %1$s</string>
+    <string name="otp_test_missing_setup_title">Setup is incomplete</string>
+    <string name="otp_test_missing_setup_message">Complete notification permission and notification access before running the end-to-end test.</string>
+    <string name="otp_test_posted_toast">Test notification posted with code %1$s</string>
+
+    <string name="clipboard_test_section">Clipboard relay test</string>
+    <string name="clipboard_test_send">Send a test string to Windows</string>
+    <string name="clipboard_test_disabled_title">Clipboard sharing is off</string>
+    <string name="clipboard_test_disabled_message">Turn on Automatically send copied text before testing.</string>
+    <string name="clipboard_test_value">ClipCascade clipboard relay test</string>
+    <string name="clipboard_test_queued">Test string added to the relay queue</string>
+    <string name="clipboard_test_duplicate">The same test string is already pending</string>
+
+    <string name="queue_section">Pending queues</string>
+    <string name="queue_summary">Clipboard: %1$d / Verification codes: %2$d</string>
+    <string name="queue_body">Pending values are stored temporarily in app-private storage. Only counts are shown here.</string>
+    <string name="queue_clear">Clear all pending values</string>
+    <string name="queue_cleared">Pending queues cleared</string>
+
+    <string name="health_section">Recent diagnostics</string>
+    <string name="health_body">Clipboard contents, verification codes, notification text, and source app names are not displayed or stored in diagnostics.</string>
+    <string name="health_clear">Clear diagnostic history</string>
+    <string name="health_cleared">Diagnostic history cleared</string>
+    <string name="health_none">%1$s: no record</string>
+    <string name="health_format">%1$s: %2$s / %3$s / %4$s / %5$s</string>
+    <string name="health_clipboard">Clipboard</string>
+    <string name="health_verification">Verification codes</string>
+    <string name="health_recovery">Automatic recovery</string>
+
+    <string name="health_service_connected">service connected</string>
+    <string name="health_service_interrupted">service interrupted</string>
+    <string name="health_selection">text selection</string>
+    <string name="health_click">copy button</string>
+    <string name="health_announcement">copy announcement</string>
+    <string name="health_copy_notice">copy-complete notice</string>
+    <string name="health_ctrl_c">Ctrl+C</string>
+    <string name="health_settings_test">settings test</string>
+    <string name="health_listener_connected">notification listener connected</string>
+    <string name="health_listener_disconnected">notification listener disconnected</string>
+    <string name="health_context_match">verification context matched</string>
+    <string name="health_accessibility">Accessibility</string>
+    <string name="health_accessibility_selection">selected text</string>
+    <string name="health_clipboard_manager">clipboard read</string>
+    <string name="health_selected_text_fallback">selected-text fallback</string>
+    <string name="health_clipboard_denied_no_fallback">clipboard denied; no fallback</string>
+    <string name="health_no_text_available">no text available</string>
+    <string name="health_notification_access">notification access</string>
+    <string name="health_local_extractor">local extractor</string>
+    <string name="health_coordinator">recovery coordinator</string>
+    <string name="health_active_react_context">active app process</string>
+    <string name="health_headless_js">background task</string>
+    <string name="health_manual_test">manual test</string>
+    <string name="health_ready">ready</string>
+    <string name="health_remembered">selection remembered</string>
+    <string name="health_queued">queued</string>
+    <string name="health_deduplicated">duplicate suppressed</string>
+    <string name="health_retrying">retrying</string>
+    <string name="health_interrupted">interrupted</string>
+    <string name="health_rebind_requested">rebind requested</string>
+    <string name="health_requested">recovery requested</string>
+    <string name="health_declined">start declined by OS</string>
+    <string name="health_blocked">background start blocked</string>
+    <string name="health_cooldown">duplicate recovery suppressed</string>
+    <string name="health_sync_disabled">sync disabled</string>
+    <string name="health_heartbeat_timeout">heartbeat timed out</string>
+    <string name="health_network_available_but_offline">network returned but transport stayed offline</string>
+    <string name="health_test_notification">test notification</string>
+    <string name="health_test_extracted">test code extracted</string>
+    <string name="health_test_acknowledged">test acknowledged</string>
+
+    <string name="generic_ok">OK</string>
+    <string name="generic_save">Save</string>
+    <string name="generic_cancel">Cancel</string>
 </resources>
