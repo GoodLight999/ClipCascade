@@ -1,0 +1,5 @@
+<resources>
+    <string name="boot_resume_enable">Automatically resume synchronization after device startup</string>
+    <string name="boot_resume_explanation">When enabled, ClipCascade requests background recovery after BOOT_COMPLETED if synchronization was running before the reboot. Android may delay the direct start, so a WorkManager fallback checks again after 30 seconds.</string>
+    <string name="boot_resume_save_failed">The device-startup setting could not be saved.</string>
+</resources>
