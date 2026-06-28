@@ -198,9 +198,12 @@ object OtpCodeExtractor {
         val contextStart = (start - 40).coerceAtLeast(0)
         val contextEnd = (end + 40).coerceAtMost(text.lastIndex)
         val context = text.substring(contextStart, contextEnd + 1)
+        val closeContextStart = (start - 12).coerceAtLeast(0)
+        val closeContextEnd = (end + 12).coerceAtMost(text.lastIndex)
+        val closeContext = text.substring(closeContextStart, closeContextEnd + 1)
 
         if (urlContext.containsMatchIn(context)) return true
-        if (value.all(Char::isDigit) && amountContext.containsMatchIn(context)) return true
+        if (value.all(Char::isDigit) && amountContext.containsMatchIn(closeContext)) return true
         if (value.length >= 7 && phoneContext.containsMatchIn(context)) return true
         if (value.length >= 8 && trackingContext.containsMatchIn(context)) return true
 
