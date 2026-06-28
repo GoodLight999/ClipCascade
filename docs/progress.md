@@ -9,6 +9,8 @@ Resume work in this order:
 
 Current development phase: validate the guided bilingual Android setup and full-path synthetic verification-code test on HONOR 400 Pro, then execute the screen-off SMS/email and recovery matrix. Keep PR #1 Draft until real-device validation and upstream regression checks pass.
 
+Latest runtime addendum: read `docs/LATEST_RUNTIME_FIXES_HANDOFF.md` for the real Yahoo! JAPAN SMS success, stable Android test-signing migration, Windows Quit repair, and automatic-recovery status wording.
+
 ## 2026-06-28 Android stability and redundancy work
 
 Starting branch head: `912271763def1bf048f5bf626cf004c8b472e84b`.
@@ -123,13 +125,26 @@ Trial-and-error record:
 
 1. `c0bcdc59a80e35e15794e778f16c1a5b87c5833b` validated the upstream-promotion removal and non-overlapping bottom bar. Android run `28310040428`: success.
 2. `9c1e7faf88d9fdfa6f92f5b608879299fd1903fb` failed Android run `28310252416` after the first boot-control transform. Its regex began at the first login-form row and consumed every row through the boot checkbox, so the following status-localization transform could not find the login-status element.
-3. `1744ceb79eae126f04ed540b26ba3c61afbfabfe` replaced the broad regex with index-based isolation of the nearest row containing the unique `relaunch_on_boot` marker. The transformed UI/source assertions then passed. Final Android/Windows build result is recorded in the subsequent handoff/status update.
+3. `1744ceb79eae126f04ed540b26ba3c61afbfabfe` replaced the broad regex with index-based isolation of the nearest row containing the unique `relaunch_on_boot` marker. The transformed UI/source assertions then passed.
+
+## 2026-06-28 Runtime hardening after real SMS success
+
+- The user deliberately chose Yahoo! JAPAN SMS authentication instead of a passkey, and the real SMS verification value reached the Windows clipboard. The screen/lock duration was not specified, so this is recorded as one real SMS success rather than completion of the screen-off matrix.
+- Repeated Android package conflicts were traced to ephemeral default debug certificates on GitHub-hosted runners.
+- A deterministic public test signer now produces one stable certificate for development APKs. The currently installed old certificate requires one final uninstall; later stable-signed builds can update in place when versionCode increases.
+- The test certificate is intentionally public and is not production publisher authentication.
+- Windows Quit previously stopped the tray but could leave the nested status window, asynchronous P2P loop, or incomplete transport teardown alive.
+- Explicit Quit now closes all Tk windows, stops the tray/watchdog, awaits transport teardown, stops the P2P event loop, flushes logs, and applies a final process-exit guarantee.
+- The ambiguous `Automatic reconnect: False` Boolean meant only that no reconnect attempt was active. It is now displayed as `Automatic recovery: Standing by`, `Retrying now`, or `Paused by user`.
+- Windows run `28312102162` succeeded with authenticated HTTP, P2P ACK, shutdown/status tests, EXE packaging, and artifact upload.
+- Android run `28312102175` built and tested the APK but failed only at the first signer-fingerprint assertion. Diagnostic preservation was added to distinguish expected/generated/APK certificate digests. See `docs/LATEST_RUNTIME_FIXES_HANDOFF.md` for exact semantics and migration tests.
 
 Remaining mandatory work:
 
 - Confirm final Android and Windows CI on the same documentation HEAD.
 - Fetch matching Android and Windows artifacts from that HEAD.
-- Install the new APK on HONOR 400 Pro.
+- Perform the one-time migration to the stable-signed APK, then prove the next build updates in place without data loss.
+- Confirm Windows Quit removes the EXE from Task Manager and immediate relaunch is not blocked by a stale mutex.
 - Confirm the bottom bar does not obscure app content and the boot-resume switch persists across process restart.
 - Reboot once while synchronization is running and verify automatic background recovery plus the 30-second fallback behavior.
 - Follow the five-step setup from a fresh/permission-reset state.
