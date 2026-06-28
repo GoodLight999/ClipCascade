@@ -36,6 +36,8 @@ Make ClipCascade dependable enough for daily Android ↔ Windows clipboard use w
 9. Duplicate suppression must avoid repeated sends caused by multiple accessibility events for one copy action.
 10. Do not claim universal compatibility until tested across representative apps; accessibility events differ by app.
 11. Image/file sharing must continue using the upstream paths unless separately redesigned and tested.
+12. Android 10+ background clipboard restrictions must be treated as architectural constraints. Accessibility must recover the explicitly selected text rather than assuming a background `ClipboardManager` read will succeed.
+13. Merely selecting text must not send it; an explicit user Copy action or equivalent copy cue is required.
 
 ## Verification-code notification requirements
 
@@ -66,6 +68,8 @@ Make ClipCascade dependable enough for daily Android ↔ Windows clipboard use w
 6. Avoid overlapping retry loops and duplicate foreground services.
 7. Use bounded queues, TTL, deduplication, synchronous durable queue writes, and rotating logs.
 8. Build success is not functional completion. Real-device tests are mandatory.
+9. Every Android outbound validation run must disable Phone Link and all other competing clipboard synchronization features so delivery can be attributed to ClipCascade alone.
+10. Validation must record capture, queue, transport, peer clipboard application, and acknowledgement as separate stages.
 
 ## Windows requirements
 
@@ -77,6 +81,7 @@ Make ClipCascade dependable enough for daily Android ↔ Windows clipboard use w
 6. Logs must rotate rather than truncate on each launch.
 7. Extended P2P Windows must recognize ACK control envelopes and ACK Android only after validated text clipboard application.
 8. Windows executable packaging must be repeatable in CI.
+9. Normal short ICE negotiation must not be reported as a persistent unhealthy connection.
 
 ## Settings and localization requirements
 
@@ -95,7 +100,7 @@ The Android app must provide an always-reachable settings screen containing:
 - Synthetic end-to-end verification-code test and live status
 - Pending queue counts without displaying contents
 - Clear-pending-data action
-- Test text relay action
+- Test text relay action with target-neutral wording
 - Content-free recent health diagnostics and clear action
 - Clear explanation of what data is read, persisted, and sent
 - No obsolete ADB, READ_LOGS, or overlay setup instructions in the distributed UI
@@ -128,8 +133,9 @@ The project is not complete until all of the following are true:
 - Guided setup can reach notification permission, Accessibility, notification access, battery settings, and app background settings without ADB.
 - The synthetic test notification is detected, extracted, queued, transported, and acknowledged through the normal path.
 - Accessibility settings and notification settings can be opened from the app.
-- Test relay reaches Windows in P2S and P2P.
+- Test relay reaches connected peers in P2S and P2P.
 - Text copied in a representative app matrix reaches Windows without ADB.
+- Android outbound works with ClipCascade backgrounded, removed from recents, locked, and screen-off while every competing clipboard synchronizer is disabled.
 - Offline queue survives disconnect and process restart.
 - P2P Extended delivery is removed after verified Windows text clipboard application.
 - P2S acknowledgement limitations are explicitly tested/documented or an application receipt is implemented.
