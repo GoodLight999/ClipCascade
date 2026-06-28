@@ -14,11 +14,38 @@ Before every run:
 - [ ] Android CI green on current HEAD
 - [ ] Windows CI green on current HEAD
 - [ ] Matching artifact IDs and hashes recorded
-- [ ] Android version `3.2.1-extended.5-standalone`
-- [ ] Android versionCode `320109`
+- [ ] Android version `3.2.1-extended.6-standalone`
+- [ ] Android versionCode `320110`
 - [ ] Stable signer unchanged
 - [ ] In-place update succeeds
 - [ ] Settings and permissions retained
+
+## Initialization stability
+
+- [ ] Five consecutive cold launches complete without a closed connection-pool error
+- [ ] Close and reopen the Android UI while synchronization is active
+- [ ] Reopen does not create an additional outbound listener
+- [ ] Foreground service remains connected after UI reopen
+- [ ] AsyncStorage settings remain readable after queue and recovery checks
+
+## Exactly-once relay
+
+For each case use one unique synthetic string and perform one Copy action.
+
+- [ ] One native queue item is created
+- [ ] One JavaScript listener obtains the relay claim
+- [ ] Other listeners are rejected for the same relay ID
+- [ ] Exactly one peer clipboard application occurs
+- [ ] Exactly one peer acknowledgement completes the item
+- [ ] Queue returns to zero after acknowledgement
+- [ ] Failed transport releases the claim and later retry succeeds
+- [ ] Same text copied deliberately after more than five seconds is allowed as a new action
+
+Failure classification:
+
+- two native queue items: Accessibility/capture duplicate;
+- one queue item and two peer applications: listener/transport duplicate;
+- one peer application and two UI/history observations: receiver UI or another clipboard observer.
 
 ## Copy capture stages
 
@@ -95,4 +122,4 @@ For each representative application:
 - [ ] Tray Quit removes the process from Task Manager
 - [ ] Immediate relaunch succeeds
 
-Do not restore an Android outbound success claim until the isolated exact peer clipboard update and acknowledgement are both observed.
+Do not restore an Android outbound, exactly-once, or initialization-stable claim until the isolated real-device checks pass.
