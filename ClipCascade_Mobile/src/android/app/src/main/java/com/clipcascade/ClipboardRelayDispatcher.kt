@@ -85,8 +85,12 @@ object ClipboardRelayDispatcher {
         val storage = AsyncStorageBridge(context)
         try {
             if (storage.getValue("wsIsRunning") != "true") return false
+
             val status = storage.getValue("wsStatusMessage").orEmpty()
-            if (!isConnectedStatus(status)) return false
+            if (!isConnectedStatus(status)) {
+                RecoveryCoordinator.request(context, "clipboard_transport_not_ready")
+                return false
+            }
 
             val mode = storage.getValue("server_mode").orEmpty()
             if (mode.equals("P2P", ignoreCase = true)) {
@@ -97,15 +101,23 @@ object ClipboardRelayDispatcher {
                     ?.getOrNull(1)
                     ?.toIntOrNull()
                     ?: 0
+                // Signaling can be healthy before another peer is online. Keep the
+                // item queued without restarting a healthy transport in this case.
                 if (peers <= 0) return false
             }
 
-            val application = context.applicationContext as? MainApplication ?: return false
+            val application = context.applicationContext as? MainApplication
+            if (application == null) {
+                RecoveryCoordinator.request(context, "clipboard_application_context_missing")
+                return false
+            }
             val reactContext = application.reactNativeHost
                 .reactInstanceManager
                 .currentReactContext
-                ?: return false
-            if (!reactContext.hasActiveCatalystInstance()) return false
+            if (reactContext == null || !reactContext.hasActiveCatalystInstance()) {
+                RecoveryCoordinator.request(context, "clipboard_react_context_missing")
+                return false
+            }
 
             val item = ClipboardRelayStore.pending(context) ?: return true
             inFlightId = item.id
@@ -124,6 +136,7 @@ object ClipboardRelayDispatcher {
             } catch (error: Exception) {
                 inFlightId = null
                 inFlightSince = 0L
+                RecoveryCoordinator.request(context, "clipboard_react_event_failed")
                 throw error
             }
         } catch (error: Exception) {
