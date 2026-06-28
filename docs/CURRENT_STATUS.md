@@ -5,228 +5,194 @@ Draft PR: `#1`
 Repository: `GoodLight999/ClipCascade` (public)  
 Canonical requirements: `docs/REQUIREMENTS.md`
 
-## Critical status correction — 2026-06-28
+## Critical evidence correction
 
-Earlier Android outbound successes were misattributed to ClipCascade because Microsoft Phone Link clipboard synchronization was active on Windows.
+Earlier Android outbound successes were misattributed to ClipCascade because Microsoft Phone Link clipboard synchronization was active.
 
-With Phone Link excluded, the user found:
+Valid user evidence:
 
+- Windows authentication, GUI, and synchronization work;
 - peer -> Android reception works while ClipCascade is backgrounded and apparently while the screen is off;
-- Android -> peer sending does not work when ClipCascade is not visible;
-- the old claim that Accessibility copied-text relay worked on the target device is invalid;
-- the old claim that a Yahoo! JAPAN SMS verification value reached Windows through ClipCascade is invalid.
+- Android -> peer background sending was not working when isolated from Phone Link;
+- the former ordinary-copy and Yahoo! JAPAN SMS success claims are invalid.
 
-No Android foreground/background/locked/screen-off outbound success is currently proven. Read `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md` before making or testing further changes.
+No Android foreground/background/locked/screen-off outbound success is currently proven. Phone Link and every competing clipboard synchronizer must be disabled for future validation. PR #1 remains Draft.
 
-PR #1 must remain Draft.
-
-## Current high-level state
-
-Windows authentication, GUI, inbound synchronization, P2P transport, Windows-applied ACK, diagnostics, packaging, and automated tests are substantially implemented.
-
-Android has:
-
-- a user-authorized AccessibilityService;
-- a user-authorized NotificationListenerService;
-- persistent clipboard and verification-code queues;
-- bilingual guided setup and diagnostics;
-- deterministic development/test signing;
-- boot/network/heartbeat recovery infrastructure;
-- Extended P2P peer acknowledgement.
-
-However, the mandatory Android outbound requirement is still unproven. A new repair attempts to remove foreground-only clipboard behavior by recovering the selected range through Accessibility rather than relying on background `ClipboardManager` access.
-
-## Android platform constraint
-
-Android 10 and later do not return clipboard data to an ordinary app unless it is the default input method editor or currently has input focus.
-
-Consequences for this project:
-
-- a foreground service alone does not make `ClipboardManager.primaryClip` reliable in the background;
-- Accessibility must capture the selected text around an explicit Copy action;
-- using Accessibility merely as a trigger and then reading the global clipboard reproduces the old foreground-only behavior;
-- future implementation and tests must distinguish copy-cue detection, selected-text recovery, native queueing, transport, peer clipboard application, and acknowledgement.
-
-## Current Android repair build
+## Current Android build
 
 Prepared identity:
 
-- app name: `ClipCascade Extended`
+- app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.5-standalone`
-- versionCode: `320109`
-- deterministic public test signer certificate SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- versionName: `3.2.1-extended.6-standalone`
+- versionCode: `320110`
+- deterministic test signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 
-The build is intended to update stable-signed versionCode `320107` or `320108` in place. The signer is public and suitable only for repeatable development/personal test builds, not publisher authentication.
+It is intended to update stable-signed versionCode `320107`, `320108`, or `320109` without uninstalling.
 
-## Accessibility outbound capture repair
+## Android background capture architecture
 
-`ClipboardAccessibilityService` now:
+Android 10+ does not provide ordinary background clipboard reads unless the application is focused or is the default IME. Therefore Accessibility must recover the explicitly selected text around an explicit Copy action instead of merely triggering `ClipboardManager.primaryClip`.
 
-- listens for selection changes, copy-button/context clicks, announcements, notification-state changes, and copy-related window changes;
-- includes non-important Accessibility views so floating/system toolbar nodes are less likely to be omitted;
-- accepts `AccessibilityNodeInfo.ACTION_COPY` as an explicit copy cue;
-- attempts capture immediately before the selection can collapse, followed by bounded delayed attempts;
-- retains selected text for 60 seconds rather than 15 seconds;
-- scans all interactive Accessibility windows for a node with an active selected range if the remembered selection is absent;
+Current implementation:
+
+- observes selection and copy-related Accessibility events;
+- retains recent selected text for 60 seconds;
+- scans interactive Accessibility windows for a live selected range when necessary;
 - queues only the selected substring;
-- does not send merely because text was selected; an explicit Copy cue is still required.
+- requires a Copy cue rather than sending on selection alone;
+- uses a persistent native queue with TTL and text deduplication;
+- requests bounded transport recovery when transport or React state is unavailable.
 
-Target-device proof is pending.
+Target-device proof remains pending.
 
-## Native queue and recovery repair
+## Latest Android initialization repair
 
-Previously, clipboard and OTP queues could retry indefinitely without asking the background transport to recover when React/JS state was unavailable.
+Reported error:
 
-Current implementation requests bounded recovery when synchronization intent is enabled but:
+`Cannot perform this operation because the connection pool has been closed.`
 
-- transport status is offline;
-- the React application/context is absent;
-- React event delivery fails.
+Confirmed cause:
 
-A healthy P2P signaling connection with zero remote peers remains a normal queued condition and does not trigger restarts.
+- `AsyncStorageBridge` received the singleton database owned by React Native AsyncStorage;
+- its `disconnect()` method closed that shared database;
+- React initialization could then access an invalid connection pool;
+- reopening the application recreated/reopened the supplier connection, explaining the temporary recovery.
 
-`RecoveryCoordinator` now:
+Repair:
 
-- does not suppress the first request merely because the device has been up for less than 60 seconds;
-- records the attempt before active-React or Headless JS recovery so OS-rejected starts remain rate-limited;
-- preserves user synchronization intent after a failed background recovery.
+- the transformed bridge no longer closes the shared database;
+- it only releases its local reference;
+- Android CI rejects the transformed source if the unsafe close remains.
 
-The transformed startup path now attempts to recreate a missing prior foreground-service generation instead of changing synchronization to OFF and leaving `Foreground service stopped running` as a terminal state.
+## Latest exactly-once relay repair
 
-Android 12+ restricts starting foreground services from the background. Recovery can still be rejected by the OS outside permitted cases; battery exemption and HONOR/MagicOS background permissions remain part of the mandatory setup and test matrix.
+A single native queue item could be observed by more than one JavaScript service listener after failed initialization and reopen. Text hashing does not fully protect this case because native queue delivery intentionally forces sending and each service generation has separate JavaScript transport state.
 
-## Target-neutral Android UI
+Current implementation:
 
-The manual clipboard test now says:
+- native `RelaySettingsModule` owns a process-wide synchronized relay-claim map;
+- each JavaScript listener must claim the opaque relay ID before sending;
+- only the first listener succeeds;
+- an unaccepted send releases the claim;
+- native acknowledgement releases the claim;
+- stale claims expire after five seconds so retry remains possible.
 
-- Japanese: `接続中の端末へテスト文字列を送る`
-- English: `Send a test string to connected devices`
+This protects one native queue item from duplicate JavaScript listeners while retaining the existing Accessibility-level text deduplication for separately created items.
 
-The setup introduction also describes connected devices rather than Windows specifically.
+## Recovery and service startup
 
-## Verification-code notification relay
+Implemented:
+
+- clipboard and OTP queues request recovery for offline transport, missing React context, or failed event delivery;
+- the first recovery request after boot is not incorrectly cooldown-suppressed;
+- repeated attempts remain bounded;
+- startup recreates a missing previous foreground-service generation instead of changing synchronization to OFF;
+- zero P2P peers is treated as a normal queued condition rather than restart failure;
+- boot, network, heartbeat, and delayed WorkManager recovery infrastructure remains present.
+
+Android background-start restrictions and HONOR/MagicOS process management still require real-device testing.
+
+## Verification-code relay
 
 Implemented in code:
 
-- local extraction through NotificationListenerService;
-- optional source-package filter;
-- standard text, expanded text, text lines, conversation title, and MessagingStyle inspection;
+- local NotificationListenerService extraction;
+- Japanese and English contextual matching and false-positive controls;
+- standard, expanded, text-lines, conversation, and MessagingStyle fields;
 - persistence of only extracted value, timestamp, and opaque relay ID;
-- bounded queue, TTL, deduplication, retry, and ACK timeout;
-- synthetic local notification test;
-- Japanese and English extraction rules with false-positive controls.
+- optional source-package filtering;
+- persistent queue, TTL, deduplication, retry, and acknowledgement timeout;
+- synthetic local notification test.
 
-No real SMS/email end-to-end result is currently valid because the prior result was contaminated by Phone Link. The synthetic and real screen-state matrix must be repeated with all other clipboard synchronizers disabled.
+No real SMS/email result is currently valid because the previous test was contaminated by Phone Link. The synthetic and real screen-state matrix must be repeated in isolation.
 
-## Delivery acknowledgement — preserve exactly
+## Delivery acknowledgement — preserve
 
 Common local path:
 
 `QUEUED -> NATIVE_IN_FLIGHT -> JS_SEND_ATTEMPT -> LOCAL_TRANSPORT_ACCEPTED`
 
-P2S completion:
+P2S:
 
 `LOCAL_TRANSPORT_ACCEPTED -> NATIVE_ACK -> DELETE`
 
-P2P with Extended peer:
+Extended P2P:
 
 `LOCAL_TRANSPORT_ACCEPTED -> PEER_RECEIVED -> PEER_TEXT_APPLIED -> PEER_ACK -> NATIVE_ACK -> DELETE`
 
-P2P with old/non-Extended peer:
+Old/non-Extended peer:
 
 `LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
 
-Do not remove or bypass:
+Preserve:
 
-- `relayId` / `ackRequested` metadata;
-- peer ACK only after validated text application or duplicate-already-applied handling;
-- Android ACK-envelope handling before clipboard parsing;
+- `relayId` and `ackRequested`;
+- peer ACK only after validated clipboard application or duplicate-already-applied handling;
+- ACK-envelope handling before clipboard parsing;
 - receive-hash commit only after validation;
-- generation-scoped ACK timers;
-- queue startup only after `SHARED_TEXT` listener registration.
+- generation-scoped timers;
+- native acknowledgement-based deletion;
+- queue wakeup after `SHARED_TEXT` listener registration.
 
-P2S and old-peer fallback are not peer-applied acknowledgement. Multiple-peer completion still occurs on the first valid ACK.
+P2S and old-peer fallback are not peer-applied acknowledgement.
 
 ## Windows status
 
 User-validated:
 
-- authentication works against the actual deployment;
+- real authentication works;
 - Windows GUI and synchronization work;
-- Windows -> Android reception works while Android is backgrounded and apparently screen-off.
+- Windows -> Android reception works while Android is backgrounded.
 
 Implemented:
 
-- persistent authenticated HTTP session and all-cookie preservation;
-- validated authenticated API responses;
+- authenticated persistent HTTP session and response validation;
 - visible status/control window;
 - restart/reconnect/disconnect/log/diagnostic controls;
-- rotating logs and second-launch activation;
-- complete P2P teardown before replacement;
-- Windows-applied P2P ACK;
-- explicit Quit cleanup and final process-exit guarantee.
+- rotating logs;
+- second-launch activation;
+- complete P2P teardown and restart;
+- Extended P2P Windows-applied ACK;
+- explicit Quit cleanup and final exit guarantee.
 
-The supplied log showed failed `169.254.*` candidate binds followed by a successful candidate and `ICE completed`. The watchdog warning was emitted too early during normal ICE negotiation. It now waits ten seconds before reporting a persistent unhealthy state; the full restart threshold remains 25 seconds.
+The supplied log showed failed link-local candidate binds followed by successful candidates and `ICE completed`. The watchdog now waits ten seconds before reporting a persistent unhealthy state; full restart remains delayed until 25 seconds.
 
-Real Task Manager proof for Quit and immediate relaunch is still pending.
+Real Task Manager proof for Quit and immediate relaunch remains pending.
 
-## CI and trial record
+## Latest green code artifacts
 
-- Prior ACK, authenticated HTTP, shutdown/status, extractor, package, and signing tests remain mandatory.
-- Android run `28316609479` failed during AAPT resource linking because the XML event flag was written as `typeViewContextClicked`; the valid XML enum is `typeContextClicked`. Kotlin's constant remains `TYPE_VIEW_CONTEXT_CLICKED`.
-- Commit `f3ca3b45c51a48f18e9811b06786c030a7b818bb` corrects the XML spelling.
-- This failure was a build-resource naming error, not a transport or ACK regression.
+Code/release-workflow commit:
 
-See `docs/progress.md` and `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md` for the complete chronology.
+- `fb31ebca8fc99a7ff9504163cf584f35e52127ba`
+- Android CI `28317382119`: success
+- Windows CI `28317382112`: success
+- Android artifact ID `7933086597`
+- Windows artifact ID `7933081818`
+- APK SHA-256: `572f39b7e524a83b3d6e2819295b5aba111eed16d76ac3a9e3c10fc512fe3135`
+- EXE SHA-256: `0953676d8eec3a69084b7cd17fd4e273906be8fece1d2e764a93ceaae573dd5d`
+
+Exact ZIP hashes and test instructions are in `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`.
 
 ## Mandatory next proof
 
-Before testing:
+With Phone Link and all competing synchronizers disabled:
 
-1. disable Phone Link clipboard synchronization;
-2. stop every other clipboard synchronization utility;
-3. use matching current Android and peer builds;
-4. use synthetic non-secret text.
+1. update the Android app to versionCode `320110` without uninstalling;
+2. cold-launch at least five times and confirm no connection-pool initialization error;
+3. copy one unique synthetic value once and confirm exactly one peer clipboard application;
+4. repeat after closing/reopening the UI while synchronization remains active;
+5. repeat backgrounded for 30 seconds, removed from recents, locked, and screen-off;
+6. confirm queue deletion only after the defined acknowledgement;
+7. run synthetic OTP, then real SMS and email without storing their contents;
+8. test Windows Quit process disappearance and immediate relaunch.
 
-Test separately:
+Failure classification:
 
-1. Android app visible;
-2. Android app backgrounded for at least 30 seconds;
-3. app removed from recents;
-4. device locked and screen off;
-5. synthetic OTP notification;
-6. real SMS and email without recording the value.
-
-After each failure, record:
-
-- clipboard diagnostic trigger/path/result;
-- pending clipboard queue count;
-- recovery diagnostic trigger/path/result;
-- whether peer -> Android reception still works.
-
-Interpretation:
-
-- no clipboard diagnostic and queue count zero: Accessibility missed the copy cue or selection;
-- `no_text_available` or `clipboard_denied_no_fallback`: the cue was observed but no selected range was available;
-- queue count greater than zero: capture succeeded but outbound transport/ACK is blocked;
-- queue drains and exact peer clipboard update plus peer ACK occurs: full outbound success.
-
-## Not yet complete
-
-- Android background outbound proof with Phone Link disabled;
-- Accessibility compatibility across representative applications;
-- synthetic OTP full-path proof;
-- real SMS/email foreground/background/locked/screen-off matrix;
-- Android 16 notification redaction measurement;
-- MagicOS process-death/reboot/handover recovery;
-- one-time signer migration and subsequent update-retention proof;
-- Windows Quit real-process proof;
-- image/file regression;
-- P2S peer-applied acknowledgement;
-- explicit multiple-peer ACK policy;
-- private production signing and tested tagged release.
+- two native queue items: Accessibility/capture duplicate;
+- one queue item and two peer applications: listener/transport duplicate;
+- one peer application and two UI/history observations: receiver UI or another clipboard observer.
 
 ## Do not claim
 
-Do not describe Android outbound synchronization as working, beta-ready, screen-off capable, or real-SMS validated until it succeeds with Phone Link and every other competing synchronizer disabled.
+Do not describe Android outbound synchronization as working, beta-ready, exactly-once, screen-off capable, or real-SMS validated until these isolated target-device tests pass.
