@@ -13,6 +13,7 @@ object OtpTestStatusStore {
     const val POST_FAILED = "post_failed"
 
     private const val FILE_NAME = "synthetic_verification_test"
+    private const val STATUS_TTL_MS = 5 * 60_000L
 
     data class Snapshot(
         val state: String,
@@ -53,11 +54,17 @@ object OtpTestStatusStore {
         )
         val state = preferences.getString("state", null).orEmpty()
         if (state.isBlank()) return null
+        val timestamp = preferences.getLong("timestamp", 0L)
+        val age = System.currentTimeMillis() - timestamp
+        if (timestamp <= 0L || age !in 0..STATUS_TTL_MS) {
+            preferences.edit().clear().commit()
+            return null
+        }
         return Snapshot(
             state = state,
             value = preferences.getString("value", "").orEmpty(),
             relayId = preferences.getString("relay_id", "").orEmpty(),
-            timestamp = preferences.getLong("timestamp", 0L),
+            timestamp = timestamp,
         )
     }
 
