@@ -2,6 +2,7 @@ package com.clipcascade
 
 import android.app.Notification
 import android.content.ComponentName
+import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -45,32 +46,72 @@ class NotificationCodeListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         val posted = sbn ?: return
         if (!RelaySettingsStore.codeRelayEnabled(this)) return
-        if (posted.packageName == packageName) return
-
-        val selectedApps = RelaySettingsStore.selectedApps(this)
-        if (selectedApps.isNotEmpty() && posted.packageName !in selectedApps) return
 
         val notification = posted.notification ?: return
+        val syntheticTest = OtpTestNotificationManager.isSyntheticTest(notification)
+        if (posted.packageName == packageName && !syntheticTest) return
+
+        val selectedApps = RelaySettingsStore.selectedApps(this)
+        if (
+            !syntheticTest &&
+            selectedApps.isNotEmpty() &&
+            posted.packageName !in selectedApps
+        ) {
+            return
+        }
+
         if ((notification.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
         if ((notification.flags and Notification.FLAG_FOREGROUND_SERVICE) != 0) return
 
+        val expected = if (syntheticTest) {
+            OtpTestNotificationManager.expectedValue(notification)
+        } else {
+            ""
+        }
         val joinedText = collectNotificationText(notification)
-        val value = OtpCodeExtractor.extract(joinedText) ?: return
+        val value = OtpCodeExtractor.extract(joinedText)
+        if (value == null || (syntheticTest && expected.isNotBlank() && value != expected)) {
+            if (syntheticTest) {
+                OtpTestStatusStore.extractionFailed(applicationContext, expected)
+                RelayHealthStore.record(
+                    applicationContext,
+                    category = "verification",
+                    trigger = "test_notification",
+                    path = "local_extractor",
+                    result = "interrupted",
+                )
+            }
+            return
+        }
 
+        if (syntheticTest) {
+            OtpTestStatusStore.detected(applicationContext, value)
+        }
+
+        val relayId = if (syntheticTest) {
+            OtpTestStatusStore.RELAY_ID_PREFIX + UUID.randomUUID().toString()
+        } else {
+            UUID.randomUUID().toString()
+        }
         val item = OtpRelayStore.Item(
-            id = UUID.randomUUID().toString(),
+            id = relayId,
             code = value,
             createdAt = System.currentTimeMillis(),
         )
 
         val queued = OtpRelayStore.enqueue(applicationContext, item)
         if (queued) {
+            if (syntheticTest) {
+                OtpTestStatusStore.queued(applicationContext, value, relayId)
+            }
             OtpRelayDispatcher.schedule(applicationContext)
+        } else if (syntheticTest) {
+            OtpTestStatusStore.deduplicated(applicationContext, value)
         }
         RelayHealthStore.record(
             applicationContext,
             category = "verification",
-            trigger = "context_match",
+            trigger = if (syntheticTest) "test_notification" else "context_match",
             path = "local_extractor",
             result = if (queued) "queued" else "deduplicated",
         )
@@ -81,11 +122,13 @@ class NotificationCodeListenerService : NotificationListenerService() {
         val parts = linkedSetOf<String>()
         listOf(
             Notification.EXTRA_TITLE,
+            Notification.EXTRA_TITLE_BIG,
             Notification.EXTRA_TEXT,
             Notification.EXTRA_SUB_TEXT,
             Notification.EXTRA_INFO_TEXT,
             Notification.EXTRA_SUMMARY_TEXT,
             Notification.EXTRA_BIG_TEXT,
+            Notification.EXTRA_CONVERSATION_TITLE,
         ).forEach { key ->
             extras.getCharSequence(key)
                 ?.toString()
@@ -97,6 +140,24 @@ class NotificationCodeListenerService : NotificationListenerService() {
             ?.map { it.toString().trim() }
             ?.filter { it.isNotEmpty() }
             ?.forEach(parts::add)
+
+        addMessageTexts(extras, Notification.EXTRA_MESSAGES, parts)
+        addMessageTexts(extras, Notification.EXTRA_HISTORIC_MESSAGES, parts)
         return parts.joinToString("\n")
+    }
+
+    private fun addMessageTexts(
+        extras: Bundle,
+        key: String,
+        parts: MutableSet<String>,
+    ) {
+        extras.getParcelableArray(key)?.forEach { parcelable ->
+            val message = parcelable as? Bundle ?: return@forEach
+            message.getCharSequence("text")
+                ?.toString()
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let(parts::add)
+        }
     }
 }
