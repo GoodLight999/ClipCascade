@@ -44,6 +44,43 @@ class RelaySettingsModule(
     }
 
     @ReactMethod
+    fun getBootResumeEnabled(promise: Promise) {
+        try {
+            promise.resolve(RelaySettingsStore.relaunchOnBootEnabled(reactApplicationContext))
+        } catch (error: Exception) {
+            promise.reject(
+                "BOOT_RESUME_READ_ERROR",
+                "Unable to read device-startup synchronization setting",
+                error,
+            )
+        }
+    }
+
+    @ReactMethod
+    fun setBootResumeEnabled(enabled: Boolean, promise: Promise) {
+        try {
+            val saved = RelaySettingsStore.setRelaunchOnBootEnabled(
+                reactApplicationContext,
+                enabled,
+            )
+            if (!saved) {
+                promise.reject(
+                    "BOOT_RESUME_WRITE_ERROR",
+                    "Unable to save device-startup synchronization setting",
+                )
+                return
+            }
+            promise.resolve(enabled)
+        } catch (error: Exception) {
+            promise.reject(
+                "BOOT_RESUME_WRITE_ERROR",
+                "Unable to save device-startup synchronization setting",
+                error,
+            )
+        }
+    }
+
+    @ReactMethod
     fun acknowledgeRelay(relayId: String, source: String, promise: Promise) {
         try {
             val acknowledged = when (source) {
