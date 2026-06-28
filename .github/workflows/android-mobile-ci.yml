@@ -55,6 +55,9 @@ jobs:
       - name: Prepare Android package version
         run: node scripts/prepare_background_recovery_version.js
 
+      - name: Protect shared AsyncStorage lifecycle
+        run: node scripts/prepare_storage_lifecycle.js
+
       - name: Prepare startup service recovery and target-neutral wording
         run: node scripts/prepare_startup_service_recovery.js
 
@@ -79,13 +82,16 @@ jobs:
       - name: Order P2P ACK after validation
         run: node scripts/prepare_p2p_ack_validation_order.js
 
+      - name: Claim native relay dispatch once
+        run: node scripts/prepare_relay_claim.js
+
       - name: Verify transformed Extended source
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.5" App.js
-          grep -q "versionCode 320109" android/app/build.gradle
-          grep -q "versionName \"3.2.1-extended.5\"" android/app/build.gradle
+          grep -q "3.2.1-extended.6" App.js
+          grep -q "versionCode 320110" android/app/build.gradle
+          grep -q "versionName \"3.2.1-extended.6\"" android/app/build.gradle
           grep -q "ユーザー名" App.js
           grep -q "Username" App.js
           grep -q "未接続" App.js
@@ -94,6 +100,9 @@ jobs:
           grep -q "RecoveryCoordinator.request(context, \"clipboard_transport_not_ready\")" android/app/src/main/java/com/clipcascade/ClipboardRelayDispatcher.kt
           grep -q "RecoveryCoordinator.request(applicationContext, \"otp_transport_not_ready\")" android/app/src/main/java/com/clipcascade/OtpRelayDispatcher.kt
           grep -q "lastRequestElapsedMs > 0L" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
+          grep -q "claimRelayDispatch" StartForegroundService.js
+          grep -q "claimRelayDispatch" android/app/src/main/java/com/clipcascade/RelaySettingsModule.kt
+          grep -q "releaseRelayDispatch" android/app/src/main/java/com/clipcascade/RelaySettingsModule.kt
           grep -q "接続中の端末へテスト文字列を送る" android/app/src/main/res/values-ja/strings.xml
           grep -q "Send a test string to connected devices" android/app/src/main/res/values/strings.xml
           grep -q "共有設定" AppRoot.js
@@ -102,6 +111,10 @@ jobs:
           grep -q "起動時に同期を再開" AppRoot.js
           grep -q "getBootResumeEnabled" AppRoot.js
           grep -q "persistedRelaunchOnBoot" App.js
+          if grep -Fq "db?.close()" android/app/src/main/java/com/clipcascade/AsyncStorageBridge.kt; then
+            echo "AsyncStorage bridge still closes the shared database" >&2
+            exit 1
+          fi
           if grep -q "Foreground service stopped running" App.js; then
             echo "Obsolete terminal foreground-service warning remains" >&2
             exit 1
