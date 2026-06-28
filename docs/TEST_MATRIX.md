@@ -144,7 +144,21 @@ P2P:
 - [ ] Relaunch on boot
 - [ ] Foreground service notification
 
-## I. Windows UI and recovery
+## I. Windows authentication, UI, and recovery
+
+Authentication/API:
+
+- [ ] Successful login preserves every session/proxy cookie required by authenticated endpoints
+- [ ] HTTP 200 that returns the login form is rejected as an authentication failure
+- [ ] `/csrf-token` empty/non-JSON response is logged safely and remains non-fatal
+- [ ] `/server-mode` returns valid `P2S` or `P2P` JSON before transport selection
+- [ ] Empty `/server-mode` response returns to login without terminating the application
+- [ ] HTML/login redirect from `/server-mode` returns to login without terminating the application
+- [ ] Connection/timeout failure from an authenticated endpoint returns to login without an unexpected application crash
+- [ ] Diagnostic log records endpoint/status/content type/body byte count/final path/redirect codes only
+- [ ] Diagnostic log contains no response body, cookie value, credential, or private server URL
+
+UI and recovery:
 
 - [ ] Visible status window after login
 - [ ] Tray Open Status
