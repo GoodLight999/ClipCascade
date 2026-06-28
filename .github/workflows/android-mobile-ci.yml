@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 40
     env:
       CLIPCASCADE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXTENDED_TEST_CERT_SHA256: b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0
 
     defaults:
       run:
@@ -120,6 +121,20 @@ jobs:
             --assets-dest android/app/src/main/res
           test -s android/app/src/main/assets/index.android.bundle
 
+      - name: Generate stable public test signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          signing_dir="android/app/build/generated/signing"
+          python scripts/generate_stable_test_signing.py "${signing_dir}"
+          openssl pkcs12 -export \
+            -inkey "${signing_dir}/clipcascade-extended-test.key.pem" \
+            -in "${signing_dir}/clipcascade-extended-test.x509.pem" \
+            -name clipcascade-test \
+            -out "${signing_dir}/clipcascade-extended-test.p12" \
+            -passout pass:clipcascade-public-test
+          test -s "${signing_dir}/clipcascade-extended-test.p12"
+
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
@@ -134,10 +149,18 @@ jobs:
             -PclipcascadeBuildSha="${CLIPCASCADE_SOURCE_SHA}" \
             --stacktrace 2>&1 | tee ../android-build.log
 
-      - name: Verify embedded bundle
+      - name: Verify embedded bundle and stable signer
         shell: bash
         run: |
-          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -q "assets/index.android.bundle"
+          set -euo pipefail
+          apk="android/app/build/outputs/apk/debug/app-debug.apk"
+          unzip -l "${apk}" | grep -q "assets/index.android.bundle"
+          apksigner="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "${apksigner}"
+          signer_output="$("${apksigner}" verify --print-certs "${apk}")"
+          printf '%s\n' "${signer_output}"
+          signer_digest="$(printf '%s\n' "${signer_output}" | awk -F': ' '/certificate SHA-256 digest/ {print $2; exit}' | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          test "${signer_digest}" = "${EXTENDED_TEST_CERT_SHA256}"
 
       - name: Upload build log
         if: always()
