@@ -48,14 +48,16 @@ The supplied Windows log reached `ICE completed`; the early watchdog warning occ
 
 `ClipboardAccessibilityService` now:
 
-- observes floating toolbar and system copy-confirmation window events;
+- observes floating toolbar and system copy-confirmation events;
 - includes non-important Accessibility views;
 - accepts `ACTION_COPY` as an explicit copy cue;
 - captures immediately, then performs bounded delayed retries;
 - retains recent selected text for 60 seconds;
 - scans all interactive Accessibility windows for a live selected range when the remembered selection is absent;
 - queues only the selected substring;
-- still requires an explicit Copy cue, so selection alone does not send.
+- still requires copy-cue validation before dispatch.
+
+The validation matrix must explicitly verify that selecting text without pressing Copy does not relay anything.
 
 ### Queue-driven recovery
 
@@ -81,6 +83,26 @@ Prepared Android validation build:
 
 It is intended to update stable-signed `320107` or `320108` in place.
 
+## CI and artifacts
+
+Final synchronized HEAD for this handoff:
+
+- commit: `1d44b24c85ba01db264e0182c5b15194af82a28a`
+- Android CI run: `28316778157` — success
+- Windows CI run: `28316778154` — success
+- Android artifact ID: `7932883811`
+- Windows artifact ID: `7932876679`
+- Android artifact ZIP SHA-256: `0aa71d2f47c2c4cc46df6924ff8e6bf734a4ceba01b55374c1f0acc6ed84583c`
+- Windows artifact ZIP SHA-256: `926fd947417e785d6e8e60dbad630c1ce17a5c594c30ddc0617f810e7abd2b01`
+- extracted APK SHA-256: `16520558ef0780e713591242baf9892594030e8a9b15b8ed3fd32f2d6f1e343a`
+- extracted EXE SHA-256: `a2d87994e3afb595565ab1ecc633d1562d51105a3d665d97b27ef0c3c11b8821`
+
+Android CI passed source transforms, bundle generation, Gradle unit tests, Kotlin/resource compilation, APK assembly, embedded-bundle verification, and deterministic signer verification. Windows CI passed authenticated HTTP, existing P2P ACK, shutdown/status, and packaging tests.
+
+### Failed CI attempt retained
+
+Android run `28316609479` failed at AAPT linking because the Accessibility XML enum was written as `typeViewContextClicked`. The valid XML name is `typeContextClicked`; Kotlin continues to use `TYPE_VIEW_CONTEXT_CLICKED`. Commit `f3ca3b45c51a48f18e9811b06786c030a7b818bb` fixed it.
+
 ## ACK invariants preserved
 
 The native persistent queue, relay IDs, P2P Windows-applied ACK ordering, ACK-envelope handling, delayed compatibility fallback, and native ACK-based deletion were not removed or bypassed.
@@ -96,6 +118,7 @@ Test separately:
 3. App removed from recents.
 4. Device locked and screen off.
 5. Synthetic OTP notification, then real SMS/email without recording the value.
+6. Select text without pressing Copy and confirm no relay occurs.
 
 After a failure, record:
 
