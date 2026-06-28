@@ -1,0 +1,5 @@
+<resources>
+    <string name="boot_resume_enable">Resume sync at startup</string>
+    <string name="boot_resume_explanation">Resume synchronization after the device starts.</string>
+    <string name="boot_resume_save_failed">Unable to save the setting.</string>
+</resources>
