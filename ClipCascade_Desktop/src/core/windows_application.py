@@ -20,6 +20,7 @@ class WindowsApplication(Application):
         self._restart_lock = threading.Lock()
         self._watchdog_stop = threading.Event()
         self._watchdog_thread = None
+        self._explicit_quit_requested = threading.Event()
 
     def authenticate_and_connect(self):
         """Keep protocol/login failures inside the login flow instead of exiting."""
@@ -88,6 +89,42 @@ class WindowsApplication(Application):
                 raise TimeoutError("Timed out while stopping the synchronization engine")
             time.sleep(0.05)
 
+    @staticmethod
+    def _shutdown_manager(manager):
+        """Finish transport teardown and stop the dedicated P2P event loop."""
+        if hasattr(manager, "schedule_task") and hasattr(manager, "_disconnect"):
+            try:
+                future = manager.schedule_task(manager._disconnect())
+                future.result(timeout=20)
+            except Exception:
+                logging.exception("P2P transport teardown did not finish cleanly")
+
+            loop = getattr(manager, "loop", None)
+            loop_thread = getattr(manager, "loop_thread", None)
+            if loop is not None and not loop.is_closed():
+                try:
+                    loop.call_soon_threadsafe(loop.stop)
+                except Exception:
+                    logging.exception("Failed to stop the P2P event loop")
+            if loop_thread is not None and loop_thread.is_alive():
+                loop_thread.join(timeout=5)
+            if loop_thread is not None and loop_thread.is_alive():
+                logging.error("P2P event-loop thread remained alive during shutdown")
+            elif loop is not None and not loop.is_closed():
+                try:
+                    loop.close()
+                except Exception:
+                    logging.exception("Failed to close the P2P event loop")
+            return
+
+        try:
+            manager.disconnect()
+        except Exception:
+            logging.exception("STOMP transport teardown failed")
+
+    def _request_explicit_quit(self):
+        self._explicit_quit_requested.set()
+
     def restart_sync(self):
         if not self._restart_lock.acquire(blocking=False):
             return False
@@ -138,7 +175,6 @@ class WindowsApplication(Application):
                     unhealthy_since = None
                     retry_delay = 10
                     continue
-
                 if self._manager_is_healthy(manager):
                     unhealthy_since = None
                     retry_delay = 10
@@ -178,6 +214,16 @@ class WindowsApplication(Application):
         )
         self._watchdog_thread.start()
 
+    def _shutdown_runtime(self):
+        self._watchdog_stop.set()
+        if self._watchdog_thread is not None and self._watchdog_thread.is_alive():
+            self._watchdog_thread.join(timeout=5)
+        try:
+            self._shutdown_manager(self._get_ws_manager())
+        except Exception:
+            logging.exception("Failed to disconnect during shutdown")
+        logging.shutdown()
+
     def run(self):
         try:
             self.banner()
@@ -195,6 +241,7 @@ class WindowsApplication(Application):
                 on_disconnect_callback=manager.disconnect,
                 on_restart_callback=self.restart_sync,
                 on_logoff_callback=self.logoff_and_exit,
+                on_quit_callback=self._request_explicit_quit,
                 new_version_available=update_available,
                 github_url=GITHUB_URL,
                 donation_url=donation_url,
@@ -215,8 +262,9 @@ class WindowsApplication(Application):
                 msg_type="error",
             ).mainloop()
         finally:
-            self._watchdog_stop.set()
-            try:
-                self._get_ws_manager().disconnect()
-            except Exception:
-                logging.exception("Failed to disconnect during shutdown")
+            self._shutdown_runtime()
+            if self._explicit_quit_requested.is_set():
+                # Explicit tray Quit must never leave a frozen PyInstaller process
+                # behind because of a third-party GUI/network worker. All normal
+                # teardown and log flushing has already completed above.
+                os._exit(0)
