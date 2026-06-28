@@ -1,10 +1,13 @@
 package com.clipcascade
 
+import android.Manifest
 import android.app.AlertDialog
-import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
@@ -14,20 +17,37 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.NotificationManagerCompat
 import java.text.DateFormat
 import java.util.Date
 
 class RelaySettingsActivity : AppCompatActivity() {
+    companion object {
+        private const val REQUEST_POST_NOTIFICATIONS = 4106
+        private const val STATUS_REFRESH_MS = 1_000L
+    }
+
+    private lateinit var setupProgress: TextView
+    private lateinit var setupDetails: TextView
+    private lateinit var setupNextButton: Button
+    private lateinit var backgroundConfirmationSwitch: Switch
     private lateinit var accessibilityStatus: TextView
     private lateinit var notificationStatus: TextView
     private lateinit var selectedAppsSummary: TextView
+    private lateinit var otpTestStatus: TextView
     private lateinit var queueStatus: TextView
     private lateinit var healthStatus: TextView
 
+    private val statusHandler = Handler(Looper.getMainLooper())
+    private val statusRefresh = object : Runnable {
+        override fun run() {
+            updateStatus()
+            statusHandler.postDelayed(this, STATUS_REFRESH_MS)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = "ClipCascade 設定"
+        title = getString(R.string.relay_settings_title)
 
         val scroll = ScrollView(this)
         val content = LinearLayout(this).apply {
@@ -42,12 +62,42 @@ class RelaySettingsActivity : AppCompatActivity() {
             ),
         )
 
-        content.addView(titleText("バックグラウンド共有"))
-        content.addView(bodyText("ADBを使わず、ユーザー補助と通知アクセスでコピー内容をPCへ送ります。"))
+        content.addView(titleText(getString(R.string.background_sharing_title)))
+        content.addView(bodyText(getString(R.string.background_sharing_body)))
 
-        content.addView(sectionTitle("通常のクリップボード共有"))
+        content.addView(sectionTitle(getString(R.string.setup_title)))
+        content.addView(bodyText(getString(R.string.setup_body)))
+        setupProgress = bodyText("")
+        content.addView(setupProgress)
+        setupDetails = bodyText("")
+        content.addView(setupDetails)
+        setupNextButton = Button(this).apply {
+            setOnClickListener { continueSetup() }
+        }
+        content.addView(setupNextButton)
+        content.addView(Button(this).apply {
+            text = getString(R.string.setup_background_open)
+            setOnClickListener { showBackgroundSettingsDialog() }
+        })
+        backgroundConfirmationSwitch = Switch(this).apply {
+            text = getString(R.string.setup_background_confirm)
+            isChecked = RelaySettingsStore.backgroundOperationConfirmed(
+                this@RelaySettingsActivity,
+            )
+            setOnCheckedChangeListener { _, confirmed ->
+                RelaySettingsStore.setBackgroundOperationConfirmed(
+                    this@RelaySettingsActivity,
+                    confirmed,
+                )
+                updateStatus()
+            }
+        }
+        content.addView(backgroundConfirmationSwitch)
+        content.addView(bodyText(getString(R.string.setup_manual_honesty)))
+
+        content.addView(sectionTitle(getString(R.string.clipboard_section)))
         val clipboardSwitch = Switch(this).apply {
-            text = "コピーしたテキストを自動送信"
+            text = getString(R.string.clipboard_enable)
             isChecked = RelaySettingsStore.clipboardEnabled(this@RelaySettingsActivity)
             setOnCheckedChangeListener { _, enabled ->
                 RelaySettingsStore.setClipboardEnabled(this@RelaySettingsActivity, enabled)
@@ -59,21 +109,16 @@ class RelaySettingsActivity : AppCompatActivity() {
         accessibilityStatus = bodyText("")
         content.addView(accessibilityStatus)
         content.addView(Button(this).apply {
-            text = "ユーザー補助設定を開く"
+            text = getString(R.string.accessibility_open)
             setOnClickListener {
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                SetupPermissionHelper.openAccessibility(this@RelaySettingsActivity)
             }
         })
-        content.addView(
-            bodyText(
-                "有効にすると、コピー操作・選択テキスト・コピー完了通知を検出します。" +
-                    "クリップボードを直接読めないアプリでは、選択テキストを代替利用します。",
-            ),
-        )
+        content.addView(bodyText(getString(R.string.accessibility_explanation)))
 
-        content.addView(sectionTitle("認証コード通知"))
+        content.addView(sectionTitle(getString(R.string.otp_section)))
         val codeSwitch = Switch(this).apply {
-            text = "通知から認証コードだけを抽出して送信"
+            text = getString(R.string.otp_enable)
             isChecked = RelaySettingsStore.codeRelayEnabled(this@RelaySettingsActivity)
             setOnCheckedChangeListener { _, enabled ->
                 RelaySettingsStore.setCodeRelayEnabled(this@RelaySettingsActivity, enabled)
@@ -85,120 +130,75 @@ class RelaySettingsActivity : AppCompatActivity() {
         notificationStatus = bodyText("")
         content.addView(notificationStatus)
         content.addView(Button(this).apply {
-            text = "通知へのアクセス設定を開く"
+            text = getString(R.string.notification_access_open)
             setOnClickListener {
-                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                SetupPermissionHelper.openNotificationAccess(this@RelaySettingsActivity)
             }
         })
-        content.addView(
-            bodyText(
-                "通知本文は端末内だけで解析し、認証コードらしい短い値だけを既存の暗号化同期へ渡します。",
-            ),
-        )
+        content.addView(bodyText(getString(R.string.notification_explanation)))
 
-        content.addView(sectionTitle("認証コードを読むアプリ"))
+        content.addView(sectionTitle(getString(R.string.otp_apps_section)))
         selectedAppsSummary = bodyText("")
         content.addView(selectedAppsSummary)
         content.addView(Button(this).apply {
-            text = "対象アプリを選ぶ"
+            text = getString(R.string.otp_apps_choose)
             setOnClickListener { showAppPicker() }
         })
         content.addView(Button(this).apply {
-            text = "対象をすべてのアプリに戻す"
+            text = getString(R.string.otp_apps_reset)
             setOnClickListener {
                 RelaySettingsStore.setSelectedApps(this@RelaySettingsActivity, emptySet())
                 updateStatus()
             }
         })
 
-        content.addView(sectionTitle("保留キュー"))
+        content.addView(sectionTitle(getString(R.string.otp_test_section)))
+        content.addView(bodyText(getString(R.string.otp_test_body)))
+        otpTestStatus = bodyText("")
+        content.addView(otpTestStatus)
+        content.addView(Button(this).apply {
+            text = getString(R.string.otp_test_send)
+            setOnClickListener { postOtpTestNotification() }
+        })
+
+        content.addView(sectionTitle(getString(R.string.clipboard_test_section)))
+        content.addView(Button(this).apply {
+            text = getString(R.string.clipboard_test_send)
+            setOnClickListener { enqueueClipboardTest() }
+        })
+
+        content.addView(sectionTitle(getString(R.string.queue_section)))
         queueStatus = bodyText("")
         content.addView(queueStatus)
-        content.addView(
-            bodyText(
-                "未送信データはアプリ専用領域に一時保存されます。ここでは内容を表示せず件数だけを表示します。",
-            ),
-        )
+        content.addView(bodyText(getString(R.string.queue_body)))
         content.addView(Button(this).apply {
-            text = "保留中のデータをすべて消去"
+            text = getString(R.string.queue_clear)
             setOnClickListener {
                 ClipboardRelayStore.clear(applicationContext)
                 OtpRelayStore.clear(applicationContext)
                 updateStatus()
                 Toast.makeText(
                     this@RelaySettingsActivity,
-                    "保留キューを消去しました",
+                    getString(R.string.queue_cleared),
                     Toast.LENGTH_SHORT,
                 ).show()
             }
         })
 
-        content.addView(sectionTitle("最近の診断"))
+        content.addView(sectionTitle(getString(R.string.health_section)))
         healthStatus = bodyText("")
         content.addView(healthStatus)
-        content.addView(
-            bodyText(
-                "コピー内容・認証コード・通知本文・利用アプリ名は表示または診断保存しません。",
-            ),
-        )
+        content.addView(bodyText(getString(R.string.health_body)))
         content.addView(Button(this).apply {
-            text = "診断履歴を消去"
+            text = getString(R.string.health_clear)
             setOnClickListener {
                 RelayHealthStore.clear(applicationContext)
                 updateStatus()
                 Toast.makeText(
                     this@RelaySettingsActivity,
-                    "診断履歴を消去しました",
+                    getString(R.string.health_cleared),
                     Toast.LENGTH_SHORT,
                 ).show()
-            }
-        })
-
-        content.addView(sectionTitle("動作確認"))
-        content.addView(Button(this).apply {
-            text = "テスト文字列をPCへ送る"
-            setOnClickListener {
-                if (!RelaySettingsStore.clipboardEnabled(this@RelaySettingsActivity)) {
-                    AlertDialog.Builder(this@RelaySettingsActivity)
-                        .setTitle("クリップボード共有がOFFです")
-                        .setMessage("テスト送信の前に「コピーしたテキストを自動送信」をONにしてください。")
-                        .setPositiveButton("OK", null)
-                        .show()
-                    return@setOnClickListener
-                }
-
-                val now = System.currentTimeMillis()
-                val queued = ClipboardRelayStore.enqueue(
-                    applicationContext,
-                    ClipboardRelayStore.Item(
-                        id = "settings-test:$now",
-                        text = "ClipCascade clipboard relay test",
-                        sourcePackage = packageName,
-                        createdAt = now,
-                    ),
-                )
-                if (queued) {
-                    ClipboardRelayDispatcher.schedule(applicationContext)
-                    RelayHealthStore.record(
-                        applicationContext,
-                        category = "clipboard",
-                        trigger = "settings_test",
-                        path = "manual_test",
-                        result = "queued",
-                    )
-                    Toast.makeText(
-                        this@RelaySettingsActivity,
-                        "テスト文字列を送信キューへ追加しました",
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                } else {
-                    Toast.makeText(
-                        this@RelaySettingsActivity,
-                        "同じテスト文字列がすでに保留中です",
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
-                updateStatus()
             }
         })
 
@@ -207,101 +207,297 @@ class RelaySettingsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        statusHandler.removeCallbacks(statusRefresh)
+        statusHandler.post(statusRefresh)
+    }
+
+    override fun onPause() {
+        statusHandler.removeCallbacks(statusRefresh)
+        super.onPause()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_POST_NOTIFICATIONS) return
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            Toast.makeText(
+                this,
+                getString(R.string.setup_notification_permission_denied),
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+        updateStatus()
+    }
+
+    private fun continueSetup() {
+        when {
+            !SetupPermissionHelper.notificationPermissionGranted(this) -> {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    requestPermissions(
+                        arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                        REQUEST_POST_NOTIFICATIONS,
+                    )
+                }
+            }
+            !SetupPermissionHelper.accessibilityEnabled(this) ->
+                SetupPermissionHelper.openAccessibility(this)
+            !SetupPermissionHelper.notificationAccessEnabled(this) ->
+                SetupPermissionHelper.openNotificationAccess(this)
+            !SetupPermissionHelper.unrestrictedBattery(this) ->
+                SetupPermissionHelper.openBatterySettings(this)
+            !RelaySettingsStore.backgroundOperationConfirmed(this) ->
+                showBackgroundSettingsDialog()
+            else -> AlertDialog.Builder(this)
+                .setTitle(R.string.setup_complete)
+                .setMessage(R.string.setup_complete_message)
+                .setPositiveButton(R.string.generic_ok, null)
+                .show()
+        }
+    }
+
+    private fun showBackgroundSettingsDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.setup_background_dialog_title)
+            .setMessage(R.string.setup_background_dialog_message)
+            .setPositiveButton(R.string.setup_open_settings) { _, _ ->
+                SetupPermissionHelper.openAppDetails(this)
+            }
+            .setNegativeButton(R.string.setup_not_yet, null)
+            .show()
+    }
+
+    private fun postOtpTestNotification() {
+        val setupReady = RelaySettingsStore.codeRelayEnabled(this) &&
+            SetupPermissionHelper.notificationPermissionGranted(this) &&
+            SetupPermissionHelper.notificationAccessEnabled(this)
+        if (!setupReady) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.otp_test_missing_setup_title)
+                .setMessage(R.string.otp_test_missing_setup_message)
+                .setPositiveButton(R.string.setup_continue) { _, _ -> continueSetup() }
+                .setNegativeButton(R.string.generic_cancel, null)
+                .show()
+            return
+        }
+
+        try {
+            val value = OtpTestNotificationManager.post(applicationContext)
+            Toast.makeText(
+                this,
+                getString(R.string.otp_test_posted_toast, value),
+                Toast.LENGTH_LONG,
+            ).show()
+        } catch (error: Exception) {
+            val detail = error.javaClass.simpleName.ifBlank { "error" }
+            OtpTestStatusStore.postFailed(applicationContext, detail)
+            Toast.makeText(
+                this,
+                getString(R.string.otp_test_status_post_failed, detail),
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+        updateStatus()
+    }
+
+    private fun enqueueClipboardTest() {
+        if (!RelaySettingsStore.clipboardEnabled(this)) {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.clipboard_test_disabled_title)
+                .setMessage(R.string.clipboard_test_disabled_message)
+                .setPositiveButton(R.string.generic_ok, null)
+                .show()
+            return
+        }
+
+        val now = System.currentTimeMillis()
+        val queued = ClipboardRelayStore.enqueue(
+            applicationContext,
+            ClipboardRelayStore.Item(
+                id = "settings-test:$now",
+                text = getString(R.string.clipboard_test_value),
+                sourcePackage = packageName,
+                createdAt = now,
+            ),
+        )
+        if (queued) {
+            ClipboardRelayDispatcher.schedule(applicationContext)
+            RelayHealthStore.record(
+                applicationContext,
+                category = "clipboard",
+                trigger = "settings_test",
+                path = "manual_test",
+                result = "queued",
+            )
+        }
+        Toast.makeText(
+            this,
+            getString(
+                if (queued) R.string.clipboard_test_queued
+                else R.string.clipboard_test_duplicate,
+            ),
+            Toast.LENGTH_SHORT,
+        ).show()
         updateStatus()
     }
 
     private fun updateStatus() {
-        accessibilityStatus.text = if (isAccessibilityEnabled()) {
-            "状態: ユーザー補助サービスは有効です"
-        } else {
-            "状態: 無効です。自動クリップボード共有には有効化が必要です"
+        val setupSteps = listOf(
+            SetupPermissionHelper.notificationPermissionGranted(this) to
+                getString(R.string.setup_step_notifications),
+            SetupPermissionHelper.accessibilityEnabled(this) to
+                getString(R.string.setup_step_accessibility),
+            SetupPermissionHelper.notificationAccessEnabled(this) to
+                getString(R.string.setup_step_notification_access),
+            SetupPermissionHelper.unrestrictedBattery(this) to
+                getString(R.string.setup_step_battery),
+            RelaySettingsStore.backgroundOperationConfirmed(this) to
+                getString(R.string.setup_step_background),
+        )
+        val completed = setupSteps.count { it.first }
+        setupProgress.text = getString(R.string.setup_progress, completed, setupSteps.size)
+        setupDetails.text = setupSteps.joinToString("\n") { (ready, label) ->
+            getString(
+                if (ready) R.string.setup_line_ready else R.string.setup_line_missing,
+                label,
+            )
         }
+        setupNextButton.text = getString(
+            if (completed == setupSteps.size) R.string.setup_complete
+            else R.string.setup_continue,
+        )
 
-        notificationStatus.text = if (
-            NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
-        ) {
-            "状態: 通知アクセスは有効です"
-        } else {
-            "状態: 無効です。SMS・メール等の認証コード取得には許可が必要です"
-        }
+        accessibilityStatus.text = getString(
+            if (SetupPermissionHelper.accessibilityEnabled(this)) {
+                R.string.accessibility_status_enabled
+            } else {
+                R.string.accessibility_status_disabled
+            },
+        )
+        notificationStatus.text = getString(
+            if (SetupPermissionHelper.notificationAccessEnabled(this)) {
+                R.string.notification_status_enabled
+            } else {
+                R.string.notification_status_disabled
+            },
+        )
 
         val selected = RelaySettingsStore.selectedApps(this)
         selectedAppsSummary.text = if (selected.isEmpty()) {
-            "対象: すべてのアプリ（認証コード文脈がある通知だけ）"
+            getString(R.string.otp_apps_all)
         } else {
-            "対象: ${selected.size}個の選択済みアプリ"
+            getString(R.string.otp_apps_selected, selected.size)
         }
 
-        queueStatus.text =
-            "通常コピー: ${ClipboardRelayStore.count(this)}件 / " +
-                "認証コード: ${OtpRelayStore.pendingCount(this)}件"
-
+        otpTestStatus.text = formatOtpTestStatus(OtpTestStatusStore.read(this))
+        queueStatus.text = getString(
+            R.string.queue_summary,
+            ClipboardRelayStore.count(this),
+            OtpRelayStore.pendingCount(this),
+        )
         healthStatus.text = listOf(
-            formatHealth("通常コピー", RelayHealthStore.read(this, "clipboard")),
-            formatHealth("認証コード", RelayHealthStore.read(this, "verification")),
-            formatHealth("自動復旧", RelayHealthStore.read(this, "recovery")),
+            formatHealth(
+                getString(R.string.health_clipboard),
+                RelayHealthStore.read(this, "clipboard"),
+            ),
+            formatHealth(
+                getString(R.string.health_verification),
+                RelayHealthStore.read(this, "verification"),
+            ),
+            formatHealth(
+                getString(R.string.health_recovery),
+                RelayHealthStore.read(this, "recovery"),
+            ),
         ).joinToString("\n")
     }
 
+    private fun formatOtpTestStatus(snapshot: OtpTestStatusStore.Snapshot?): String {
+        if (snapshot == null) return getString(R.string.otp_test_status_none)
+        return when (snapshot.state) {
+            OtpTestStatusStore.POSTED ->
+                getString(R.string.otp_test_status_posted, snapshot.value)
+            OtpTestStatusStore.DETECTED ->
+                getString(R.string.otp_test_status_detected, snapshot.value)
+            OtpTestStatusStore.QUEUED ->
+                getString(R.string.otp_test_status_queued, snapshot.value)
+            OtpTestStatusStore.ACKNOWLEDGED ->
+                getString(R.string.otp_test_status_acknowledged, snapshot.value)
+            OtpTestStatusStore.EXTRACT_FAILED ->
+                getString(R.string.otp_test_status_extract_failed)
+            OtpTestStatusStore.DEDUPLICATED ->
+                getString(R.string.otp_test_status_deduplicated)
+            OtpTestStatusStore.POST_FAILED ->
+                getString(R.string.otp_test_status_post_failed, snapshot.value)
+            else -> getString(R.string.otp_test_status_none)
+        }
+    }
+
     private fun formatHealth(label: String, snapshot: RelayHealthStore.Snapshot?): String {
-        if (snapshot == null) return "$label: 記録なし"
+        if (snapshot == null) return getString(R.string.health_none, label)
         val time = DateFormat.getDateTimeInstance(
             DateFormat.SHORT,
             DateFormat.MEDIUM,
         ).format(Date(snapshot.timestamp))
-        return "$label: $time / ${healthLabel(snapshot.trigger)} / " +
-            "${healthLabel(snapshot.path)} / ${healthLabel(snapshot.result)}"
+        return getString(
+            R.string.health_format,
+            label,
+            time,
+            healthLabel(snapshot.trigger),
+            healthLabel(snapshot.path),
+            healthLabel(snapshot.result),
+        )
     }
 
-    private fun healthLabel(value: String): String = when (value) {
-        "service_connected" -> "サービス接続"
-        "service_interrupted" -> "サービス中断"
-        "selection" -> "文字選択"
-        "click" -> "コピーボタン"
-        "announcement" -> "コピー通知"
-        "copy_notice" -> "コピー完了通知"
-        "ctrl_c" -> "Ctrl+C"
-        "settings_test" -> "設定テスト"
-        "listener_connected" -> "通知リスナー接続"
-        "listener_disconnected" -> "通知リスナー切断"
-        "context_match" -> "コード文脈一致"
-        "accessibility" -> "ユーザー補助"
-        "accessibility_selection" -> "選択文字列"
-        "clipboard_manager" -> "クリップボード読取"
-        "selected_text_fallback" -> "選択文字列フォールバック"
-        "clipboard_denied_no_fallback" -> "読取拒否・代替なし"
-        "no_text_available" -> "文字列未取得"
-        "notification_access" -> "通知アクセス"
-        "local_extractor" -> "端末内抽出"
-        "coordinator" -> "復旧調整"
-        "active_react_context" -> "実行中アプリ"
-        "headless_js" -> "バックグラウンド処理"
-        "manual_test" -> "手動テスト"
-        "ready" -> "待機中"
-        "remembered" -> "選択を記憶"
-        "queued" -> "キュー追加"
-        "deduplicated" -> "重複抑止"
-        "retrying" -> "再試行中"
-        "interrupted" -> "中断"
-        "rebind_requested" -> "再接続要求"
-        "requested" -> "復旧要求済み"
-        "declined" -> "OSが開始を拒否"
-        "blocked" -> "バックグラウンド制限"
-        "cooldown" -> "重複復旧を抑止"
-        "sync_disabled" -> "同期OFF"
-        "heartbeat_timeout" -> "応答タイムアウト"
-        "network_available_but_offline" -> "ネット復帰後も未接続"
-        else -> value.ifBlank { "―" }
-    }
-
-    private fun isAccessibilityEnabled(): Boolean {
-        val expected = ComponentName(this, ClipboardAccessibilityService::class.java)
-            .flattenToString()
-        val enabled = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-        ).orEmpty()
-        return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+    private fun healthLabel(value: String): String {
+        val resource = when (value) {
+            "service_connected" -> R.string.health_service_connected
+            "service_interrupted" -> R.string.health_service_interrupted
+            "selection" -> R.string.health_selection
+            "click" -> R.string.health_click
+            "announcement" -> R.string.health_announcement
+            "copy_notice" -> R.string.health_copy_notice
+            "ctrl_c" -> R.string.health_ctrl_c
+            "settings_test" -> R.string.health_settings_test
+            "listener_connected" -> R.string.health_listener_connected
+            "listener_disconnected" -> R.string.health_listener_disconnected
+            "context_match" -> R.string.health_context_match
+            "accessibility" -> R.string.health_accessibility
+            "accessibility_selection" -> R.string.health_accessibility_selection
+            "clipboard_manager" -> R.string.health_clipboard_manager
+            "selected_text_fallback" -> R.string.health_selected_text_fallback
+            "clipboard_denied_no_fallback" -> R.string.health_clipboard_denied_no_fallback
+            "no_text_available" -> R.string.health_no_text_available
+            "notification_access" -> R.string.health_notification_access
+            "local_extractor" -> R.string.health_local_extractor
+            "coordinator" -> R.string.health_coordinator
+            "active_react_context" -> R.string.health_active_react_context
+            "headless_js" -> R.string.health_headless_js
+            "manual_test" -> R.string.health_manual_test
+            "ready" -> R.string.health_ready
+            "remembered" -> R.string.health_remembered
+            "queued" -> R.string.health_queued
+            "deduplicated" -> R.string.health_deduplicated
+            "retrying" -> R.string.health_retrying
+            "interrupted" -> R.string.health_interrupted
+            "rebind_requested" -> R.string.health_rebind_requested
+            "requested" -> R.string.health_requested
+            "declined" -> R.string.health_declined
+            "blocked" -> R.string.health_blocked
+            "cooldown" -> R.string.health_cooldown
+            "sync_disabled" -> R.string.health_sync_disabled
+            "heartbeat_timeout" -> R.string.health_heartbeat_timeout
+            "network_available_but_offline" ->
+                R.string.health_network_available_but_offline
+            "test_notification" -> R.string.health_test_notification
+            "test_extracted" -> R.string.health_test_extracted
+            "test_acknowledged" -> R.string.health_test_acknowledged
+            else -> null
+        }
+        return resource?.let(::getString) ?: value.ifBlank { "—" }
     }
 
     @Suppress("DEPRECATION")
@@ -323,15 +519,15 @@ class RelaySettingsActivity : AppCompatActivity() {
         val checked = BooleanArray(packages.size) { selected.contains(packages[it]) }
 
         AlertDialog.Builder(this)
-            .setTitle("認証コード通知の対象アプリ")
+            .setTitle(R.string.otp_apps_picker_title)
             .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
                 if (isChecked) selected += packages[which] else selected -= packages[which]
             }
-            .setPositiveButton("保存") { _, _ ->
+            .setPositiveButton(R.string.generic_save) { _, _ ->
                 RelaySettingsStore.setSelectedApps(this, selected)
                 updateStatus()
             }
-            .setNegativeButton("キャンセル", null)
+            .setNegativeButton(R.string.generic_cancel, null)
             .show()
     }
 
