@@ -28,7 +28,14 @@ Migration rule: the currently installed ephemeral-signed APK must be uninstalled
 
 Security boundary: this deterministic identity is intentionally public and exists only to make development/test artifacts updateable. It is not a private production release identity and must not be represented as proof of publisher authenticity.
 
-Trial note: an attempted direct key-file commit was blocked. The final implementation commits no binary or encoded private-key blob; it deterministically generates the documented public test identity inside the build directory.
+Trial record:
+
+1. An attempted direct key-file commit was blocked. The final implementation commits no binary or encoded private-key blob; it deterministically generates the documented public test identity inside the build directory.
+2. Android run `28312102175` built and tested the APK, but the initial certificate assertion failed.
+3. A diagnostic artifact proved the APK was correctly signed. Expected, generated-certificate, and APK-certificate SHA-256 values were all `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`.
+4. The failure was only the parser: current `apksigner` printed `V2 Signer: certificate SHA-256 digest: <value>`, while the workflow read field 2 (`certificate SHA-256 digest`) instead of the final field.
+5. Commit `50808d40973c63a35141d860899efca5f65a411d` changed the parser to use the final colon-delimited field. Android run `28312431226` then passed source transforms, ACK transforms, unit tests, APK assembly, embedded bundle verification, stable certificate verification, diagnostics upload, and APK upload.
+6. The tagged-release workflow was aligned in `386921f648f639bb6da61ff159eff465e418c27d` so it runs the same Android version transform, stable signer, final-field certificate parser, and Windows shutdown tests.
 
 ## Windows Quit left the EXE alive
 
@@ -53,7 +60,7 @@ Repair:
 - flush logging;
 - after graceful teardown, explicit tray Quit uses a final process-exit guarantee so a third-party GUI/network worker cannot leave a frozen EXE behind.
 
-`tests/test_windows_shutdown.py` verifies idempotent Quit signaling, status/root/icon closure, and the revised recovery wording. Existing authenticated-HTTP and P2P Windows-applied ACK tests remain mandatory.
+`tests/test_windows_shutdown.py` verifies idempotent Quit signaling, status/root/icon closure, and the revised recovery wording. Existing authenticated-HTTP and P2P Windows-applied ACK tests remain mandatory. Windows run `28312431225` passed all three test groups, PyInstaller packaging, and artifact upload.
 
 ## `Automatic reconnect: False`
 
