@@ -55,12 +55,12 @@
 
       <activity
         android:name=".RelaySettingsActivity"
-        android:label="ClipCascade 設定"
+        android:label="@string/relay_settings_title"
         android:exported="false" />
 
       <service
         android:name=".ClipboardAccessibilityService"
-        android:label="ClipCascade クリップボード共有"
+        android:label="@string/accessibility_service_label"
         android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
         android:exported="true">
         <intent-filter>
@@ -73,7 +73,7 @@
 
       <service
         android:name=".NotificationCodeListenerService"
-        android:label="ClipCascade 認証コード共有"
+        android:label="@string/notification_listener_label"
         android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
         android:exported="true">
         <intent-filter>
