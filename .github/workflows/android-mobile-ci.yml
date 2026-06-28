@@ -48,6 +48,9 @@ jobs:
       - name: Prepare Extended interface
         run: node scripts/prepare_extended_bundle.js
 
+      - name: Localize displayed status
+        run: node scripts/prepare_extended_status_i18n.js
+
       - name: Prepare relay transport acknowledgement
         run: node scripts/prepare_relay_transport_ack.js
 
@@ -83,6 +86,7 @@ jobs:
           bundle="android/app/src/main/assets/index.android.bundle"
           grep -a -q "共有設定" "$bundle"
           grep -a -q "Sharing setup" "$bundle"
+          grep -a -q "未接続" "$bundle"
           if grep -a -q "pm grant com.clipcascade android.permission.READ_LOGS" "$bundle"; then
             echo "Legacy READ_LOGS setup command remains in the distributed bundle" >&2
             exit 1
