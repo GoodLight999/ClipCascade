@@ -100,11 +100,38 @@ Trial-and-error record:
 7. `bc7cbfc7005fa925662bc0dc3e9969e0b799a9a2` failed Android run `28308003116` in one new positive test: `Use 462881 to verify user1234@example.com`. The extractor rejected no false candidate; it lacked an authentication keyword pattern for a `verify` phrase addressed directly to an email address.
 8. `5433eb8e8ffaae47ed6873af67ea1c1df6824333` adds explicit support for `verify <email-address>` while retaining candidate-overlap rejection for digits that are actually part of the address. Android run `28308127548`: success. Windows run `28308127573`: success.
 
+## 2026-06-28 Upstream-promotion cleanup and visible boot resume
+
+User feedback after running the prior artifact: synchronization remained very stable, but the app still showed the upstream project's update banner and footer links, and the floating Sharing setup button covered the footer.
+
+Implemented:
+
+- removed the upstream version and funding network lookups from the transformed Extended app;
+- removed the upstream release banner entirely;
+- removed the `GITHUB`, `HELP`, `DONATE`, and `HOMEPAGE` footer controls from both login and connected pages;
+- moved Sharing setup from an absolute overlay to a dedicated non-overlapping bottom bar;
+- exposed an always-visible localized `Resume sync at startup` / `起動時に同期を再開` switch in the same bottom bar;
+- connected the switch directly to the existing `relaunch_on_boot` AsyncStorage value used by `BootReceiver`;
+- preserved existing boot semantics: automatic recovery is requested after `BOOT_COMPLETED` only when the switch is enabled and synchronization was active before reboot;
+- preserved the immediate Headless JS attempt plus the delayed 30-second WorkManager fallback;
+- removed the duplicate boot checkbox from the transformed advanced login settings;
+- refreshes `relaunch_on_boot` from native storage before the login form persists its complete state, preventing stale React state from overwriting the always-visible switch;
+- CI now rejects upstream URLs, release-banner text, removed footer labels, old ADB commands, duplicate boot controls, and missing canonical boot-switch plumbing;
+- Android version bumped to `3.2.1-extended.3`.
+
+Trial-and-error record:
+
+1. `c0bcdc59a80e35e15794e778f16c1a5b87c5833b` validated the upstream-promotion removal and non-overlapping bottom bar. Android run `28310040428`: success.
+2. `9c1e7faf88d9fdfa6f92f5b608879299fd1903fb` failed Android run `28310252416` after the first boot-control transform. Its regex began at the first login-form row and consumed every row through the boot checkbox, so the following status-localization transform could not find the login-status element.
+3. `1744ceb79eae126f04ed540b26ba3c61afbfabfe` replaced the broad regex with index-based isolation of the nearest row containing the unique `relaunch_on_boot` marker. The transformed UI/source assertions then passed. Final Android/Windows build result is recorded in the subsequent handoff/status update.
+
 Remaining mandatory work:
 
 - Confirm final Android and Windows CI on the same documentation HEAD.
 - Fetch matching Android and Windows artifacts from that HEAD.
 - Install the new APK on HONOR 400 Pro.
+- Confirm the bottom bar does not obscure app content and the boot-resume switch persists across process restart.
+- Reboot once while synchronization is running and verify automatic background recovery plus the 30-second fallback behavior.
 - Follow the five-step setup from a fresh/permission-reset state.
 - Run the synthetic notification test in Extended P2P and confirm the status reaches `acknowledged` only after the Windows clipboard contains the synthetic value.
 - Repeat the synthetic test with Windows offline and after reconnect.
