@@ -6,7 +6,7 @@ import time
 from pystray import Menu, MenuItem as item
 
 from core.constants import get_program_files_directory
-from gui.status_dialog import show_connection_status
+from gui.status_dialog import close_connection_status, show_connection_status
 from gui.tray import TaskbarPanel
 
 
@@ -18,10 +18,18 @@ def get_show_window_request_path():
 
 
 class EnhancedTaskbarPanel(TaskbarPanel):
-    def __init__(self, *args, on_restart_callback=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        on_restart_callback=None,
+        on_quit_callback=None,
+        **kwargs,
+    ):
         self.on_restart_callback = on_restart_callback
+        self.on_quit_callback = on_quit_callback
         self._operation_lock = threading.Lock()
         self._stop_status_poll = threading.Event()
+        self._shutdown_requested = threading.Event()
         super().__init__(*args, **kwargs)
 
     def create_menu(self, item_: tuple = None):
@@ -37,9 +45,18 @@ class EnhancedTaskbarPanel(TaskbarPanel):
     def run(self):
         self.icon.run_detached()
         self.root.after(0, self._show_status_on_ui_thread)
-        self.root.mainloop()
+        try:
+            self.root.mainloop()
+        finally:
+            self._stop_status_poll.set()
+            try:
+                self.icon.stop()
+            except Exception:
+                logging.exception("Failed to stop tray icon during shutdown")
 
     def _show_status_on_ui_thread(self):
+        if self._shutdown_requested.is_set():
+            return
         show_connection_status(
             self.ws_interface,
             self.config,
@@ -49,10 +66,12 @@ class EnhancedTaskbarPanel(TaskbarPanel):
         )
 
     def _open_status(self, icon=None, menu_item=None):
+        if self._shutdown_requested.is_set():
+            return
         self.root.after(0, self._show_status_on_ui_thread)
 
     def _run_manager_operation(self, callback, operation_name):
-        if callback is None:
+        if callback is None or self._shutdown_requested.is_set():
             return
 
         def worker():
@@ -81,6 +100,8 @@ class EnhancedTaskbarPanel(TaskbarPanel):
         self._run_manager_operation(self.on_disconnect_callback, "Disconnect")
 
     def _sync_tray_state(self):
+        if self._shutdown_requested.is_set():
+            return
         actual = bool(getattr(self.ws_interface, "is_connected", False))
         changed = actual != self.is_connected
         self.is_connected = actual
@@ -91,6 +112,8 @@ class EnhancedTaskbarPanel(TaskbarPanel):
                 logging.exception("Failed to update tray state")
 
     def _consume_show_window_request(self):
+        if self._shutdown_requested.is_set():
+            return
         path = get_show_window_request_path()
         if not os.path.exists(path):
             return
@@ -114,13 +137,49 @@ class EnhancedTaskbarPanel(TaskbarPanel):
                     self.previous_stats_items = (current_stats, 0, None)
                     self.root.after(0, self.update_menu)
             except Exception:
-                logging.exception("Tray status polling failed")
-                time.sleep(1)
+                if not self._shutdown_requested.is_set():
+                    logging.exception("Tray status polling failed")
+                    time.sleep(1)
+
+    def _shutdown_ui(self):
+        """Run all Tk teardown on the Tk thread, including the nested status dialog."""
+        close_connection_status()
+        try:
+            self.root.quit()
+        except Exception:
+            pass
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def _request_shutdown(self):
+        if self._shutdown_requested.is_set():
+            return
+        self._shutdown_requested.set()
+        self._stop_status_poll.set()
+        if self.on_quit_callback is not None:
+            try:
+                self.on_quit_callback()
+            except Exception:
+                logging.exception("Failed to notify application shutdown")
+        try:
+            self.icon.stop()
+        except Exception:
+            logging.exception("Failed to stop tray icon")
+        try:
+            self.root.after(0, self._shutdown_ui)
+        except Exception:
+            logging.exception("Failed to schedule Tk shutdown")
 
     def _on_quit(self, icon, menu_item):
-        self._stop_status_poll.set()
-        super()._on_quit(icon, menu_item)
+        self._request_shutdown()
 
     def _on_logoff(self, icon, menu_item):
-        self._stop_status_poll.set()
-        super()._on_logoff(icon, menu_item)
+        try:
+            if self.on_logoff_callback:
+                self.on_logoff_callback()
+        except Exception:
+            logging.exception("Logoff failed during shutdown")
+        finally:
+            self._request_shutdown()
