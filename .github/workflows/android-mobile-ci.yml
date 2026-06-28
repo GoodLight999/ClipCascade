@@ -67,6 +67,9 @@ jobs:
       - name: Localize displayed status
         run: node scripts/prepare_extended_status_i18n.js
 
+      - name: Synchronize runtime control state
+        run: node scripts/prepare_runtime_control_state.js
+
       - name: Prepare relay transport acknowledgement
         run: node scripts/prepare_relay_transport_ack.js
 
@@ -89,14 +92,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.6" App.js
-          grep -q "versionCode 320110" android/app/build.gradle
-          grep -q "versionName \"3.2.1-extended.6\"" android/app/build.gradle
+          grep -q "3.2.1-extended.7" App.js
+          grep -q "versionCode 320111" android/app/build.gradle
+          grep -q "versionName \"3.2.1-extended.7\"" android/app/build.gradle
           grep -q "ユーザー名" App.js
           grep -q "Username" App.js
           grep -q "未接続" App.js
           grep -q "foregroundServiceNeedsRestart" App.js
           grep -q "Restarting background synchronization" App.js
+          grep -q "setWsIsRunning(latest.wsIsRunning)" App.js
           grep -q "RecoveryCoordinator.request(context, \"clipboard_transport_not_ready\")" android/app/src/main/java/com/clipcascade/ClipboardRelayDispatcher.kt
           grep -q "RecoveryCoordinator.request(applicationContext, \"otp_transport_not_ready\")" android/app/src/main/java/com/clipcascade/OtpRelayDispatcher.kt
           grep -q "lastRequestElapsedMs > 0L" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
