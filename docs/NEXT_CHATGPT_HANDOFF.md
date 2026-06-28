@@ -10,7 +10,7 @@ This file lets a new ChatGPT thread continue without hidden conversation history
 - Draft PR: `#1`
 - Base branch: `main`
 
-A branch in a public repository is public. Do not add credentials, private server details, real notification contents, verification values, or clipboard contents.
+A branch in a public repository is public. Do not add credentials, private server details, real notification contents, verification values, clipboard contents, cookies, or response bodies.
 
 ## Read in this order
 
@@ -40,11 +40,15 @@ The user strongly dislikes inflated completion claims. Distinguish compilation, 
 
 ## Current code baseline
 
-Latest Android behavior commit at the time of this handoff:
+Latest Android behavior commit:
 
 `230a10562456dc96d0f354e2d78e01123d10a800`
 
-Documentation commits follow that code commit. Consult PR #1 for the current branch HEAD before downloading artifacts.
+Latest Windows authentication behavior and tests:
+
+`fae212a9fbe127f582e6bdace5c8a0c8f25fb575`
+
+Documentation commits follow those code commits. Consult PR #1 for the current branch HEAD before downloading artifacts.
 
 ## Preserved delivery acknowledgement
 
@@ -73,7 +77,7 @@ Do not remove or bypass:
 - generation-scoped P2P ACK timers
 - queue startup only after the `SHARED_TEXT` listener is installed
 
-The Android stability changes described below did not modify the ACK transformation scripts or Windows ACK receiver.
+The Android stability and Windows authentication changes described below did not modify the ACK transformation scripts or Windows ACK receiver.
 
 ## 2026-06-28 Android stability changes
 
@@ -116,9 +120,64 @@ Connected status is now accepted only as `Connected` or `Connected - ...`, optio
 
 An initial hypothesis that notification-listener rebind logic was absent was wrong. `NotificationCodeListenerService.onListenerDisconnected()` already calls `requestRebind(...)`. Preserve that behavior.
 
+## 2026-06-28 Windows login/API failure and repair
+
+### Real artifact failure
+
+The user observed:
+
+- login reported HTTP 200 success
+- `/csrf-token` JSON decoding failed at line 1 column 1
+- `/server-mode` JSON decoding failed at line 1 column 1
+- the exception escaped `authenticate_and_connect()` and terminated Windows startup
+
+The old logs did not include safe HTTP response metadata, so do not claim the exact server-side cause. Possibilities still include an empty response, HTML/login redirect, reverse-proxy interception, a missing additional session cookie, or server/client endpoint mismatch.
+
+### Confirmed client defects
+
+- almost any login HTTP 200 without `bad credentials` was considered successful
+- login used `requests.Session`, but authenticated follow-up calls discarded it and forwarded only `JSESSIONID`
+- JSON endpoints did not validate empty bodies, HTML, final redirect paths, payload shape, or server mode value
+- mandatory API failures escaped the login flow as an unexpected application error
+
+### Repair
+
+Commits:
+
+- `bac2ed9f33391cee98d91532df883abb370fc4b7` — retain one authenticated session, preserve all cookies, add bounded timeouts, parse JSON safely, and emit content-free response metadata; Windows `28305923495`, Android `28305923474`: success
+- `9b2c04544a8ed407b44575891ebaf512f1f7fa90` — catch authenticated API validation failures in the Windows login flow, clear the rejected session, show an actionable dialog, and reopen login; Windows `28305936639`, Android `28305936584`: success
+- `fb4dd2ae60c2ba4622a54a4b4368bf681a464dc0` — add initial HTTP response unit tests; Windows `28305951497`, Android `28305951534`: success
+- `57293aa060efadcef87c3442108c0ed43c27ec45` — make HTTP tests mandatory in Desktop Windows CI alongside existing P2P ACK tests; Windows `28305957237`, Android `28305957212`: success
+- `03126bea1369d68d3afc6565ba38f295b585ac51` — normalize authenticated connection and timeout failures into the same safe login-recovery path; Windows `28306013776`, Android `28306013777`: success
+- `fae212a9fbe127f582e6bdace5c8a0c8f25fb575` — add tests for HTTP-200 login-form false positives and content-free transport-error reporting; Windows `28306019657`, Android `28306019658`: success
+
+### New safe diagnosis
+
+If login still fails, the log now records only:
+
+- endpoint path
+- HTTP status
+- content type
+- body byte count
+- final path after redirects
+- redirect status codes
+- transport exception class where applicable
+
+It does not record response bodies, cookie values, credentials, or the private server URL.
+
+`/csrf-token` failure is non-fatal because the token is used for logout. `/server-mode` remains mandatory: do not guess P2S/P2P.
+
+### Immediate next validation
+
+Run the repaired Windows artifact against the actual deployment.
+
+- If it connects, the discarded-session/additional-cookie problem was the operative cause.
+- If it returns to login, preserve the new safe `/server-mode` diagnostic line. That line should distinguish empty body, HTML redirect, HTTP failure, or transport failure without needing Network captures containing secrets.
+- Do not add a guessed server-mode fallback merely to suppress the error.
+
 ## CI and artifacts
 
-Every Android code commit above passed Android standalone CI. The matching Windows workflow also passed for each commit.
+Every code commit above passed Android standalone CI and the matching Windows workflow.
 
 Before real-device testing:
 
@@ -132,9 +191,11 @@ Current CI artifacts are test/debug signed. Installing over an older differently
 
 ## Highest-priority next work
 
-### Priority 1 — target-device build and guided validation
+### Priority 1 — Windows login re-test, then target-device validation
 
-- install the current APK on HONOR 400 Pro / Android 16 / MagicOS
+- run the repaired Windows login first
+- retain the content-free `/server-mode` diagnosis only if it still fails
+- install the matching APK on HONOR 400 Pro / Android 16 / MagicOS
 - start with settings status and the synthetic test relay
 - verify P2P Extended Android → Extended Windows delivery and clipboard-applied ACK
 - run Chrome, Gmail, SMS, LINE/Discord/editor copy tests
@@ -172,6 +233,7 @@ If notification text is present but extraction fails:
 
 ## Important remaining limitations
 
+- The repaired Windows authentication path has passed unit/CI validation but has not yet been re-tested against the user's server.
 - Android 16 may redact verification-code notification content.
 - Accessibility copy capture remains app-dependent until tested.
 - P2S confirms local STOMP publish, not Windows clipboard application.
