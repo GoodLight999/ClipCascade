@@ -9,6 +9,7 @@ react {
 def enableProguardInReleaseBuilds = false
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 def clipcascadeBuildSha = (project.findProperty("clipcascadeBuildSha") ?: "local").toString()
+def extendedTestSigningFile = file("${buildDir}/generated/signing/clipcascade-extended-test.p12")
 
 def quotedBuildSha = "\"${clipcascadeBuildSha.replace('\\', '\\\\').replace('\"', '\\\"')}\""
 
@@ -18,12 +19,21 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.clipcascade"
+    signingConfigs {
+        extendedTest {
+            storeFile extendedTestSigningFile
+            storePassword "clipcascade-public-test"
+            keyAlias "clipcascade-test"
+            keyPassword "clipcascade-public-test"
+            storeType "PKCS12"
+        }
+    }
     defaultConfig {
         applicationId "com.clipcascade"
         minSdkVersion 26
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 320106
-        versionName "3.2.1-extended.3"
+        versionCode 320107
+        versionName "3.2.1-extended.4"
         buildConfigField "String", "SOURCE_COMMIT", quotedBuildSha
     }
 
@@ -32,11 +42,13 @@ android {
             applicationIdSuffix ".extended"
             versionNameSuffix "-standalone"
             resValue "string", "app_name", "ClipCascade Extended"
+            signingConfig signingConfigs.extendedTest
         }
         release {
             applicationIdSuffix ".extended.release"
             versionNameSuffix "-release"
             resValue "string", "app_name", "ClipCascade Extended"
+            signingConfig signingConfigs.extendedTest
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
