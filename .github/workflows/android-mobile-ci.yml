@@ -48,6 +48,9 @@ jobs:
       - name: Prepare Extended interface
         run: node scripts/prepare_extended_bundle.js
 
+      - name: Prepare canonical boot-resume control
+        run: node scripts/prepare_boot_resume_ui.js
+
       - name: Localize displayed status
         run: node scripts/prepare_extended_status_i18n.js
 
@@ -76,7 +79,13 @@ jobs:
           grep -q "共有設定" AppRoot.js
           grep -q "Sharing setup" AppRoot.js
           grep -q "settingsBar" AppRoot.js
-          grep -q "端末起動後に同期を自動再開" App.js
+          grep -q "起動時に同期を再開" AppRoot.js
+          grep -q "getBootResumeEnabled" AppRoot.js
+          grep -q "persistedRelaunchOnBoot" App.js
+          if grep -q "data.relaunch_on_boot === 'true'" App.js; then
+            echo "Duplicate legacy boot-resume checkbox remains in transformed App.js" >&2
+            exit 1
+          fi
           if grep -q "pm grant com.clipcascade android.permission.READ_LOGS" App.js; then
             echo "Legacy READ_LOGS setup command remains in transformed App.js" >&2
             exit 1
