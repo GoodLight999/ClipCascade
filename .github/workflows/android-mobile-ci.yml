@@ -76,6 +76,22 @@ jobs:
             --assets-dest android/app/src/main/res
           test -s android/app/src/main/assets/index.android.bundle
 
+      - name: Verify bilingual no-ADB interface
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="android/app/src/main/assets/index.android.bundle"
+          grep -a -q "共有設定" "$bundle"
+          grep -a -q "Sharing setup" "$bundle"
+          if grep -a -q "pm grant com.clipcascade android.permission.READ_LOGS" "$bundle"; then
+            echo "Legacy READ_LOGS setup command remains in the distributed bundle" >&2
+            exit 1
+          fi
+          if grep -a -q "SYSTEM_ALERT_WINDOW allow" "$bundle"; then
+            echo "Legacy overlay setup command remains in the distributed bundle" >&2
+            exit 1
+          fi
+
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
