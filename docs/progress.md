@@ -98,7 +98,7 @@ Trial-and-error record:
 5. `abb9ca720ab728c56d8ee490132f0c9c1f6ae572` failed Android run `28307830787` only in a new bilingual-bundle assertion. Metro escaped Japanese literals, so raw Japanese grep against the bundle was invalid; compilation was not reached.
 6. `9b4e5da9b62c6a3054421c90697cf6363ce67134` moved bilingual/no-ADB assertions to transformed `App.js`/`AppRoot.js`. Run `28307959797` completed status localization, source assertions, bundle creation, unit tests, APK assembly, embedded-bundle verification, and artifact upload successfully.
 7. `bc7cbfc7005fa925662bc0dc3e9969e0b799a9a2` failed Android run `28308003116` in one new positive test: `Use 462881 to verify user1234@example.com`. The extractor rejected no false candidate; it lacked an authentication keyword pattern for a `verify` phrase addressed directly to an email address.
-8. `5433eb8e8ffaae47ed6873af67ea1c1df6824333` adds explicit support for `verify <email-address>` while retaining candidate-overlap rejection for digits that are actually part of the address. Final CI result must be recorded after completion.
+8. `5433eb8e8ffaae47ed6873af67ea1c1df6824333` adds explicit support for `verify <email-address>` while retaining candidate-overlap rejection for digits that are actually part of the address. Android run `28308127548`: success. Windows run `28308127573`: success.
 
 Remaining mandatory work:
 
