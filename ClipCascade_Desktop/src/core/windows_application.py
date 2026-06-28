@@ -166,6 +166,7 @@ class WindowsApplication(Application):
 
     def _watchdog_loop(self, manager):
         unhealthy_since = None
+        unhealthy_warning_emitted = False
         retry_delay = 10
         next_attempt_at = 0.0
 
@@ -173,20 +174,30 @@ class WindowsApplication(Application):
             try:
                 if bool(getattr(manager, "disconnected", False)):
                     unhealthy_since = None
+                    unhealthy_warning_emitted = False
                     retry_delay = 10
                     continue
                 if self._manager_is_healthy(manager):
                     unhealthy_since = None
+                    unhealthy_warning_emitted = False
                     retry_delay = 10
                     continue
 
                 now = time.monotonic()
                 if unhealthy_since is None:
                     unhealthy_since = now
-                    logging.warning(
-                        "Synchronization watchdog detected an unhealthy connection"
-                    )
                     continue
+
+                # Normal P2P startup briefly has signaling without an open
+                # DataChannel while ICE checks run. Do not report that expected
+                # negotiation window as a failed connection.
+                if now - unhealthy_since < 10:
+                    continue
+                if not unhealthy_warning_emitted:
+                    logging.warning(
+                        "Synchronization watchdog detected a persistently unhealthy connection"
+                    )
+                    unhealthy_warning_emitted = True
 
                 # Give the manager's native reconnect path time to recover first.
                 if now - unhealthy_since < 25 or now < next_attempt_at:
