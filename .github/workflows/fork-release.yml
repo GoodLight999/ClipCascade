@@ -72,6 +72,7 @@ jobs:
           node scripts/prepare_extended_bundle.js
           node scripts/prepare_extended_version.js
           node scripts/prepare_background_recovery_version.js
+          node scripts/prepare_storage_lifecycle.js
           node scripts/prepare_startup_service_recovery.js
           node scripts/prepare_boot_resume_ui.js
           node scripts/prepare_extended_status_i18n.js
@@ -80,6 +81,7 @@ jobs:
           node scripts/prepare_service_listener_lifecycle.js
           node scripts/prepare_p2p_peer_ack.js
           node scripts/prepare_p2p_ack_validation_order.js
+          node scripts/prepare_relay_claim.js
       - name: Bundle and generate stable test signer
         shell: bash
         run: |
