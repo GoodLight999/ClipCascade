@@ -5,6 +5,7 @@ import android.content.Context
 object RelaySettingsStore {
     private const val FILE_NAME = "relay_settings"
     private const val KEY_SCHEMA_VERSION = "queue_schema_version"
+    private const val KEY_BACKGROUND_CONFIRMED = "background_operation_confirmed"
     private const val CURRENT_SCHEMA_VERSION = 2
 
     @Synchronized
@@ -66,5 +67,16 @@ object RelaySettingsStore {
         // Values already queued under the previous source policy must not leak
         // after the user narrows or resets the app filter.
         OtpRelayStore.clear(context.applicationContext)
+    }
+
+    fun backgroundOperationConfirmed(context: Context): Boolean =
+        context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_BACKGROUND_CONFIRMED, false)
+
+    fun setBackgroundOperationConfirmed(context: Context, confirmed: Boolean) {
+        context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_BACKGROUND_CONFIRMED, confirmed)
+            .commit()
     }
 }
