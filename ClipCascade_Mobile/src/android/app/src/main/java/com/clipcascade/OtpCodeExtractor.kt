@@ -1,15 +1,13 @@
 package com.clipcascade
 
 import java.text.Normalizer
-import kotlin.math.abs
 
 /**
  * Conservative bilingual verification-value extractor for notification text.
  *
- * Candidates are ranked only when they occur close to Japanese or English
- * authentication language. Dates, times, amounts, phone numbers, card/account
- * identifiers, delivery references, URLs, and other structured values are
- * rejected locally before anything enters the relay queue.
+ * Candidates are ranked only near Japanese or English authentication language.
+ * Dates, times, amounts, phone numbers, delivery references, URLs, and other
+ * structured values are rejected locally before anything enters the queue.
  */
 object OtpCodeExtractor {
     private val keywordRegex = Regex(
@@ -40,7 +38,8 @@ object OtpCodeExtractor {
     private val candidateRegex = Regex(
         pattern = "(?<![A-Z0-9])(" +
             "(?:[A-Z]-\\d{4,8})" +
-            "|(?:[A-Z0-9]{1,5}(?:[\\s\\-–—][A-Z0-9]{2,8}){1,2})" +
+            "|(?:\\d{2,4}(?:[\\s\\-–—]\\d{2,4}){1,2})" +
+            "|(?:[A-Z0-9]{2,5}(?:[\\-–—][A-Z0-9]{2,5}){1,2})" +
             "|(?:[A-Z0-9]{4,10})" +
             ")(?![A-Z0-9])",
         option = RegexOption.IGNORE_CASE,
@@ -61,10 +60,6 @@ object OtpCodeExtractor {
     private val trackingContext = Regex(
         "(?i)(tracking|shipment|delivery|parcel|order(?:\\s+(?:id|number|no))?|" +
             "reference(?:\\s+(?:id|number|no))?|追跡|配送|荷物|注文番号|受付番号)",
-    )
-    private val accountContext = Regex(
-        "(?i)(account(?:\\s+(?:id|number|no))?|card|credit|debit|member(?:ship)?|" +
-            "口座|カード|会員番号|お客様番号)",
     )
     private val calendarContext = Regex(
         "(?i)(date|year|scheduled|schedule|appointment|expires?\\s+on|" +
@@ -208,7 +203,6 @@ object OtpCodeExtractor {
         if (value.all(Char::isDigit) && amountContext.containsMatchIn(context)) return true
         if (value.length >= 7 && phoneContext.containsMatchIn(context)) return true
         if (value.length >= 8 && trackingContext.containsMatchIn(context)) return true
-        if (accountContext.containsMatchIn(context)) return true
 
         val numeric = value.toIntOrNull()
         if (
