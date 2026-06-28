@@ -1,0 +1,81 @@
+package com.clipcascade
+
+import android.content.Context
+
+object OtpTestStatusStore {
+    const val RELAY_ID_PREFIX = "synthetic-test:"
+    const val POSTED = "posted"
+    const val DETECTED = "detected"
+    const val QUEUED = "queued"
+    const val ACKNOWLEDGED = "acknowledged"
+    const val EXTRACT_FAILED = "extract_failed"
+    const val DEDUPLICATED = "deduplicated"
+    const val POST_FAILED = "post_failed"
+
+    private const val FILE_NAME = "synthetic_verification_test"
+
+    data class Snapshot(
+        val state: String,
+        val value: String,
+        val relayId: String,
+        val timestamp: Long,
+    )
+
+    fun start(context: Context, value: String) = save(context, POSTED, value, "")
+
+    fun detected(context: Context, value: String) = save(context, DETECTED, value, "")
+
+    fun queued(context: Context, value: String, relayId: String) =
+        save(context, QUEUED, value, relayId)
+
+    fun extractionFailed(context: Context, value: String) =
+        save(context, EXTRACT_FAILED, value, "")
+
+    fun deduplicated(context: Context, value: String) =
+        save(context, DEDUPLICATED, value, "")
+
+    fun postFailed(context: Context, detail: String) =
+        save(context, POST_FAILED, detail.take(80), "")
+
+    @Synchronized
+    fun acknowledged(context: Context, relayId: String) {
+        val current = read(context) ?: return
+        if (current.relayId == relayId) {
+            save(context, ACKNOWLEDGED, current.value, relayId)
+        }
+    }
+
+    @Synchronized
+    fun read(context: Context): Snapshot? {
+        val preferences = context.applicationContext.getSharedPreferences(
+            FILE_NAME,
+            Context.MODE_PRIVATE,
+        )
+        val state = preferences.getString("state", null).orEmpty()
+        if (state.isBlank()) return null
+        return Snapshot(
+            state = state,
+            value = preferences.getString("value", "").orEmpty(),
+            relayId = preferences.getString("relay_id", "").orEmpty(),
+            timestamp = preferences.getLong("timestamp", 0L),
+        )
+    }
+
+    @Synchronized
+    private fun save(
+        context: Context,
+        state: String,
+        value: String,
+        relayId: String,
+    ) {
+        context.applicationContext.getSharedPreferences(
+            FILE_NAME,
+            Context.MODE_PRIVATE,
+        ).edit()
+            .putString("state", state)
+            .putString("value", value)
+            .putString("relay_id", relayId)
+            .putLong("timestamp", System.currentTimeMillis())
+            .commit()
+    }
+}
