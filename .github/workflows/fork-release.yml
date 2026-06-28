@@ -37,11 +37,20 @@ jobs:
       - name: Prepare P2P peer acknowledgement
         run: python scripts/prepare_p2p_peer_ack.py
 
+      - name: Compile desktop sources
+        run: python -m compileall -q .
+
       - name: Install dependencies
         run: python -m pip install --upgrade pip pyinstaller && python -m pip install -r requirements_win.txt
 
+      - name: Test authenticated HTTP handling
+        run: python -m unittest tests.test_request_manager -v
+
       - name: Test P2P peer acknowledgement
         run: python -m unittest tests.test_p2p_peer_ack -v
+
+      - name: Test Windows shutdown and status wording
+        run: python -m unittest tests.test_windows_shutdown -v
 
       - name: Build standalone executable
         run: python -m PyInstaller --clean ClipCascade_win.spec
@@ -62,6 +71,7 @@ jobs:
     timeout-minutes: 40
     env:
       CLIPCASCADE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXTENDED_TEST_CERT_SHA256: b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0
 
     defaults:
       run:
@@ -91,6 +101,12 @@ jobs:
       - name: Prepare Extended interface
         run: node scripts/prepare_extended_bundle.js
 
+      - name: Prepare canonical boot-resume control
+        run: node scripts/prepare_boot_resume_ui.js
+
+      - name: Localize displayed status
+        run: node scripts/prepare_extended_status_i18n.js
+
       - name: Prepare relay transport acknowledgement
         run: node scripts/prepare_relay_transport_ack.js
 
@@ -119,9 +135,24 @@ jobs:
             --assets-dest android/app/src/main/res
           test -s android/app/src/main/assets/index.android.bundle
 
+      - name: Generate stable public test signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          signing_dir="android/app/build/generated/signing"
+          python scripts/generate_stable_test_signing.py "${signing_dir}"
+          openssl pkcs12 -export \
+            -inkey "${signing_dir}/clipcascade-extended-test.key.pem" \
+            -in "${signing_dir}/clipcascade-extended-test.x509.pem" \
+            -name clipcascade-test \
+            -out "${signing_dir}/clipcascade-extended-test.p12" \
+            -passout pass:clipcascade-public-test
+          test -s "${signing_dir}/clipcascade-extended-test.p12"
+
       - name: Test and build installable Android APK
         shell: bash
         run: |
+          set -o pipefail
           chmod +x android/gradlew
           cd android
           ./gradlew \
@@ -130,11 +161,18 @@ jobs:
             -PclipcascadeBuildSha="${CLIPCASCADE_SOURCE_SHA}" \
             --stacktrace
 
-      - name: Verify and rename APK
+      - name: Verify signer and rename APK
         shell: bash
         run: |
-          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | grep -q "assets/index.android.bundle"
-          cp android/app/build/outputs/apk/debug/app-debug.apk ClipCascade-Extended-Android.apk
+          set -euo pipefail
+          apk="android/app/build/outputs/apk/debug/app-debug.apk"
+          unzip -l "${apk}" | grep -q "assets/index.android.bundle"
+          apksigner="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "${apksigner}"
+          signer_output="$("${apksigner}" verify --print-certs "${apk}")"
+          signer_digest="$(printf '%s\n' "${signer_output}" | awk -F': ' '/certificate SHA-256 digest/ {print $2; exit}' | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          test "${signer_digest}" = "${EXTENDED_TEST_CERT_SHA256}"
+          cp "${apk}" ClipCascade-Extended-Android.apk
 
       - name: Upload Android package
         uses: actions/upload-artifact@v4
