@@ -52,6 +52,9 @@ jobs:
       - name: Prepare Extended version identity
         run: node scripts/prepare_extended_version.js
 
+      - name: Prepare startup service recovery and target-neutral wording
+        run: node scripts/prepare_startup_service_recovery.js
+
       - name: Prepare canonical boot-resume control
         run: node scripts/prepare_boot_resume_ui.js
 
@@ -81,12 +84,20 @@ jobs:
           grep -q "ユーザー名" App.js
           grep -q "Username" App.js
           grep -q "未接続" App.js
+          grep -q "foregroundServiceNeedsRestart" App.js
+          grep -q "Restarting background synchronization" App.js
+          grep -q "接続中の端末へテスト文字列を送る" android/app/src/main/res/values-ja/strings.xml
+          grep -q "Send a test string to connected devices" android/app/src/main/res/values/strings.xml
           grep -q "共有設定" AppRoot.js
           grep -q "Sharing setup" AppRoot.js
           grep -q "settingsBar" AppRoot.js
           grep -q "起動時に同期を再開" AppRoot.js
           grep -q "getBootResumeEnabled" AppRoot.js
           grep -q "persistedRelaunchOnBoot" App.js
+          if grep -q "Foreground service stopped running" App.js; then
+            echo "Obsolete terminal foreground-service warning remains" >&2
+            exit 1
+          fi
           if grep -q "data.relaunch_on_boot === 'true'" App.js; then
             echo "Duplicate legacy boot-resume checkbox remains in transformed App.js" >&2
             exit 1
