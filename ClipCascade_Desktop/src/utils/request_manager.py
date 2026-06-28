@@ -108,6 +108,16 @@ class RequestManager:
             timeout=self.REQUEST_TIMEOUT,
         )
 
+    def _authenticated_json(self, endpoint: str) -> tuple[requests.Response, dict]:
+        try:
+            response = self._authenticated_get(endpoint)
+        except requests.RequestException as error:
+            raise ServerResponseError(
+                f"Authenticated request could not reach the server "
+                f"(endpoint={endpoint}, error={type(error).__name__})"
+            ) from error
+        return response, self._parse_json_object(response, endpoint)
+
     def login(self) -> tuple[bool, str, dict]:
         try:
             self.reset_session()
@@ -170,8 +180,7 @@ class RequestManager:
 
     def maxsize(self) -> int:
         try:
-            response = self._authenticated_get(MAXSIZE_URL)
-            payload = self._parse_json_object(response, MAXSIZE_URL)
+            _, payload = self._authenticated_json(MAXSIZE_URL)
             maxsize = int(payload.get("maxsize", MAX_SIZE))
             logging.info("Max size: %s", maxsize)
             return maxsize
@@ -185,8 +194,7 @@ class RequestManager:
 
     def get_server_mode(self) -> str:
         try:
-            response = self._authenticated_get(SERVER_MODE_URL)
-            payload = self._parse_json_object(response, SERVER_MODE_URL)
+            response, payload = self._authenticated_json(SERVER_MODE_URL)
             server_mode = str(payload.get("mode", "")).upper()
             if server_mode not in {"P2S", "P2P"}:
                 summary = self._response_summary(response, SERVER_MODE_URL)
@@ -201,8 +209,7 @@ class RequestManager:
 
     def get_stun_url(self) -> str:
         try:
-            response = self._authenticated_get(STUN_URL)
-            payload = self._parse_json_object(response, STUN_URL)
+            response, payload = self._authenticated_json(STUN_URL)
             stun_url = payload.get("url")
             if not isinstance(stun_url, str) or not stun_url.strip():
                 summary = self._response_summary(response, STUN_URL)
@@ -243,8 +250,7 @@ class RequestManager:
 
     def get_csrf_token(self) -> str:
         try:
-            response = self._authenticated_get(CSRF_URL)
-            payload = self._parse_json_object(response, CSRF_URL)
+            _, payload = self._authenticated_json(CSRF_URL)
             token = payload.get("token", "")
             return token if isinstance(token, str) else ""
         except Exception as error:
