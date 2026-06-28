@@ -66,6 +66,24 @@ jobs:
       - name: Order P2P ACK after validation
         run: node scripts/prepare_p2p_ack_validation_order.js
 
+      - name: Verify transformed bilingual no-ADB source
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "ユーザー名" App.js
+          grep -q "Username" App.js
+          grep -q "未接続" App.js
+          grep -q "共有設定" AppRoot.js
+          grep -q "Sharing setup" AppRoot.js
+          if grep -q "pm grant com.clipcascade android.permission.READ_LOGS" App.js; then
+            echo "Legacy READ_LOGS setup command remains in transformed App.js" >&2
+            exit 1
+          fi
+          if grep -q "SYSTEM_ALERT_WINDOW allow" App.js; then
+            echo "Legacy overlay setup command remains in transformed App.js" >&2
+            exit 1
+          fi
+
       - name: Bundle JavaScript into Android assets
         shell: bash
         run: |
@@ -78,23 +96,6 @@ jobs:
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res
           test -s android/app/src/main/assets/index.android.bundle
-
-      - name: Verify bilingual no-ADB interface
-        shell: bash
-        run: |
-          set -euo pipefail
-          bundle="android/app/src/main/assets/index.android.bundle"
-          grep -a -q "共有設定" "$bundle"
-          grep -a -q "Sharing setup" "$bundle"
-          grep -a -q "未接続" "$bundle"
-          if grep -a -q "pm grant com.clipcascade android.permission.READ_LOGS" "$bundle"; then
-            echo "Legacy READ_LOGS setup command remains in the distributed bundle" >&2
-            exit 1
-          fi
-          if grep -a -q "SYSTEM_ALERT_WINDOW allow" "$bundle"; then
-            echo "Legacy overlay setup command remains in the distributed bundle" >&2
-            exit 1
-          fi
 
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
