@@ -12,7 +12,7 @@ Current behavior baselines before final documentation commits:
 
 - Android recovery/queue baseline: `230a10562456dc96d0f354e2d78e01123d10a800`
 - Windows authentication repair/tests: `fae212a9fbe127f582e6bdace5c8a0c8f25fb575`
-- Guided setup, localization, synthetic test, and extractor work: through `bc7cbfc7005fa925662bc0dc3e9969e0b799a9a2`
+- Guided setup/localization/synthetic test/extractor: `5433eb8e8ffaae47ed6873af67ea1c1df6824333`
 
 Consult PR #1 for the current branch HEAD before fetching artifacts.
 
@@ -22,7 +22,7 @@ User-validated facts:
 - Android automatic copied-text relay works through Accessibility in the user's current test scenario.
 - The current Extended clipboard path does not require the old ADB commands.
 
-These reports are meaningful real-device validation, but they do not yet constitute the complete app matrix, screen-off SMS/email matrix, or recovery matrix.
+These reports are real-device validation, but they do not yet constitute the complete app matrix, screen-off SMS/email matrix, or recovery matrix.
 
 ## Android — implemented
 
@@ -36,12 +36,12 @@ These reports are meaningful real-device validation, but they do not yet constit
 - Native settings, service labels/descriptions, persistent settings entry, primary React labels, and displayed status select Japanese/English from the system locale
 - Protocol/storage state remains stable English internally; status translation is display-only
 - CI checks transformed source for Japanese and English labels
-- CI rejects any transformed UI containing the old READ_LOGS grant or overlay command
+- CI rejects transformed UI containing the old READ_LOGS grant or overlay command
 - Android manifest contains neither READ_LOGS nor overlay permission
 
 ### Guided setup
 
-The always-reachable Sharing setup screen now presents five ordered steps:
+The always-reachable Sharing setup screen presents five ordered steps:
 
 1. Android 13+ notification permission
 2. Accessibility clipboard-sharing service
@@ -52,36 +52,35 @@ The always-reachable Sharing setup screen now presents five ordered steps:
 Behavior:
 
 - `Continue setup` opens the next missing Android setting
-- Status refreshes after returning from Android settings
+- status refreshes after returning from Android settings
 - HONOR/MagicOS guidance names auto-launch, secondary launch, and background execution
-- Manufacturer-specific background switches are manually confirmed because Android cannot reliably query every vendor implementation through one common API
-- First-run prompt routes into this same guided setup instead of separately prompting for only notification access
-- Existing clipboard/verification switches, source-app filter, queue controls, diagnostics, and clipboard test remain available
+- manufacturer-specific switches are manually confirmed because Android cannot reliably query every vendor implementation through one common API
+- first-run prompt routes into this same guided setup
+- existing clipboard/verification switches, source-app filter, queue controls, diagnostics, and clipboard test remain available
 
 This flow is compile/CI validated but has not yet been executed from a fresh permission state on the target HONOR device.
 
 ### Accessibility clipboard relay
 
 - User-authorized AccessibilityService detects bounded copy cues, selection events, likely copy actions, announcements, and Ctrl+C
-- Direct ClipboardManager read with recent-selection fallback
-- Delayed capture attempts stop after the first usable result
-- Persistent bounded queue with TTL and duplicate suppression
-- No removal merely because a React event was emitted
-- Dispatch waits for an actual connected state; `Disconnected` is not misclassified as connected
-- Legacy logcat/READ_LOGS/overlay clipboard path is removed
+- direct ClipboardManager read with recent-selection fallback
+- persistent bounded queue with TTL and duplicate suppression
+- no removal merely because a React event was emitted
+- dispatch waits for an actual connected state; `Disconnected` is not misclassified as connected
+- legacy logcat/READ_LOGS/overlay clipboard path is removed
 
-The user has confirmed this path works in the current Android test scenario. Representative-app compatibility remains untested.
+The user confirmed this path works in the current Android test scenario. Representative-app compatibility remains untested.
 
 ### Verification-code notification relay
 
 - User-authorized NotificationListenerService with rebind request after listener disconnection
-- Optional source-package filter; empty selection means contextual matching across all apps
-- Notification title/text, expanded text, text lines, conversation title, and MessagingStyle current/historic message text are combined transiently
-- Combined notification content is not persisted or sent
-- Only extracted value, timestamp, and opaque relay ID enter the persistent queue
-- Persistent queue has TTL, duplicate suppression, retry, and acknowledgement timeout
-- Turning relay off or changing source policy clears pending values
-- Dispatch waits for an actual connected state
+- optional source-package filter; empty selection means contextual matching across all apps
+- notification title/text, expanded text, text lines, conversation title, and MessagingStyle current/historic message text are combined transiently
+- combined notification content is not persisted or sent
+- only the extracted value, timestamp, and opaque relay ID enter the persistent queue
+- persistent queue has TTL, duplicate suppression, retry, and acknowledgement timeout
+- turning relay off or changing source policy clears pending values
+- dispatch waits for an actual connected state
 
 Bilingual extraction supports:
 
@@ -91,17 +90,17 @@ Bilingual extraction supports:
 - numeric, compact alphanumeric, prefixed, and grouped values
 - code-before-keyword and code-after-keyword forms
 - transaction notifications containing a separate amount
-- notifications containing a destination email address separate from the code
+- verification addressed directly to a destination email address
 
 False-positive controls cover dates, times, years, nearby monetary values, phone numbers, tracking identifiers, URL/email substrings, ordinary numbers, and generic postal/promotion/error codes.
 
-The expanded extractor corpus is unit tested. Real Gmail/SMS/Outlook layouts and Android 16 redaction remain target-device work.
+The expanded extractor corpus passed Android CI run `28308127548`. Real Gmail/SMS/Outlook layouts and Android 16 redaction remain target-device work.
 
 ### Synthetic end-to-end verification test
 
 The settings screen can post a real local notification containing a fresh random synthetic six-digit value.
 
-The test deliberately follows the normal path:
+The test follows the normal path:
 
 `LOCAL_NOTIFICATION -> NOTIFICATION_LISTENER -> LOCAL_EXTRACTOR -> PERSISTENT_QUEUE -> REACT_TRANSPORT -> EXISTING_ACK -> DELETE`
 
@@ -175,9 +174,9 @@ Remaining limitations:
 
 ## Windows — implemented and partly validated
 
-- Visible status/control window
-- Restart, reconnect, disconnect, open logs, and copy diagnostics controls
-- Second launch focuses existing process
+- visible status/control window
+- restart, reconnect, disconnect, open logs, and copy diagnostics controls
+- second launch focuses existing process
 - complete P2P teardown before replacement
 - watchdog for persistent offline and signaling-connected/DataChannel-dead states
 - rotating logs
@@ -198,8 +197,9 @@ The user confirmed this repair works against the actual deployment.
 
 ## CI caveats and resolved failures
 
-- `000d964408d7f4824cd0f16fb9d47954ccddf425` failed extractor tests because a grouped candidate regex joined prose with date/code tokens. The regex was narrowed and subsequent extractor CI passed.
-- `abb9ca720ab728c56d8ee490132f0c9c1f6ae572` failed only because raw Japanese grep was performed on a Metro bundle that escaped Unicode. Verification was moved to transformed source; all major steps in run `28307959797` then passed.
+- `000d964408d7f4824cd0f16fb9d47954ccddf425` failed extractor tests because a grouped candidate regex joined prose with date/code tokens. The regex was narrowed.
+- `abb9ca720ab728c56d8ee490132f0c9c1f6ae572` failed because raw Japanese grep was performed on a Metro bundle that escaped Unicode. Verification was moved to transformed source.
+- `bc7cbfc7005fa925662bc0dc3e9969e0b799a9a2` failed one new positive test because `verify <email-address>` was not treated as verification context. `5433eb8e8ffaae47ed6873af67ea1c1df6824333` fixed it and Android run `28308127548` succeeded.
 
 See `docs/progress.md` for commit-by-commit details.
 
