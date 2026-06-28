@@ -95,6 +95,14 @@ class LiveStatusDialog(CustomDialog):
             return "Disconnected by user"
         return "Offline"
 
+    def _automatic_recovery_status(self):
+        """Describe transient recovery activity without exposing an ambiguous Boolean."""
+        if bool(getattr(self.manager, "is_auto_reconnecting", False)):
+            return "Retrying now"
+        if bool(getattr(self.manager, "disconnected", False)):
+            return "Paused by user"
+        return "Standing by"
+
     def _build_message(self):
         data = self.config.data if self.config is not None else {}
         stats = self.manager.get_stats() if self.manager is not None else None
@@ -104,8 +112,7 @@ class LiveStatusDialog(CustomDialog):
             f"Server: {data.get('server_url', 'unknown')}\n"
             f"Mode: {data.get('server_mode', 'unknown')}\n"
             f"Transport status: {stats or 'No active transfer'}\n"
-            f"Automatic reconnect: "
-            f"{bool(getattr(self.manager, 'is_auto_reconnecting', False))}\n"
+            f"Automatic recovery: {self._automatic_recovery_status()}\n"
             f"Last operation: {self.last_operation}"
         )
 
@@ -139,7 +146,7 @@ class LiveStatusDialog(CustomDialog):
                 f"Server: {data.get('server_url', 'unknown')}",
                 f"Mode: {data.get('server_mode', 'unknown')}",
                 f"Transport: {stats or 'No active transfer'}",
-                f"Auto reconnect: {bool(getattr(self.manager, 'is_auto_reconnecting', False))}",
+                f"Automatic recovery: {self._automatic_recovery_status()}",
                 f"User disconnected: {bool(getattr(self.manager, 'disconnected', False))}",
                 f"Last operation: {self.last_operation}",
                 f"Log file: {os.path.join(get_program_files_directory(), LOG_FILE_NAME)}",
