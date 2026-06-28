@@ -6,11 +6,16 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import java.util.Locale
 
 class RelaySettingsModule(
     reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
     override fun getName(): String = "RelaySettingsModule"
+
+    override fun getConstants(): MutableMap<String, Any> = hashMapOf(
+        "languageTag" to Locale.getDefault().toLanguageTag(),
+    )
 
     @ReactMethod
     fun openSettings(promise: Promise) {
@@ -30,6 +35,7 @@ class RelaySettingsModule(
             val map = Arguments.createMap().apply {
                 putString("versionName", BuildConfig.VERSION_NAME)
                 putString("sourceCommit", BuildConfig.SOURCE_COMMIT)
+                putString("languageTag", Locale.getDefault().toLanguageTag())
             }
             promise.resolve(map)
         } catch (error: Exception) {
