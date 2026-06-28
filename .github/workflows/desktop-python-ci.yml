@@ -47,6 +47,9 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip pyinstaller && python -m pip install -r requirements_win.txt
 
+      - name: Test authenticated HTTP handling
+        run: python -m unittest tests.test_request_manager -v
+
       - name: Test P2P peer acknowledgement
         run: python -m unittest tests.test_p2p_peer_ack -v
 
