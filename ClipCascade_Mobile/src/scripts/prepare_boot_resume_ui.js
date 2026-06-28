@@ -11,12 +11,19 @@ function replaceRequired(before, after) {
   source = source.replace(before, after);
 }
 
-const bootRowPattern = /\n\s*<View style=\{styles\.row\}>[\s\S]*?data\.relaunch_on_boot === 'true'[\s\S]*?handleInputChange\('relaunch_on_boot',[\s\S]*?\n\s*<\/View>/g;
-const bootRows = source.match(bootRowPattern) || [];
-if (bootRows.length !== 1) {
-  throw new Error(`Expected one legacy boot-resume row, found ${bootRows.length}`);
+const bootMarker = "data.relaunch_on_boot === 'true'";
+const markerIndex = source.indexOf(bootMarker);
+if (markerIndex < 0 || source.indexOf(bootMarker, markerIndex + 1) >= 0) {
+  throw new Error('Expected exactly one legacy boot-resume checkbox marker');
 }
-source = source.replace(bootRowPattern, '');
+
+const rowStart = source.lastIndexOf('<View style={styles.row}>', markerIndex);
+const rowEndStart = source.indexOf('</View>', markerIndex);
+if (rowStart < 0 || rowEndStart < 0) {
+  throw new Error('Unable to isolate the legacy boot-resume row');
+}
+const rowEnd = rowEndStart + '</View>'.length;
+source = source.slice(0, rowStart) + source.slice(rowEnd);
 
 replaceRequired(
   `        // Save data in async storage
