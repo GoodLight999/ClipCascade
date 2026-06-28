@@ -29,10 +29,43 @@ Implemented and CI-validated changes:
 
 The P2P Windows-applied ACK transformation scripts, relay IDs, peer ACK handling, fallback timer, queue deletion semantics, and Windows receiver were not modified by these changes. Every code commit above also completed the matching Windows CI successfully.
 
+## 2026-06-28 Windows authentication/API failure
+
+Observed on the real Windows artifact:
+
+- `POST /login` ended with HTTP 200 and was logged as successful.
+- `/csrf-token` and `/server-mode` then returned responses that failed JSON decoding at byte zero.
+- The unhandled `/server-mode` decode exception terminated Windows startup before P2P could be tested.
+
+The old build did not record response status metadata beyond the JSON exception, so the server-side cause cannot yet be distinguished between an empty response, HTML/login redirect, reverse-proxy interception, missing additional session cookie, or server/client endpoint mismatch.
+
+Confirmed client defects:
+
+- login treated almost any HTTP 200 without the words `bad credentials` as authenticated;
+- the login used a `requests.Session`, but later authenticated calls discarded that session and manually forwarded only `JSESSIONID`;
+- mandatory JSON endpoints called `.json()` without checking empty bodies, HTML, final redirect path, or payload shape;
+- mandatory API validation errors escaped the login flow and shut down the Windows application.
+
+Implemented and CI-validated changes:
+
+1. `bac2ed9f33391cee98d91532df883abb370fc4b7` — retain one authenticated `requests.Session`, preserve all server/proxy cookies, validate JSON responses, classify empty/HTML/non-object responses using content-free metadata, add request timeouts, and stop logging private server URLs from generic request errors. Windows run `28305923495`: success. Android run `28305923474`: success.
+2. `9b2c04544a8ed407b44575891ebaf512f1f7fa90` — keep authenticated API validation failures inside the Windows login flow, clear the rejected session, display a specific diagnosis, and reopen login instead of reporting an unexpected application crash. Windows run `28305936639`: success. Android run `28305936584`: success.
+3. `fb4dd2ae60c2ba4622a54a4b4368bf681a464dc0` — add unit coverage for valid JSON, empty bodies, HTML redirects, unsupported modes, additional-cookie retention, and response-body secrecy. Windows run `28305951497`: success. Android run `28305951534`: success.
+4. `57293aa060efadcef87c3442108c0ed43c27ec45` — make the authenticated HTTP tests mandatory in Desktop Windows CI alongside the existing P2P ACK tests. Windows run `28305957237`: success. Android run `28305957212`: success.
+5. `03126bea1369d68d3afc6565ba38f295b585ac51` — normalize authenticated endpoint connection/timeout failures into the same safe login-recovery path. Windows run `28306013776`: success. Android run `28306013777`: success.
+6. `fae212a9fbe127f582e6bdace5c8a0c8f25fb575` — add tests for HTTP-200 login-form false positives and content-free transport-error normalization. Windows run `28306019657`: success. Android run `28306019658`: success.
+
+Expected next observation:
+
+- If preserving the complete authenticated session fixes the deployment, `/server-mode` will return valid JSON and startup will continue.
+- If it does not, the next log will identify `endpoint`, HTTP status, content type, body byte count, final path, and redirect status codes without writing response contents, cookies, credentials, or the private server URL.
+- An empty `/csrf-token` remains non-fatal because it is used for logout; `/server-mode` remains mandatory because choosing P2S/P2P by guess would be unsafe.
+
 Next mandatory work:
 
-- Download Android and Windows artifacts from the final documentation head so both display the same source commit.
-- Install the APK on HONOR 400 Pro and run `docs/TEST_MATRIX.md`, beginning with settings and synthetic test relay.
+- Build matching Windows and Android artifacts from the final documentation HEAD.
+- Run the repaired Windows login against the user's actual server and retain the new content-free response diagnosis if authentication still fails.
+- Install the matching APK on HONOR 400 Pro and run `docs/TEST_MATRIX.md`, beginning with settings and synthetic test relay.
 - Measure real SMS and email notification fields with screen on, background, locked, and 1/15/30+ minute screen-off states.
 - Record whether Android 16/MagicOS redacts OTP-like notification content. Do not claim screen-off reliability before those tests.
 - Exercise Wi-Fi/mobile handover, Windows-offline queueing, process kill, reboot, and P2P clipboard-applied ACK on real devices.
