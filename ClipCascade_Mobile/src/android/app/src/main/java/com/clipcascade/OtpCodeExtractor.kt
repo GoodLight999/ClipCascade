@@ -18,6 +18,7 @@ object OtpCodeExtractor {
             "confirmation|access|two[\\s-]?(?:factor|step)|2fa)" +
             "(?:\\s+(?:code|number|passcode|password|pin))" +
             "|verify\\s+(?:your\\s+)?(?:account|email|e-mail|phone|number|identity)" +
+            "|verify\\s+[A-Z0-9._%+-]+@[A-Z0-9.-]+" +
             "|(?:your|this)\\s+(?:verification\\s+|security\\s+|login\\s+|" +
             "sign[\\s-]?in\\s+|confirmation\\s+|access\\s+)?(?:code|passcode)" +
             "|use\\s+(?:this\\s+)?(?:code|passcode)" +
