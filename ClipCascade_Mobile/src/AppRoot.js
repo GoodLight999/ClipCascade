@@ -32,7 +32,9 @@ export default function AppRoot() {
         const shortCommit =
           commit && commit !== 'local' ? commit.slice(0, 8) : 'local';
         setBuildLabel([version, shortCommit].filter(Boolean).join(' · '));
-        setLanguageTag(String(info?.languageTag || initialLanguageTag).toLowerCase());
+        setLanguageTag(
+          String(info?.languageTag || initialLanguageTag).toLowerCase(),
+        );
       } catch (error) {
         // Build identity is diagnostic only; settings must remain usable.
       }
@@ -62,17 +64,21 @@ export default function AppRoot() {
 
   return (
     <View style={styles.root}>
-      <App />
-      <TouchableOpacity
-        accessibilityLabel={accessibilityLabel}
-        style={styles.settingsButton}
-        onPress={openRelaySettings}
-      >
-        <Text style={styles.settingsButtonText}>{settingsLabel}</Text>
-        {buildLabel ? (
-          <Text style={styles.buildLabel}>{buildLabel}</Text>
-        ) : null}
-      </TouchableOpacity>
+      <View style={styles.appContent}>
+        <App />
+      </View>
+      <View style={styles.settingsBar}>
+        <TouchableOpacity
+          accessibilityLabel={accessibilityLabel}
+          style={styles.settingsButton}
+          onPress={openRelaySettings}
+        >
+          <Text style={styles.settingsButtonText}>{settingsLabel}</Text>
+          {buildLabel ? (
+            <Text style={styles.buildLabel}>{buildLabel}</Text>
+          ) : null}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -81,15 +87,23 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  appContent: {
+    flex: 1,
+  },
+  settingsBar: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#B0BEC5',
+    backgroundColor: '#ECEFF1',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    alignItems: 'flex-end',
+  },
   settingsButton: {
-    position: 'absolute',
-    right: 14,
-    bottom: 18,
     backgroundColor: '#263238',
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    elevation: 8,
+    paddingVertical: 8,
+    borderRadius: 20,
+    elevation: 4,
     alignItems: 'center',
   },
   settingsButtonText: {
