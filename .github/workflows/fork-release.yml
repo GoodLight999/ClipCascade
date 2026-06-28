@@ -15,52 +15,31 @@ jobs:
     timeout-minutes: 35
     env:
       CLIPCASCADE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-
     defaults:
       run:
         working-directory: ClipCascade_Desktop/src
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: ClipCascade_Desktop/src/requirements_win.txt
-
-      - name: Prepare build identity
-        run: python scripts/prepare_build_info.py
-
-      - name: Prepare P2P peer acknowledgement
-        run: python scripts/prepare_p2p_peer_ack.py
-
-      - name: Compile desktop sources
-        run: python -m compileall -q .
-
-      - name: Install dependencies
-        run: python -m pip install --upgrade pip pyinstaller && python -m pip install -r requirements_win.txt
-
-      - name: Test authenticated HTTP handling
-        run: python -m unittest tests.test_request_manager -v
-
-      - name: Test P2P peer acknowledgement
-        run: python -m unittest tests.test_p2p_peer_ack -v
-
-      - name: Test Windows shutdown and status wording
-        run: python -m unittest tests.test_windows_shutdown -v
-
-      - name: Build standalone executable
-        run: python -m PyInstaller --clean ClipCascade_win.spec
-
+      - name: Prepare and test Windows build
+        run: |
+          python scripts/prepare_build_info.py
+          python scripts/prepare_p2p_peer_ack.py
+          python -m compileall -q .
+          python -m pip install --upgrade pip pyinstaller
+          python -m pip install -r requirements_win.txt
+          python -m unittest tests.test_request_manager -v
+          python -m unittest tests.test_p2p_peer_ack -v
+          python -m unittest tests.test_windows_shutdown -v
+          python -m PyInstaller --clean ClipCascade_win.spec
       - name: Package Windows build
         shell: pwsh
         run: Compress-Archive -Path dist/ClipCascade.exe -DestinationPath ClipCascade-Windows.zip -Force
-
-      - name: Upload Windows package
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: windows-package
           path: ClipCascade_Desktop/src/ClipCascade-Windows.zip
@@ -72,113 +51,55 @@ jobs:
     env:
       CLIPCASCADE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       EXTENDED_TEST_CERT_SHA256: b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0
-
     defaults:
       run:
         working-directory: ClipCascade_Mobile/src
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
-
-      - name: Set up JDK
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
-
-      - name: Install JavaScript dependencies
-        run: npm ci
-
-      - name: Prepare Extended interface
-        run: node scripts/prepare_extended_bundle.js
-
-      - name: Prepare Extended version identity
-        run: node scripts/prepare_extended_version.js
-
-      - name: Prepare canonical boot-resume control
-        run: node scripts/prepare_boot_resume_ui.js
-
-      - name: Localize displayed status
-        run: node scripts/prepare_extended_status_i18n.js
-
-      - name: Prepare relay transport acknowledgement
-        run: node scripts/prepare_relay_transport_ack.js
-
-      - name: Order relay startup after listeners
-        run: node scripts/prepare_relay_startup_order.js
-
-      - name: Isolate service listener lifecycle
-        run: node scripts/prepare_service_listener_lifecycle.js
-
-      - name: Prepare P2P peer acknowledgement
-        run: node scripts/prepare_p2p_peer_ack.js
-
-      - name: Order P2P ACK after validation
-        run: node scripts/prepare_p2p_ack_validation_order.js
-
-      - name: Bundle JavaScript into Android assets
+      - name: Prepare Android source
+        run: |
+          npm ci
+          node scripts/prepare_extended_bundle.js
+          node scripts/prepare_extended_version.js
+          node scripts/prepare_boot_resume_ui.js
+          node scripts/prepare_extended_status_i18n.js
+          node scripts/prepare_relay_transport_ack.js
+          node scripts/prepare_relay_startup_order.js
+          node scripts/prepare_service_listener_lifecycle.js
+          node scripts/prepare_p2p_peer_ack.js
+          node scripts/prepare_p2p_ack_validation_order.js
+      - name: Bundle and generate stable test signer
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p android/app/src/main/assets
-          npx react-native bundle \
-            --platform android \
-            --dev false \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res
-          test -s android/app/src/main/assets/index.android.bundle
-
-      - name: Generate stable public test signing identity
-        shell: bash
-        run: |
-          set -euo pipefail
+          npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
           signing_dir="android/app/build/generated/signing"
           python scripts/generate_stable_test_signing.py "${signing_dir}"
-          openssl pkcs12 -export \
-            -inkey "${signing_dir}/clipcascade-extended-test.key.pem" \
-            -in "${signing_dir}/clipcascade-extended-test.x509.pem" \
-            -name clipcascade-test \
-            -out "${signing_dir}/clipcascade-extended-test.p12" \
-            -passout pass:clipcascade-public-test
-          test -s "${signing_dir}/clipcascade-extended-test.p12"
-
-      - name: Test and build installable Android APK
-        shell: bash
-        run: |
-          set -o pipefail
-          chmod +x android/gradlew
-          cd android
-          ./gradlew \
-            :app:testDebugUnitTest \
-            :app:assembleDebug \
-            -PclipcascadeBuildSha="${CLIPCASCADE_SOURCE_SHA}" \
-            --stacktrace
-
-      - name: Verify signer and rename APK
+          openssl pkcs12 -export -inkey "${signing_dir}/clipcascade-extended-test.key.pem" -in "${signing_dir}/clipcascade-extended-test.x509.pem" -name clipcascade-test -out "${signing_dir}/clipcascade-extended-test.p12" -passout pass:clipcascade-public-test
+      - name: Build and verify Android package
         shell: bash
         run: |
           set -euo pipefail
+          chmod +x android/gradlew
+          (cd android && ./gradlew :app:testDebugUnitTest :app:assembleDebug -PclipcascadeBuildSha="${CLIPCASCADE_SOURCE_SHA}" --stacktrace)
           apk="android/app/build/outputs/apk/debug/app-debug.apk"
           unzip -l "${apk}" | grep -q "assets/index.android.bundle"
           apksigner="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          test -x "${apksigner}"
-          signer_output="$("${apksigner}" verify --print-certs "${apk}")"
-          signer_digest="$(printf '%s\n' "${signer_output}" | awk -F': ' '/certificate SHA-256 digest/ {print $2; exit}' | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          signer_digest="$("${apksigner}" verify --print-certs "${apk}" | awk -F': ' '/certificate SHA-256 digest/ {print $NF; exit}' | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
           test "${signer_digest}" = "${EXTENDED_TEST_CERT_SHA256}"
           cp "${apk}" ClipCascade-Extended-Android.apk
-
-      - name: Upload Android package
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: android-package
           path: ClipCascade_Mobile/src/ClipCascade-Extended-Android.apk
@@ -186,31 +107,18 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/extended-v')
-    needs:
-      - windows
-      - android
+    needs: [windows, android]
     runs-on: ubuntu-latest
-
     steps:
-      - name: Download Windows package
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: windows-package
           path: release
-
-      - name: Download Android package
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: android-package
           path: release
-
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "${GITHUB_REF_NAME}"
-          release/ClipCascade-Windows.zip
-          release/ClipCascade-Extended-Android.apk
-          --repo "${GITHUB_REPOSITORY}"
-          --generate-notes
-          --title "ClipCascade Extended ${GITHUB_REF_NAME}"
+        run: gh release create "${GITHUB_REF_NAME}" release/ClipCascade-Windows.zip release/ClipCascade-Extended-Android.apk --repo "${GITHUB_REPOSITORY}" --generate-notes --title "ClipCascade Extended ${GITHUB_REF_NAME}"
