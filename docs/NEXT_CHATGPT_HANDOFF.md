@@ -27,28 +27,36 @@ Build a practical Android ↔ Windows clipboard synchronizer with:
 - no ADB, root, or Shizuku for normal use
 - AccessibilityService-based ordinary text copy relay
 - local verification-code extraction through user-authorized notification access
-- only the extracted value sent; notification title/body remain local and are not persisted
+- only the extracted value sent; full notification title/body remain transient and are not persisted
 - **SMS and email verification codes must reach the Windows clipboard while the HONOR 400 Pro is locked and its screen has been off**
+- guided permission/background setup that a normal user can follow
+- Japanese and English UI and verification-language support
+- synthetic test notification proving the normal extraction/queue/transport path
 - persistent queues and recovery after disconnect, sleep, process death, reboot, and network handover
 - visible Windows status/control UI and self-recovery
 - standalone APK and repeatable Windows/Android packages
 - no personal handle in product identity
 
-The screen-off SMS/email requirement is already present in the canonical requirements and test matrix. Do not weaken it or claim it is satisfied before real-device testing.
+The user strongly dislikes inflated completion claims. Distinguish compilation, unit tests, synthetic notification tests, local transport acceptance, peer clipboard application, and real-device screen-off verification.
 
-The user strongly dislikes inflated completion claims. Distinguish compilation, simulated/unit validation, local transport acceptance, peer clipboard application, and real-device verification.
+## Current real-world validation
 
-## Current code baseline
+The user has confirmed:
 
-Latest Android behavior commit:
+- the repaired Windows artifact logs into the actual deployment;
+- the Windows GUI works;
+- Android copied-text relay works through Accessibility in the current test scenario;
+- the current path works without rerunning the old ADB commands.
 
-`230a10562456dc96d0f354e2d78e01123d10a800`
+Do not widen that into universal app compatibility or screen-off OTP reliability. The target-device matrix is still outstanding.
 
-Latest Windows authentication behavior and tests:
+## Current code baselines
 
-`fae212a9fbe127f582e6bdace5c8a0c8f25fb575`
+- Android recovery/queue baseline: `230a10562456dc96d0f354e2d78e01123d10a800`
+- Windows authentication repair/tests: `fae212a9fbe127f582e6bdace5c8a0c8f25fb575`
+- Guided setup/localization/synthetic test/extractor: through `bc7cbfc7005fa925662bc0dc3e9969e0b799a9a2`
 
-Documentation commits follow those code commits. Consult PR #1 for the current branch HEAD before downloading artifacts.
+Documentation and CI-fix commits follow. Always read PR #1 for the actual branch HEAD before fetching artifacts.
 
 ## Preserved delivery acknowledgement
 
@@ -77,171 +85,183 @@ Do not remove or bypass:
 - generation-scoped P2P ACK timers
 - queue startup only after the `SHARED_TEXT` listener is installed
 
-The Android stability and Windows authentication changes described below did not modify the ACK transformation scripts or Windows ACK receiver.
+The synthetic test uses this existing ACK path. There is no test-only queue deletion shortcut.
 
-## 2026-06-28 Android stability changes
+## Android stability already present
 
-### Redundant boot recovery
+- redundant boot recovery: immediate Headless JS plus delayed WorkManager heartbeat
+- replacement-network tracking so a late old-network `onLost` does not cancel recovery
+- strict connected-state parsing; `Disconnected` is never accepted as `Connected`
+- notification-listener rebind request after listener disconnection
+- persistent clipboard and verification queues
+- content-free recovery diagnostics
 
-Commit `852141452014ea7265ebbf7587f4d56e71f525b8`:
+These paths are CI validated but still require MagicOS process-kill, reboot, sleep, and handover tests.
 
-- preserves the existing Headless JS boot-recovery path
-- checks `relaunch_on_boot` and the enabled sync intent before recovery
-- schedules a delayed one-time WorkManager heartbeat before trying Headless JS
-- leaves the WorkManager path available when Android declines or blocks the direct service start
-- avoids duplicate restart when the foreground service is already healthy
-- records content-free outcomes only
+## Windows authentication repair
 
-Android CI run `28304486580`: success.
+The former artifact logged HTTP 200 login success and then crashed decoding `/csrf-token` and `/server-mode`.
 
-### Network handover race
+Repairs retain one `requests.Session`, preserve all server/proxy cookies, validate authenticated JSON responses, reject HTTP-200 login-form returns, add bounded timeouts, and return failed sessions to the login flow with content-free response metadata.
 
-Commit `0ec58ffe0facb1934010f0270b8803ea65eb6a15`:
+Windows CI runs HTTP handling tests and existing P2P ACK tests before PyInstaller. The user confirmed the repair works against the real deployment.
 
-- tracks the actual active default `Network`
-- prevents a late `onLost` callback for the old Wi-Fi/mobile network from cancelling recovery scheduled for its replacement
-- still resumes both persistent queues immediately on `onAvailable`
+## Guided bilingual setup
 
-Android CI run `28304554055`: success.
+Files:
 
-### Strict connected-state parsing
+- `RelaySettingsActivity.kt`
+- `SetupPermissionHelper.kt`
+- `NotificationAccessPrompt.kt`
+- `RelaySettingsStore.kt`
+- `res/values/strings.xml`
+- `res/values-ja/strings.xml`
+- `RelaySettingsModule.kt`
+- `AppRoot.js`
+- `scripts/prepare_extended_bundle.js`
+- `scripts/prepare_extended_status_i18n.js`
 
-The prior code used `contains("Connected", ignoreCase = true)`. This incorrectly classified `Disconnected` as connected.
+Five setup steps:
 
-Fixed in:
+1. Android 13+ runtime notification permission
+2. Accessibility clipboard-sharing service
+3. notification-listener access
+4. battery-optimization exemption
+5. HONOR/MagicOS background/auto-launch confirmation
 
-- `eb8dfe5a3de9d8e00faffbea5fb541b34dd1af5b` — network recovery; Android run `28304618791`: success
-- `1b95ccf7074d614a97521d519f3bb9b842a1f0f6` — clipboard queue dispatch; Android run `28304684578`: success
-- `230a10562456dc96d0f354e2d78e01123d10a800` — verification-code queue dispatch; Android run `28304755556`: success
+`Continue setup` opens the next missing setting. The MagicOS text explicitly names auto-launch, secondary launch, and background execution. The final manufacturer-specific step is user-confirmed because Android does not expose one reliable cross-vendor query API.
 
-Connected status is now accepted only as `Connected` or `Connected - ...`, optionally following the existing check-mark prefix. `Disconnected` no longer suppresses recovery or starts false in-flight delivery attempts.
+The distributed Extended UI uses the system locale:
 
-### Corrected investigation note
+- default resources: English
+- `values-ja`: Japanese
+- service labels/descriptions: localized
+- persistent Sharing setup entry: localized
+- primary React labels: transformed to Japanese/English at build time
+- connection/login/P2P status: translated only when displayed; internal protocol/storage tokens remain unchanged
 
-An initial hypothesis that notification-listener rebind logic was absent was wrong. `NotificationCodeListenerService.onListenerDisconnected()` already calls `requestRebind(...)`. Preserve that behavior.
+Old READ_LOGS and overlay commands are removed from the transformed UI. CI asserts their absence and asserts bilingual transformed source before Metro bundling.
 
-## 2026-06-28 Windows login/API failure and repair
+## Synthetic verification notification test
 
-### Real artifact failure
+Files:
 
-The user observed:
+- `OtpTestNotificationManager.kt`
+- `OtpTestStatusStore.kt`
+- `NotificationCodeListenerService.kt`
+- `OtpRelayDispatcher.kt`
+- `RelaySettingsActivity.kt`
 
-- login reported HTTP 200 success
-- `/csrf-token` JSON decoding failed at line 1 column 1
-- `/server-mode` JSON decoding failed at line 1 column 1
-- the exception escaped `authenticate_and_connect()` and terminated Windows startup
+Flow:
 
-The old logs did not include safe HTTP response metadata, so do not claim the exact server-side cause. Possibilities still include an empty response, HTML/login redirect, reverse-proxy interception, a missing additional session cookie, or server/client endpoint mismatch.
+`REAL LOCAL TEST NOTIFICATION -> NotificationListenerService -> OtpCodeExtractor -> OtpRelayStore -> OtpRelayDispatcher -> React transport -> existing native ACK`
 
-### Confirmed client defects
+Behavior:
 
-- almost any login HTTP 200 without `bad credentials` was considered successful
-- login used `requests.Session`, but authenticated follow-up calls discarded it and forwarded only `JSESSIONID`
-- JSON endpoints did not validate empty bodies, HTML, final redirect paths, payload shape, or server mode value
-- mandatory API failures escaped the login flow as an unexpected application error
+- fresh random fake six-digit value
+- localized notification/channel text
+- explicitly marked synthetic extra
+- bypasses optional source-app filter only for the marked synthetic test
+- ordinary ClipCascade foreground notifications remain ignored
+- verifies extracted value equals the expected synthetic value before queueing
+- status: posted, detected, queued, extraction failed, deduplicated, post failed, acknowledged
+- settings refreshes status every second while visible
+- status/value expires after five minutes
+- test requires verification relay, notification permission, and notification access
+- Extended P2P acknowledgement follows validated Windows clipboard application
+- P2S still provides only its documented local transport acceptance
 
-### Repair
+The test path is compiled and CI validated but has not yet been run on HONOR 400 Pro.
 
-Commits:
+## Verification-code extractor
 
-- `bac2ed9f33391cee98d91532df883abb370fc4b7` — retain one authenticated session, preserve all cookies, add bounded timeouts, parse JSON safely, and emit content-free response metadata; Windows `28305923495`, Android `28305923474`: success
-- `9b2c04544a8ed407b44575891ebaf512f1f7fa90` — catch authenticated API validation failures in the Windows login flow, clear the rejected session, show an actionable dialog, and reopen login; Windows `28305936639`, Android `28305936584`: success
-- `fb4dd2ae60c2ba4622a54a4b4368bf681a464dc0` — add initial HTTP response unit tests; Windows `28305951497`, Android `28305951534`: success
-- `57293aa060efadcef87c3442108c0ed43c27ec45` — make HTTP tests mandatory in Desktop Windows CI alongside existing P2P ACK tests; Windows `28305957237`, Android `28305957212`: success
-- `03126bea1369d68d3afc6565ba38f295b585ac51` — normalize authenticated connection and timeout failures into the same safe login-recovery path; Windows `28306013776`, Android `28306013777`: success
-- `fae212a9fbe127f582e6bdace5c8a0c8f25fb575` — add tests for HTTP-200 login-form false positives and content-free transport-error reporting; Windows `28306019657`, Android `28306019658`: success
+Current coverage:
 
-### New safe diagnosis
+- Japanese authentication/confirmation/login/sign-in/one-time/identity/two-step/security language
+- English OTP/one-time/verification/security/auth/login/sign-in/confirmation/access/two-factor language
+- full-width normalization
+- numeric, compact alphanumeric, prefixed, and grouped formats
+- candidate before or after the authentication phrase
+- standard title/text, BigText, text lines, conversation title, MessagingStyle current/historic messages
+- preserves a legitimate OTP when a separate transaction amount or destination email address is present
 
-If login still fails, the log now records only:
+False-positive controls:
 
-- endpoint path
-- HTTP status
-- content type
-- body byte count
-- final path after redirects
-- redirect status codes
-- transport exception class where applicable
+- dates, times, years
+- monetary values adjacent to a candidate
+- phone numbers
+- tracking/delivery references
+- candidate substrings inside URLs/email addresses
+- generic postal, promotion, and error codes
+- ordinary numbers without authentication context
 
-It does not record response bodies, cookie values, credentials, or the private server URL.
+Important trial and error:
 
-`/csrf-token` failure is non-fatal because the token is used for logout. `/server-mode` remains mandatory: do not guess P2S/P2P.
+- `000d964408d7f4824cd0f16fb9d47954ccddf425` failed because an over-broad grouped pattern joined prose and following values. It produced candidates such as `ON202606` from date prose and swallowed valid alphanumeric values with preceding words.
+- `acd5cb9cf0dad674fb58b1d1b691d4f3cdf941ee` restricted spaces to grouped digits and hyphens to grouped alphanumerics.
+- `aa799b3553b2bfa160f793324972b072edead18b` expanded the bilingual corpus; Android run `28307672613` succeeded.
+- `9d06c1b175aaff118f09be7df929486155cc67e9` added transaction-notification positives; Android run `28307814762` succeeded.
+- `cbae051f9b88a3b2f0584f615aabf3b61f61dee3` and `bc7cbfc7005fa925662bc0dc3e9969e0b799a9a2` add generic-code and email-address distinctions. Check the final run before claiming success.
 
-### Immediate next validation
+## CI verification nuance
 
-Run the repaired Windows artifact against the actual deployment.
+Commit `abb9ca720ab728c56d8ee490132f0c9c1f6ae572` failed only because CI grepped raw Japanese text inside a Metro bundle that escaped Unicode. It did not prove a product failure.
 
-- If it connects, the discarded-session/additional-cookie problem was the operative cause.
-- If it returns to login, preserve the new safe `/server-mode` diagnostic line. That line should distinguish empty body, HTML redirect, HTTP failure, or transport failure without needing Network captures containing secrets.
-- Do not add a guessed server-mode fallback merely to suppress the error.
-
-## CI and artifacts
-
-Every code commit above passed Android standalone CI and the matching Windows workflow.
-
-Before real-device testing:
-
-1. Read PR #1 to obtain the current branch HEAD.
-2. Fetch Android and Windows artifacts built from that same HEAD.
-3. Confirm the APK contains `assets/index.android.bundle`.
-4. Record APK/EXE SHA-256 hashes.
-5. Do not mix an APK from one commit with an EXE from another when validating the P2P peer ACK.
-
-Current CI artifacts are test/debug signed. Installing over an older differently signed test package may require uninstalling that older package.
+Commit `9b4e5da9b62c6a3054421c90697cf6363ce67134` moved assertions to transformed `App.js`/`AppRoot.js`. Run `28307959797` completed status localization, bilingual/no-ADB assertions, bundling, unit tests, APK assembly, embedded-bundle verification, and artifact upload successfully.
 
 ## Highest-priority next work
 
-### Priority 1 — Windows login re-test, then target-device validation
+### Priority 1 — final CI and matching artifacts
 
-- run the repaired Windows login first
-- retain the content-free `/server-mode` diagnosis only if it still fails
-- install the matching APK on HONOR 400 Pro / Android 16 / MagicOS
-- start with settings status and the synthetic test relay
-- verify P2P Extended Android → Extended Windows delivery and clipboard-applied ACK
-- run Chrome, Gmail, SMS, LINE/Discord/editor copy tests
-- run screen on, background, locked, and 1/15/30+ minute screen-off cases
-- test Windows offline → queued item → Windows returns
-- test Wi-Fi ↔ mobile-data handover
-- test app removal from recents, process kill, and reboot
-- test the delayed WorkManager boot fallback by making the immediate Headless path fail or be killed
-- record only content-free diagnostics and synthetic values
+- obtain current PR head
+- confirm Android and Windows CI success on that exact head
+- fetch Android and Windows artifacts from the same head
+- verify APK contains `assets/index.android.bundle`
+- record SHA-256 hashes
+- keep PR #1 Draft
 
-### Priority 2 — Android 16 notification redaction
+### Priority 2 — guided setup and synthetic test on HONOR
 
-- measure actual fields exposed to NotificationListenerService for SMS and email notifications
-- determine whether OTP-like content is redacted on the target HONOR device
-- distinguish absent/redacted notification content from extractor failure and transport failure
-- do not claim or implement an OS-security bypass
-- if redacted, design a legitimate fallback only after recording the actual behavior
+- install current APK
+- start from fresh install or reset permissions
+- follow all five setup steps
+- confirm Japanese UI under Japanese locale and English UI under English locale
+- start Extended P2P with matching Windows build
+- post synthetic notification
+- confirm status reaches posted -> detected -> queued -> acknowledged
+- confirm Windows clipboard equals the displayed synthetic value
+- repeat with Windows offline and after reconnect
 
-### Priority 3 — extraction coverage from real notification layouts
+### Priority 3 — real SMS/email screen-off matrix
 
-If notification text is present but extraction fails:
+- SMS and email with screen on/background/locked
+- screen off 1, 15, and 30+ minutes
+- MagicOS battery default and relaxed
+- auto-launch/secondary launch/background execution enabled
+- app removed from recents, process killed, device rebooted
+- record notification visibility/redaction, extractor result, queue result, transport result, and ACK independently
 
-- inspect which standard notification extras contain synthetic test text
-- add support for required standard layouts, such as MessagingStyle, without persisting full notification content
-- extend extractor tests with synthetic examples only
-- keep full title/body out of queues, logs, and Windows
+### Priority 4 — remaining regression/protocol work
 
-### Priority 4 — remaining protocol and regression work
-
+- representative app copy matrix
+- Wi-Fi/mobile handover
+- delayed boot fallback
 - P2S Windows-applied acknowledgement design
-- explicit multiple-P2P-peer acknowledgement policy
-- automated ACK-envelope and old-client behavior tests
-- upstream text/image/file regression in P2S and P2P
-- Windows recovery-control and watchdog tests
+- explicit multiple-P2P-peer ACK policy
+- upstream text/image/file regression
+- Windows sleep/resume/watchdog controls
 
-## Important remaining limitations
+## Remaining limitations
 
-- The repaired Windows authentication path has passed unit/CI validation but has not yet been re-tested against the user's server.
-- Android 16 may redact verification-code notification content.
-- Accessibility copy capture remains app-dependent until tested.
-- P2S confirms local STOMP publish, not Windows clipboard application.
-- P2P old-client fallback confirms only local DataChannel acceptance.
-- Multiple-P2P-peer ACK semantics are not explicit.
-- Recovery changes are CI/compile validated but not yet proven against MagicOS process management.
-- Screen-off SMS/email delivery is still an unverified requirement, not a completed feature claim.
+- synthetic notification test is not yet target-device validated
+- Android 16 may redact real SMS/email verification content
+- screen-off SMS/email delivery is unverified
+- Accessibility capture remains app-dependent outside the user's current successful scenario
+- P2S ACK is not Windows-applied
+- old-peer P2P fallback is not Windows-applied
+- multiple-peer ACK semantics are not explicit
+- no empirical comparison against OTP Helper has been completed; the implementation now has broader designed coverage and stronger staged diagnostics, but superiority must be demonstrated by a shared corpus/device matrix
 
 ## Pull-request state
 
-Keep PR #1 Draft until the mandatory HONOR 400 Pro tests and upstream regression matrix pass. Do not publish a release tag merely because CI is green.
+Keep PR #1 Draft until mandatory HONOR 400 Pro tests and upstream regressions pass. Do not tag or publish a release merely because CI is green.
