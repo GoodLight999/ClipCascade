@@ -10,8 +10,49 @@ Resume work in this order:
 6. `docs/LATEST_PRIORITY1_VALIDATION_HANDOFF.md`
 7. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
 8. `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`
+9. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
+10. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
 
-Current phase: prove Android outbound sending, initialization stability, and exactly-once relay behavior on the target device. PR #1 remains Draft.
+Current phase: preserve the now-stable Android relay while proving isolated outbound behavior, exactly-once delivery, runtime-control consistency, and acceptable battery use on the target device. PR #1 remains Draft.
+
+## 2026-07-03 — Android idle-power pass
+
+User report: the current Android build is functioning very well, but battery consumption may be too high.
+
+Confirmed continuous costs:
+
+1. The foreground JavaScript service synchronously read four AsyncStorage/SQLite flags once every second for its entire lifetime.
+2. The visible UI read status flags every 300 ms.
+3. Accessibility accepted high-volume window-content events with a 25 ms notification timeout and fetched the source node for every possible copy cue.
+
+Low-risk repair:
+
+- foreground-service flag polling: 1 second -> 3 seconds;
+- visible UI polling: 300 ms -> 1 second;
+- Accessibility notification timeout: 25 ms -> 100 ms;
+- high-volume events inspect lightweight event text first;
+- source-node inspection remains for direct click, context-click, and window-state events;
+- the 15-minute worker heartbeat allows up to 4 seconds for the slower service loop.
+
+The P2P/WebRTC connection and its 20-second application keepalive were deliberately left unchanged because the user reports that the transport is currently very stable. If drain remains high after this pass, measure that transport separately before changing it.
+
+Build identity:
+
+- version: `3.2.1-extended.8-standalone`
+- versionCode: `320112`
+
+Transport ACK, persistent queues, relay claims, startup recovery, and runtime Start/Stop synchronization remain intact.
+
+## 2026-06-28 — Android runtime Start/Stop state repair
+
+An already-connected service before opening the UI is valid when a previous session survived or recovery recreated it. The upper control must then display Stop, not Start.
+
+`pollUIFlags()` previously refreshed status text from persisted `wsIsRunning` without updating the React state that renders the button. `prepare_runtime_control_state.js` now keeps those states synchronized.
+
+Repair build:
+
+- version: `3.2.1-extended.7-standalone`
+- versionCode: `320111`
 
 ## 2026-06-28 — Android initialization and duplicate-send repair
 
@@ -62,11 +103,11 @@ Future validation must disable Phone Link and every other clipboard synchronizat
 
 ### Repairs implemented
 
-- Accessibility now observes copy toolbar/window cues, includes non-important views, recognizes `ACTION_COPY`, attempts immediate capture, retains selection for 60 seconds, and scans interactive windows for the live selected range.
+- Accessibility observes copy toolbar/window cues, includes non-important views, recognizes `ACTION_COPY`, attempts immediate capture, retains selection for 60 seconds, and scans interactive windows for the live selected range.
 - It still requires an explicit Copy cue and queues only the selected substring.
 - Clipboard and OTP dispatchers request bounded recovery for offline transport, missing React context, or failed event delivery.
 - The first recovery request is no longer incorrectly cooldown-suppressed; repeated failures remain bounded.
-- Startup now attempts to restart a missing previous service generation.
+- Startup attempts to restart a missing previous service generation.
 - Test wording targets connected devices rather than Windows.
 - Windows watchdog delays its unhealthy warning for ten seconds while retaining the 25-second restart threshold.
 
@@ -91,11 +132,13 @@ The following remain intact:
 ### Mandatory next proof
 
 1. Disable Phone Link clipboard sync and every competing clipboard utility.
-2. Update the stable-signed Android app to versionCode `320110` without uninstalling.
-3. Cold-launch repeatedly and confirm no connection-pool initialization error.
-4. Test exactly one outbound application per Copy action while visible, backgrounded, reopened, removed from recents, locked, and screen-off.
-5. Record queue count, diagnostics, exact peer clipboard application, and ACK result.
-6. Do not restore an Android success claim until the isolated tests pass.
+2. Update the stable-signed Android app without uninstalling.
+3. Confirm no connection-pool initialization error.
+4. Confirm an active service displays Stop immediately after reopening the UI.
+5. Test exactly one outbound application per Copy action while visible, backgrounded, reopened, removed from recents, locked, and screen-off.
+6. Test synthetic and real notification-code paths.
+7. Compare battery consumption over matched idle intervals before considering a P2P keepalive change.
+8. Do not restore an Android success claim until the isolated tests pass.
 
 ## Earlier work retained
 
