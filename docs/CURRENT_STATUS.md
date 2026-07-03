@@ -16,7 +16,7 @@ Valid user evidence:
 - Android -> peer background sending was not working when isolated from Phone Link;
 - the former ordinary-copy and Yahoo! JAPAN SMS success claims are invalid.
 
-No Android foreground/background/locked/screen-off outbound success is currently proven. Phone Link and every competing clipboard synchronizer must be disabled for future validation. PR #1 remains Draft.
+No isolated Android foreground/background/locked/screen-off outbound success is formally proven yet. Phone Link and every competing clipboard synchronizer must be disabled for validation. PR #1 remains Draft.
 
 ## Current Android build
 
@@ -24,15 +24,45 @@ Prepared identity:
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.6-standalone`
-- versionCode: `320110`
+- versionName: `3.2.1-extended.8-standalone`
+- versionCode: `320112`
 - deterministic test signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 
-It is intended to update stable-signed versionCode `320107`, `320108`, or `320109` without uninstalling.
+It is intended to update the earlier stable-signed builds without uninstalling.
+
+## Latest idle-power repair
+
+The user reports that the current relay behavior is very stable, but battery consumption may be excessive.
+
+Confirmed avoidable work:
+
+- the foreground JavaScript service synchronously read four AsyncStorage/SQLite flags once per second for its entire lifetime;
+- the visible UI polled status flags every 300 ms;
+- Accessibility accepted high-volume window-content events with a 25 ms notification timeout and fetched a source node for every possible copy cue.
+
+Current repair:
+
+- foreground-service flag poll: 1 second -> 3 seconds;
+- visible-UI poll: 300 ms -> 1 second;
+- Accessibility notification timeout: 25 ms -> 100 ms;
+- lightweight event text is checked before any source-node binder access;
+- source-node inspection remains for click, context-click, and window-state events;
+- the 15-minute WorkManager heartbeat waits up to 4 seconds for the slower service loop.
+
+P2P/WebRTC and its 20-second application-level keepalive are deliberately unchanged in this pass because transport stability is currently good. If battery drain remains high, measure that layer separately before changing the keepalive cadence.
+
+## Runtime Start/Stop state
+
+A foreground synchronization service may already be active when the UI opens because a previous session survived, resumed at startup, or was recreated by recovery. In that case `Connected` / `接続済み` is valid before the user presses the upper control.
+
+The upper control is a service Start/Stop toggle. Persisted `wsIsRunning` is now synchronized into React state, so:
+
+- runtime `true` -> `Stop` / `停止`;
+- runtime `false` -> `Start` / `開始`.
 
 ## Android background capture architecture
 
-Android 10+ does not provide ordinary background clipboard reads unless the application is focused or is the default IME. Therefore Accessibility must recover the explicitly selected text around an explicit Copy action instead of merely triggering `ClipboardManager.primaryClip`.
+Android 10+ does not provide ordinary background clipboard reads unless the application is focused or is the default IME. Therefore Accessibility recovers explicitly selected text around an explicit Copy action instead of merely triggering `ClipboardManager.primaryClip`.
 
 Current implementation:
 
@@ -44,30 +74,24 @@ Current implementation:
 - uses a persistent native queue with TTL and text deduplication;
 - requests bounded transport recovery when transport or React state is unavailable.
 
-Target-device proof remains pending.
+Target-device matrix proof remains pending.
 
-## Latest Android initialization repair
+## Android initialization repair
 
 Reported error:
 
 `Cannot perform this operation because the connection pool has been closed.`
 
-Confirmed cause:
+Confirmed cause and repair:
 
 - `AsyncStorageBridge` received the singleton database owned by React Native AsyncStorage;
 - its `disconnect()` method closed that shared database;
-- React initialization could then access an invalid connection pool;
-- reopening the application recreated/reopened the supplier connection, explaining the temporary recovery.
-
-Repair:
-
-- the transformed bridge no longer closes the shared database;
-- it only releases its local reference;
+- the transformed bridge no longer closes the shared database and only releases its local reference;
 - Android CI rejects the transformed source if the unsafe close remains.
 
-## Latest exactly-once relay repair
+## Exactly-once relay repair
 
-A single native queue item could be observed by more than one JavaScript service listener after failed initialization and reopen. Text hashing does not fully protect this case because native queue delivery intentionally forces sending and each service generation has separate JavaScript transport state.
+A single native queue item could be observed by more than one JavaScript service listener after failed initialization and reopen.
 
 Current implementation:
 
@@ -77,8 +101,6 @@ Current implementation:
 - an unaccepted send releases the claim;
 - native acknowledgement releases the claim;
 - stale claims expire after five seconds so retry remains possible.
-
-This protects one native queue item from duplicate JavaScript listeners while retaining the existing Accessibility-level text deduplication for separately created items.
 
 ## Recovery and service startup
 
@@ -156,36 +178,22 @@ Implemented:
 - Extended P2P Windows-applied ACK;
 - explicit Quit cleanup and final exit guarantee.
 
-The supplied log showed failed link-local candidate binds followed by successful candidates and `ICE completed`. The watchdog now waits ten seconds before reporting a persistent unhealthy state; full restart remains delayed until 25 seconds.
-
 Real Task Manager proof for Quit and immediate relaunch remains pending.
-
-## Latest green code artifacts
-
-Code/release-workflow commit:
-
-- `fb31ebca8fc99a7ff9504163cf584f35e52127ba`
-- Android CI `28317382119`: success
-- Windows CI `28317382112`: success
-- Android artifact ID `7933086597`
-- Windows artifact ID `7933081818`
-- APK SHA-256: `572f39b7e524a83b3d6e2819295b5aba111eed16d76ac3a9e3c10fc512fe3135`
-- EXE SHA-256: `0953676d8eec3a69084b7cd17fd4e273906be8fece1d2e764a93ceaae573dd5d`
-
-Exact ZIP hashes and test instructions are in `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`.
 
 ## Mandatory next proof
 
 With Phone Link and all competing synchronizers disabled:
 
-1. update the Android app to versionCode `320110` without uninstalling;
-2. cold-launch at least five times and confirm no connection-pool initialization error;
-3. copy one unique synthetic value once and confirm exactly one peer clipboard application;
-4. repeat after closing/reopening the UI while synchronization remains active;
-5. repeat backgrounded for 30 seconds, removed from recents, locked, and screen-off;
-6. confirm queue deletion only after the defined acknowledgement;
-7. run synthetic OTP, then real SMS and email without storing their contents;
-8. test Windows Quit process disappearance and immediate relaunch.
+1. update the Android app to versionCode `320112` without uninstalling;
+2. confirm no connection-pool initialization error across repeated cold launches;
+3. confirm an active service opens with `停止`, not `開始`;
+4. confirm Stop completes within about three seconds and Start reconnects;
+5. copy one unique value once and confirm exactly one peer clipboard application;
+6. repeat visible, backgrounded, reopened, removed from recents, locked, and screen-off;
+7. confirm queue deletion only after the defined acknowledgement;
+8. run synthetic OTP, then real SMS and email without storing their contents;
+9. compare battery usage over matched idle intervals with the same network and peer connected;
+10. test Windows Quit process disappearance and immediate relaunch.
 
 Failure classification:
 
@@ -195,4 +203,4 @@ Failure classification:
 
 ## Do not claim
 
-Do not describe Android outbound synchronization as working, beta-ready, exactly-once, screen-off capable, or real-SMS validated until these isolated target-device tests pass.
+Do not describe Android outbound synchronization as beta-ready, exactly-once, screen-off capable, real-SMS validated, or battery-efficient until the isolated target-device tests pass.
