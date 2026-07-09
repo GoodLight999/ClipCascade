@@ -41,6 +41,9 @@ jobs:
       - name: Prepare P2P peer acknowledgement
         run: python scripts/prepare_p2p_peer_ack.py
 
+      - name: Prepare Windows tray lifecycle and watchdog bounds
+        run: python scripts/prepare_windows_tray_lifecycle.py
+
       - name: Compile desktop sources
         run: python -m compileall -q .
 
@@ -55,6 +58,9 @@ jobs:
 
       - name: Test Windows shutdown and status wording
         run: python -m unittest tests.test_windows_shutdown -v
+
+      - name: Test Windows tray lifecycle and scheme diagnostics
+        run: python -m unittest tests.test_windows_tray_lifecycle -v
 
       - name: Build standalone executable
         run: python -m PyInstaller --clean ClipCascade_win.spec
