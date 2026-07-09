@@ -5,22 +5,57 @@ Draft PR: `#1`
 Repository: `GoodLight999/ClipCascade` (public)  
 Canonical requirements: `docs/REQUIREMENTS.md`
 
-## Critical evidence correction
+## Current focus
 
-Earlier Android outbound successes were misattributed to ClipCascade because Microsoft Phone Link clipboard synchronization was active.
+Current focus is Windows tray ghost-icon containment plus continued Android isolated validation. PR #1 remains Draft.
+
+## Windows tray ghost-icon repair
+
+User-reported Windows 11 evidence:
+
+- many default-looking ClipCascade tray ghosts remain in the notification area;
+- ghost tooltip is `ClipCascade`;
+- owner PID is `0`, meaning the tray HWND/process is already gone;
+- the issue existed upstream before Extended;
+- Extended watchdog/restart behavior made it much worse;
+- repeated logs include `scheme http is invalid - goodbye`, repeated `Restarting synchronization engine`, and watchdog full restart roughly every minute;
+- persisted config still showed `server_url=https://clipcascade.sathvik.dev`, `websocket_url=wss://clipcascade.sathvik.dev/p2psignaling`, and `server_mode=P2P`.
+
+Patch status:
+
+- `scripts/prepare_windows_tray_lifecycle.py` adds tray lifecycle control, watchdog bounds, and P2P scheme diagnostics during desktop build/test;
+- pystray disposal is centralized and idempotent;
+- disposal order is `icon.visible = False` followed by `icon.stop()`;
+- tray create/run/visible-false/stop lifecycle events are logged with panel id, icon id, process id, and reason;
+- only one active `TaskbarPanel` may own a pystray icon per process;
+- constructing a replacement panel disposes the previous icon first;
+- explicit Quit, Logoff, and run-finally all use the same disposal path;
+- P2P signaling validates that the URL scheme is `ws` or `wss` before constructing the WebSocket;
+- P2P logs runtime `websocket_url`, parsed scheme, `server_url`, close args, and latest transport error;
+- remembered `scheme http is invalid - goodbye` is classified as fatal for watchdog purposes;
+- watchdog full restarts are capped at three consecutive attempts and then backed off for 15 minutes;
+- fatal scheme errors suppress full restart amplification and trigger the long backoff.
+
+New tests:
+
+- `tests.test_windows_tray_lifecycle` verifies visible-false-before-stop, idempotent stop, replacement-panel disposal, P2P scheme diagnostics, and remembered fatal scheme errors.
+
+Code commit for this patch: `c34057a9cfd10599db68e32f6a98f576d9bc8ed2`.
+
+Final documentation HEAD is newer than the code commit. At this status update, GitHub Actions was still queued; do not call the Windows patch green until final Android and Windows CI complete successfully.
+
+## Android status
+
+Earlier Android outbound successes were misattributed to ClipCascade because Microsoft Phone Link clipboard synchronization was active. Phone Link and every competing clipboard synchronizer must remain disabled for validation.
 
 Valid user evidence:
 
 - Windows authentication, GUI, and synchronization work;
 - peer -> Android reception works while ClipCascade is backgrounded and apparently while the screen is off;
-- Android -> peer background sending was not working when isolated from Phone Link;
-- the former ordinary-copy and Yahoo! JAPAN SMS success claims are invalid.
+- Android -> peer background sending was not previously working when isolated from Phone Link;
+- recent repaired Android build is reported by the user as very stable, but formal isolated matrix proof remains pending.
 
-No isolated Android foreground/background/locked/screen-off outbound success is formally proven yet. Phone Link and every competing clipboard synchronizer must be disabled for validation. PR #1 remains Draft.
-
-## Current Android build
-
-Prepared identity:
+Current Android build identity:
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
@@ -28,30 +63,20 @@ Prepared identity:
 - versionCode: `320112`
 - deterministic test signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 
-It is intended to update the earlier stable-signed builds without uninstalling.
+## Android idle-power repair
 
-## Latest idle-power repair
-
-The user reports that the current relay behavior is very stable, but battery consumption may be excessive.
-
-Confirmed avoidable work:
-
-- the foreground JavaScript service synchronously read four AsyncStorage/SQLite flags once per second for its entire lifetime;
-- the visible UI polled status flags every 300 ms;
-- Accessibility accepted high-volume window-content events with a 25 ms notification timeout and fetched a source node for every possible copy cue.
-
-Current repair:
+Implemented after user reported large battery use despite good stability:
 
 - foreground-service flag poll: 1 second -> 3 seconds;
 - visible-UI poll: 300 ms -> 1 second;
 - Accessibility notification timeout: 25 ms -> 100 ms;
-- lightweight event text is checked before any source-node binder access;
+- lightweight event text is checked before source-node binder access;
 - source-node inspection remains for click, context-click, and window-state events;
 - the 15-minute WorkManager heartbeat waits up to 4 seconds for the slower service loop.
 
-P2P/WebRTC and its 20-second application-level keepalive are deliberately unchanged in this pass because transport stability is currently good. If battery drain remains high, measure that layer separately before changing the keepalive cadence.
+P2P/WebRTC and its 20-second application-level keepalive remain unchanged because transport stability is currently good. If battery drain remains high, measure that layer separately before changing keepalive cadence.
 
-## Runtime Start/Stop state
+## Android runtime Start/Stop state
 
 A foreground synchronization service may already be active when the UI opens because a previous session survived, resumed at startup, or was recreated by recovery. In that case `Connected` / `接続済み` is valid before the user presses the upper control.
 
@@ -102,33 +127,6 @@ Current implementation:
 - native acknowledgement releases the claim;
 - stale claims expire after five seconds so retry remains possible.
 
-## Recovery and service startup
-
-Implemented:
-
-- clipboard and OTP queues request recovery for offline transport, missing React context, or failed event delivery;
-- the first recovery request after boot is not incorrectly cooldown-suppressed;
-- repeated attempts remain bounded;
-- startup recreates a missing previous foreground-service generation instead of changing synchronization to OFF;
-- zero P2P peers is treated as a normal queued condition rather than restart failure;
-- boot, network, heartbeat, and delayed WorkManager recovery infrastructure remains present.
-
-Android background-start restrictions and HONOR/MagicOS process management still require real-device testing.
-
-## Verification-code relay
-
-Implemented in code:
-
-- local NotificationListenerService extraction;
-- Japanese and English contextual matching and false-positive controls;
-- standard, expanded, text-lines, conversation, and MessagingStyle fields;
-- persistence of only extracted value, timestamp, and opaque relay ID;
-- optional source-package filtering;
-- persistent queue, TTL, deduplication, retry, and acknowledgement timeout;
-- synthetic local notification test.
-
-No real SMS/email result is currently valid because the previous test was contaminated by Phone Link. The synthetic and real screen-state matrix must be repeated in isolation.
-
 ## Delivery acknowledgement — preserve
 
 Common local path:
@@ -159,32 +157,11 @@ Preserve:
 
 P2S and old-peer fallback are not peer-applied acknowledgement.
 
-## Windows status
-
-User-validated:
-
-- real authentication works;
-- Windows GUI and synchronization work;
-- Windows -> Android reception works while Android is backgrounded.
-
-Implemented:
-
-- authenticated persistent HTTP session and response validation;
-- visible status/control window;
-- restart/reconnect/disconnect/log/diagnostic controls;
-- rotating logs;
-- second-launch activation;
-- complete P2P teardown and restart;
-- Extended P2P Windows-applied ACK;
-- explicit Quit cleanup and final exit guarantee.
-
-Real Task Manager proof for Quit and immediate relaunch remains pending.
-
 ## Mandatory next proof
 
 With Phone Link and all competing synchronizers disabled:
 
-1. update the Android app to versionCode `320112` without uninstalling;
+1. update Android without uninstalling and repeat the isolated matrix;
 2. confirm no connection-pool initialization error across repeated cold launches;
 3. confirm an active service opens with `停止`, not `開始`;
 4. confirm Stop completes within about three seconds and Start reconnects;
@@ -192,15 +169,13 @@ With Phone Link and all competing synchronizers disabled:
 6. repeat visible, backgrounded, reopened, removed from recents, locked, and screen-off;
 7. confirm queue deletion only after the defined acknowledgement;
 8. run synthetic OTP, then real SMS and email without storing their contents;
-9. compare battery usage over matched idle intervals with the same network and peer connected;
-10. test Windows Quit process disappearance and immediate relaunch.
-
-Failure classification:
-
-- two native queue items: Accessibility/capture duplicate;
-- one queue item and two peer applications: listener/transport duplicate;
-- one peer application and two UI/history observations: receiver UI or another clipboard observer.
+9. compare Android battery usage over matched idle intervals;
+10. on Windows, force at least 10 reconnect/restart cycles and confirm tray icon count remains one;
+11. Quit from tray and confirm no `ClipCascade` ghost remains without restarting Explorer;
+12. if `scheme http is invalid - goodbye` reappears, preserve adjacent P2P diagnostic lines.
 
 ## Do not claim
 
 Do not describe Android outbound synchronization as beta-ready, exactly-once, screen-off capable, real-SMS validated, or battery-efficient until the isolated target-device tests pass.
+
+Do not describe the Windows tray ghost fix as green until final Android and Windows CI complete after the latest documentation HEAD.
