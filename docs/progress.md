@@ -12,8 +12,36 @@ Resume work in this order:
 8. `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`
 9. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
 10. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
+11. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
 
-Current phase: preserve the now-stable Android relay while proving isolated outbound behavior, exactly-once delivery, runtime-control consistency, and acceptable battery use on the target device. PR #1 remains Draft.
+Current phase: preserve the now-stable Android relay while proving isolated outbound behavior, exactly-once delivery, runtime-control consistency, acceptable battery use, and Windows tray lifecycle stability. PR #1 remains Draft.
+
+## 2026-07-09 — Windows tray ghost icon repair
+
+User report: Windows notification area accumulates many default-looking ClipCascade ghost icons with `tip=ClipCascade` and owner `pid=0`. This existed upstream before Extended, but Extended watchdog full restarts made it worse. Runtime config still showed `websocket_url=wss://clipcascade.sathvik.dev/p2psignaling`, so the repeated `scheme http is invalid - goodbye` logs must be diagnosed at the runtime P2P path rather than dismissed as stale persisted config.
+
+Implemented patch:
+
+- `scripts/prepare_windows_tray_lifecycle.py` transforms the desktop source before build/test;
+- pystray icon lifecycle is centralized in an idempotent `_dispose_tray_icon(reason)` path;
+- disposal order is explicitly `icon.visible = False` before `icon.stop()`;
+- create/run/visible-false/stop lifecycle events are logged with panel id, icon id, process id, and reason;
+- same-process replacement of `TaskbarPanel` disposes the previous icon first;
+- `EnhancedTaskbarPanel` uses the same disposal path for explicit quit, logoff, and run-finally;
+- P2P signaling logs current `websocket_url`, parsed scheme, `server_url`, close arguments, and last transport error;
+- only `ws` and `wss` schemes are accepted before constructing `websocket.WebSocketApp`;
+- remembered `scheme http is invalid - goodbye` is treated as fatal and suppresses watchdog full restart amplification;
+- watchdog full restarts are capped at three consecutive attempts, then backed off for 15 minutes.
+
+Tests added:
+
+- tray `visible=False -> stop()` order;
+- idempotent stop;
+- replacement panel disposes previous icon;
+- P2P `wss://` accepted and `http://` rejected;
+- remembered `scheme http is invalid - goodbye` classified as fatal while preserving current `wss://` diagnostics.
+
+Code commit containing this patch: `c34057a9cfd10599db68e32f6a98f576d9bc8ed2`. At handoff writing time, final GitHub Actions runs had been triggered but were still queued. Do not claim this patch green until final Android and Windows CI complete.
 
 ## 2026-07-03 — Android idle-power pass
 
@@ -138,7 +166,7 @@ The following remain intact:
 5. Test exactly one outbound application per Copy action while visible, backgrounded, reopened, removed from recents, locked, and screen-off.
 6. Test synthetic and real notification-code paths.
 7. Compare battery consumption over matched idle intervals before considering a P2P keepalive change.
-8. Do not restore an Android success claim until the isolated tests pass.
+8. On Windows, force reconnect/restart failures and confirm tray icon count stays one, then Quit leaves zero ghosts without restarting Explorer.
 
 ## Earlier work retained
 
