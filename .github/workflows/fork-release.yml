@@ -29,12 +29,14 @@ jobs:
         run: |
           python scripts/prepare_build_info.py
           python scripts/prepare_p2p_peer_ack.py
+          python scripts/prepare_windows_tray_lifecycle.py
           python -m compileall -q .
           python -m pip install --upgrade pip pyinstaller
           python -m pip install -r requirements_win.txt
           python -m unittest tests.test_request_manager -v
           python -m unittest tests.test_p2p_peer_ack -v
           python -m unittest tests.test_windows_shutdown -v
+          python -m unittest tests.test_windows_tray_lifecycle -v
           python -m PyInstaller --clean ClipCascade_win.spec
       - name: Package Windows build
         shell: pwsh
