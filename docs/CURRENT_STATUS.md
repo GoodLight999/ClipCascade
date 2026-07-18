@@ -7,38 +7,38 @@ Canonical requirements: `docs/REQUIREMENTS.md`
 
 ## Current focus
 
-Current focus is Beeper-style email OTP extraction, Windows tray ghost-icon containment, and continued Android isolated validation. PR #1 remains Draft.
+Current focus is broad notification-code extraction, Windows tray ghost-icon containment, and continued Android isolated validation. PR #1 remains Draft.
 
 ## Android notification-code extraction
 
-Latest user report: a Beeper login email did not relay its visible six-digit login code. The sample layout was a standalone six-digit code line near `Your login code for Beeper` and `manually enter the login code above` text.
+Latest user report: a Beeper login email did not relay its visible six-digit login code, and the user explicitly rejected a Beeper-only fix.
 
-Patch status:
+Current patch scope:
 
-- `OtpCodeExtractor` now has line-structured extraction for standalone code lines near authentication language;
-- logo-alt-text residue such as `Beeper logo 774464` is allowed when login-code context is nearby;
-- English authentication context now includes `login code`, `sign-in code`, `signin code`, `enter the login code above`, `2FA`, and `MFA`;
-- keyword windows and surrounding-line scoring were widened for email title/body/reordered notification extras;
-- negative contexts were added for promo/coupon/discount/postal/error/status/tracking/order-like values unless strong authentication context is present;
-- `NotificationCodeListenerService` keeps explicit `Notification.EXTRA_*` collection and also folds all safe string-like extras into the extraction text;
-- notification contents are not logged.
-
-New tests cover:
-
-- Beeper-style standalone code line;
-- notification-order variant where title/preview precede expanded body;
-- logo-alt-text same-line variant;
-- coupon/discount false-positive rejection near login-button text.
+- `OtpCodeExtractor` now models WebOTP/domain-bound SMS, SMS Retriever-style messages, SMS User Consent-style code lengths, email/push standalone code lines, action phrases, and multilingual authentication labels;
+- WebOTP/domain-bound `@domain #code` is accepted;
+- SMS Retriever app-hash lines are rejected while the actual one-time code is extracted;
+- standalone code lines and logo-alt-text lines are accepted only near authentication language;
+- action phrases such as `Enter 552244 to sign in` and `Use code A8K4-P2 to authenticate` are covered;
+- English, Japanese, Chinese, Korean, Spanish, French, and German samples are covered by unit tests;
+- negative contexts reject coupon, promo, discount, postal, error, status, tracking, shipment, delivery, order, booking, ticket, invoice, amount, phone, URL/email-local-part, date/year, and SMS Retriever hash-alone false positives;
+- `NotificationCodeListenerService` folds safe string-like extras into extraction input without logging contents.
 
 Current Android build identity:
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.9-standalone`
-- versionCode: `320113`
+- versionName: `3.2.1-extended.10-standalone`
+- versionCode: `320114`
 - deterministic test signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 
-Do not claim this extraction pass green until final Android and Windows CI complete on the latest HEAD.
+Latest validated code head before documentation commits:
+
+- head: `26c719655491afb838e082c882bd2253ae2746ac`
+- Android CI `29627309385`: success
+- Windows CI `29627309390`: success
+
+Do not claim real-device Beeper/Gmail extraction until the target notification app exposes the code text through notification extras and the device test passes.
 
 ## Windows tray ghost-icon repair
 
@@ -48,7 +48,7 @@ User-reported Windows 11 evidence:
 - ghost tooltip is `ClipCascade`;
 - owner PID is `0`, meaning the tray HWND/process is already gone;
 - the issue existed upstream before Extended;
-- Extended watchdog/restart behavior made it much worse;
+- Extended watchdog/restart behavior made it worse;
 - repeated logs include `scheme http is invalid - goodbye`, repeated `Restarting synchronization engine`, and watchdog full restart roughly every minute;
 - persisted config still showed `server_url=https://clipcascade.sathvik.dev`, `websocket_url=wss://clipcascade.sathvik.dev/p2psignaling`, and `server_mode=P2P`.
 
@@ -66,12 +66,6 @@ Patch status:
 - remembered `scheme http is invalid - goodbye` is classified as fatal for watchdog purposes;
 - watchdog full restarts are capped at three consecutive attempts and then backed off for 15 minutes;
 - fatal scheme errors suppress full restart amplification and trigger the long backoff.
-
-New tests:
-
-- `tests.test_windows_tray_lifecycle` verifies visible-false-before-stop, idempotent stop, replacement-panel disposal, P2P scheme diagnostics, and remembered fatal scheme errors.
-
-Code commit for the tray patch: `c34057a9cfd10599db68e32f6a98f576d9bc8ed2`.
 
 ## Android status
 
@@ -96,57 +90,6 @@ Implemented after user reported large battery use despite good stability:
 - the 15-minute WorkManager heartbeat waits up to 4 seconds for the slower service loop.
 
 P2P/WebRTC and its 20-second application-level keepalive remain unchanged because transport stability is currently good. If battery drain remains high, measure that layer separately before changing keepalive cadence.
-
-## Android runtime Start/Stop state
-
-A foreground synchronization service may already be active when the UI opens because a previous session survived, resumed at startup, or was recreated by recovery. In that case `Connected` / `接続済み` is valid before the user presses the upper control.
-
-The upper control is a service Start/Stop toggle. Persisted `wsIsRunning` is now synchronized into React state, so:
-
-- runtime `true` -> `Stop` / `停止`;
-- runtime `false` -> `Start` / `開始`.
-
-## Android background capture architecture
-
-Android 10+ does not provide ordinary background clipboard reads unless the application is focused or is the default IME. Therefore Accessibility recovers explicitly selected text around an explicit Copy action instead of merely triggering `ClipboardManager.primaryClip`.
-
-Current implementation:
-
-- observes selection and copy-related Accessibility events;
-- retains recent selected text for 60 seconds;
-- scans interactive Accessibility windows for a live selected range when necessary;
-- queues only the selected substring;
-- requires a Copy cue rather than sending on selection alone;
-- uses a persistent native queue with TTL and text deduplication;
-- requests bounded transport recovery when transport or React state is unavailable.
-
-Target-device matrix proof remains pending.
-
-## Android initialization repair
-
-Reported error:
-
-`Cannot perform this operation because the connection pool has been closed.`
-
-Confirmed cause and repair:
-
-- `AsyncStorageBridge` received the singleton database owned by React Native AsyncStorage;
-- its `disconnect()` method closed that shared database;
-- the transformed bridge no longer closes the shared database and only releases its local reference;
-- Android CI rejects the transformed source if the unsafe close remains.
-
-## Exactly-once relay repair
-
-A single native queue item could be observed by more than one JavaScript service listener after failed initialization and reopen.
-
-Current implementation:
-
-- native `RelaySettingsModule` owns a process-wide synchronized relay-claim map;
-- each JavaScript listener must claim the opaque relay ID before sending;
-- only the first listener succeeds;
-- an unaccepted send releases the claim;
-- native acknowledgement releases the claim;
-- stale claims expire after five seconds so retry remains possible.
 
 ## Delivery acknowledgement — preserve
 
@@ -190,9 +133,9 @@ With Phone Link and all competing synchronizers disabled:
 6. repeat visible, backgrounded, reopened, removed from recents, locked, and screen-off;
 7. confirm queue deletion only after the defined acknowledgement;
 8. run synthetic OTP, then real SMS and email without storing their contents;
-9. test Beeper-style real email notification and record whether the expanded notification visibly contains the code;
+9. test Beeper/Gmail-style real email notifications and record whether notification extras contain the code;
 10. compare Android battery usage over matched idle intervals;
-11. on Windows, force at least 10 reconnect/restart cycles and confirm tray icon count remains one;
+11. on Windows, force at least 10 reconnect/restart cycles and confirm tray icon count stays one;
 12. Quit from tray and confirm no `ClipCascade` ghost remains without restarting Explorer;
 13. if `scheme http is invalid - goodbye` reappears, preserve adjacent P2P diagnostic lines.
 
@@ -200,4 +143,4 @@ With Phone Link and all competing synchronizers disabled:
 
 Do not describe Android outbound synchronization as beta-ready, exactly-once, screen-off capable, real-SMS validated, real-email validated, notification-code reliable, or battery-efficient until the isolated target-device tests pass.
 
-Do not describe the Windows tray ghost fix or Beeper OTP extraction pass as green until final Android and Windows CI complete after the latest documentation HEAD.
+Do not describe the Windows tray ghost fix or broad OTP extraction pass as real-device proven until target-device tests pass.
