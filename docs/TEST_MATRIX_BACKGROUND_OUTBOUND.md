@@ -14,8 +14,8 @@ Before every run:
 - [ ] Android CI green on current HEAD
 - [ ] Windows CI green on current HEAD
 - [ ] Matching artifact IDs and hashes recorded
-- [ ] Android version `3.2.1-extended.6-standalone`
-- [ ] Android versionCode `320110`
+- [ ] Android version `3.2.1-extended.9-standalone`
+- [ ] Android versionCode `320113`
 - [ ] Stable signer unchanged
 - [ ] In-place update succeeds
 - [ ] Settings and permissions retained
@@ -111,6 +111,8 @@ For each representative application:
 - [ ] Synthetic notification succeeds after 1 minute screen-off
 - [ ] Synthetic notification succeeds after 15 minutes screen-off
 - [ ] Synthetic notification succeeds after 30+ minutes screen-off
+- [ ] Beeper-style email notification succeeds: standalone code line followed or preceded by `Your login code` / `login code above`
+- [ ] Email layout with logo alt text and code on the same line succeeds
 - [ ] Real SMS tested without storing its contents
 - [ ] Real email tested without storing its contents
 - [ ] Android redaction recorded separately from extraction and transport
@@ -121,5 +123,8 @@ For each representative application:
 - [ ] Persistent failure produces a warning after the grace period
 - [ ] Tray Quit removes the process from Task Manager
 - [ ] Immediate relaunch succeeds
+- [ ] Normal startup shows exactly one ClipCascade tray icon
+- [ ] Ten reconnect/restart cycles do not create tray ghosts
+- [ ] Quit leaves zero ClipCascade ghost tray icons without restarting Explorer
 
-Do not restore an Android outbound, exactly-once, or initialization-stable claim until the isolated real-device checks pass.
+Do not restore an Android outbound, exactly-once, notification-code, or initialization-stable claim until the isolated real-device checks pass.
