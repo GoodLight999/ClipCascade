@@ -52,7 +52,7 @@
     <string name="otp_apps_picker_title">Verification-code source apps</string>
 
     <string name="otp_test_section">End-to-end verification-code test</string>
-    <string name="otp_test_body">Posts a real local notification containing a random synthetic code. The notification listener, extractor, persistent queue, transport, and Windows acknowledgement are exercised through the normal path.</string>
+    <string name="otp_test_body">Posts a local notification with a random synthetic code, then sends that same extracted value through the normal verification-code queue. This deterministically tests the extractor, persistent queue, transport, and acknowledgement. Real app notifications still require separate NotificationListener validation.</string>
     <string name="otp_test_send">Post test verification-code notification</string>
     <string name="otp_test_channel_name">Verification-code tests</string>
     <string name="otp_test_channel_description">Synthetic notifications used to verify ClipCascade code extraction and relay.</string>
