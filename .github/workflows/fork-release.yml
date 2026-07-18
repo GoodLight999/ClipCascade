@@ -80,6 +80,7 @@ jobs:
           node scripts/prepare_extended_status_i18n.js
           node scripts/prepare_runtime_control_state.js
           node scripts/prepare_idle_power.js
+          node scripts/prepare_broad_otp_extractor.js
           node scripts/prepare_relay_transport_ack.js
           node scripts/prepare_relay_startup_order.js
           node scripts/prepare_service_listener_lifecycle.js
