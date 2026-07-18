@@ -143,7 +143,34 @@ class NotificationCodeListenerService : NotificationListenerService() {
 
         addMessageTexts(extras, Notification.EXTRA_MESSAGES, parts)
         addMessageTexts(extras, Notification.EXTRA_HISTORIC_MESSAGES, parts)
+        addLooseTextExtras(extras, parts)
         return parts.joinToString("\n")
+    }
+
+    private fun addLooseTextExtras(
+        extras: Bundle,
+        parts: MutableSet<String>,
+    ) {
+        extras.keySet().sorted().forEach { key ->
+            val value = extras.get(key) ?: return@forEach
+            when (value) {
+                is CharSequence -> addPart(parts, value)
+                is Array<*> -> value.forEach { item ->
+                    if (item is CharSequence) addPart(parts, item)
+                }
+                is ArrayList<*> -> value.forEach { item ->
+                    if (item is CharSequence) addPart(parts, item)
+                }
+            }
+        }
+    }
+
+    private fun addPart(parts: MutableSet<String>, value: CharSequence) {
+        value.toString()
+            .trim()
+            .takeIf { it.isNotEmpty() }
+            ?.take(4096)
+            ?.let(parts::add)
     }
 
     private fun addMessageTexts(
