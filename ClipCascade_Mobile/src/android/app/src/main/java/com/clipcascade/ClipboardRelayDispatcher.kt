@@ -61,6 +61,7 @@ object ClipboardRelayDispatcher {
             inFlightId = null
             inFlightSince = 0L
         }
+        record(context, "peer_ack", "acknowledged")
         return true
     }
 
@@ -70,6 +71,7 @@ object ClipboardRelayDispatcher {
             ClipboardRelayStore.clear(context)
             inFlightId = null
             inFlightSince = 0L
+            record(context, "settings", "sync_disabled")
             return false
         }
 
@@ -78,16 +80,21 @@ object ClipboardRelayDispatcher {
         if (currentInFlight != null) {
             if (now - inFlightSince < ACK_TIMEOUT_MS) return false
             Log.w(TAG, "Transport acknowledgement timed out; retrying relay item")
+            record(context, "peer_ack", "retrying")
             inFlightId = null
             inFlightSince = 0L
         }
 
         val storage = AsyncStorageBridge(context)
         try {
-            if (storage.getValue("wsIsRunning") != "true") return false
+            if (storage.getValue("wsIsRunning") != "true") {
+                record(context, "transport_enabled", "sync_disabled")
+                return false
+            }
 
             val status = storage.getValue("wsStatusMessage").orEmpty()
             if (!isConnectedStatus(status)) {
+                record(context, "transport_status", "retrying")
                 RecoveryCoordinator.request(context, "clipboard_transport_not_ready")
                 return false
             }
@@ -103,11 +110,15 @@ object ClipboardRelayDispatcher {
                     ?: 0
                 // Signaling can be healthy before another peer is online. Keep the
                 // item queued without restarting a healthy transport in this case.
-                if (peers <= 0) return false
+                if (peers <= 0) {
+                    record(context, "p2p_peer", "retrying")
+                    return false
+                }
             }
 
             val application = context.applicationContext as? MainApplication
             if (application == null) {
+                record(context, "react_context", "rebind_requested")
                 RecoveryCoordinator.request(context, "clipboard_application_context_missing")
                 return false
             }
@@ -115,6 +126,7 @@ object ClipboardRelayDispatcher {
                 .reactInstanceManager
                 .currentReactContext
             if (reactContext == null || !reactContext.hasActiveCatalystInstance()) {
+                record(context, "react_context", "rebind_requested")
                 RecoveryCoordinator.request(context, "clipboard_react_context_missing")
                 return false
             }
@@ -132,19 +144,32 @@ object ClipboardRelayDispatcher {
                 reactContext
                     .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                     .emit("SHARED_TEXT", params)
+                record(context, "react_event", "emitted")
                 true
             } catch (error: Exception) {
                 inFlightId = null
                 inFlightSince = 0L
+                record(context, "react_event", "interrupted")
                 RecoveryCoordinator.request(context, "clipboard_react_event_failed")
                 throw error
             }
         } catch (error: Exception) {
             Log.w(TAG, "Clipboard relay is not ready", error)
+            record(context, "dispatcher", "interrupted")
             return false
         } finally {
             storage.disconnect()
         }
+    }
+
+    private fun record(context: Context, path: String, result: String) {
+        RelayHealthStore.record(
+            context.applicationContext,
+            category = "clipboard",
+            trigger = "delivery",
+            path = path,
+            result = result,
+        )
     }
 
     private fun isConnectedStatus(status: String): Boolean {
