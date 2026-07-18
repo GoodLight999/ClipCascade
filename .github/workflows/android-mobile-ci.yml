@@ -98,10 +98,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected_code=$((320113 + 1))
-          grep -q "3.2.1-extended.10" App.js
+          expected_code=$((320114 + 1))
+          grep -q "3.2.1-extended.11" App.js
           grep -q "versionCode ${expected_code}" android/app/build.gradle
-          grep -q "versionName \"3.2.1-extended.10\"" android/app/build.gradle
+          grep -q "versionName \"3.2.1-extended.11\"" android/app/build.gradle
           grep -q "ユーザー名" App.js
           grep -q "Username" App.js
           grep -q "未接続" App.js
@@ -130,6 +130,10 @@ jobs:
           grep -q "domainBoundCodeRegex" android/app/src/main/java/com/clipcascade/OtpCodeExtractor.kt
           grep -q "actionCodeRegex" android/app/src/main/java/com/clipcascade/OtpCodeExtractor.kt
           grep -q "smsRetrieverHashLine" android/app/src/main/java/com/clipcascade/OtpCodeExtractor.kt
+          grep -q "queueSyntheticValue(applicationContext, text, value)" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
+          grep -q "OtpRelayDispatcher.schedule(context)" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
+          grep -q "saveUnlessProgressed(context, DETECTED" android/app/src/main/java/com/clipcascade/OtpTestStatusStore.kt
+          grep -q "saveUnlessAcknowledged(context, QUEUED" android/app/src/main/java/com/clipcascade/OtpTestStatusStore.kt
           if grep -Fq "db?.close()" android/app/src/main/java/com/clipcascade/AsyncStorageBridge.kt; then
             echo "AsyncStorage bridge still closes the shared database" >&2
             exit 1
