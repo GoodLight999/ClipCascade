@@ -106,5 +106,6 @@ fs.writeFileSync(schedulePath, schedule, 'utf8');
 // toolbars and bootstrap React in-process when a queued relay outlives the
 // Notifee/React service generation.
 require('./prepare_background_clipboard_reliability.js');
+require('./prepare_recovery_cooldown_bootstrap.js');
 
 console.log('Prepared lower-power idle polling with reliable background clipboard recovery.');
