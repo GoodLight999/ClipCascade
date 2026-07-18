@@ -23,7 +23,7 @@ if (blockStart < 0 || blockEnd < 0 || blockEnd <= blockStart) {
   throw new Error('Expected broad OTP label extractor block was not found');
 }
 
-const current = `    private val labelThenCodeRegex = Regex(
+const current = String.raw`    private val labelThenCodeRegex = Regex(
         pattern = "(?i)(?:verification|security|authentication|auth|login|log[\\s-]?in|sign[\\s-]?in|" +
             "signin|one[\\s-]?time|temporary|authorization|approval|recovery|device|" +
             "認証|確認|ログイン|サインイン|ワンタイム|本人確認|验证码|驗證碼|인증)" +
