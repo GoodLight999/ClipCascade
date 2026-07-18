@@ -5,12 +5,13 @@ Read these first, in this order:
 1. `docs/progress.md`
 2. `docs/REQUIREMENTS.md`
 3. `docs/CURRENT_STATUS.md`
-4. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
-5. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
-6. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
-7. `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`
-8. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
-9. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
+4. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
+5. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
+6. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
+7. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
+8. `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`
+9. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
+10. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
 
 ## Current branch and PR
 
@@ -20,36 +21,46 @@ Read these first, in this order:
 
 ## Latest work
 
-Windows tray ghost icon containment was added after the user reported many `ClipCascade` default/ghost tray icons with owner PID `0`. The patch is staged through `ClipCascade_Desktop/src/scripts/prepare_windows_tray_lifecycle.py` and covered by `tests.test_windows_tray_lifecycle`.
+Beeper-style email OTP extraction was added after the user reported that a visible Beeper login code did not relay.
 
 Key changes:
 
-- one active pystray icon owner per process;
-- replacing a panel disposes the previous icon first;
-- every shutdown path uses idempotent `_dispose_tray_icon(reason)`;
-- disposal order is `icon.visible = False` then `icon.stop()`;
-- lifecycle logging records create/run/visible-false/stop with panel id, icon id, pid, and reason;
-- watchdog full restarts are capped at three consecutive attempts and then back off for 15 minutes;
-- fatal websocket scheme errors suppress full restart amplification;
-- P2P logs runtime `websocket_url`, parsed scheme, `server_url`, close args, and latest transport error;
-- remembered `scheme http is invalid - goodbye` is classified as fatal for watchdog purposes.
+- `OtpCodeExtractor` now recognizes standalone code lines near authentication language;
+- logo-alt-text residue such as `Beeper logo 774464` is allowed when login-code context is nearby;
+- English authentication context includes `login code`, `sign-in code`, `signin code`, `enter the login code above`, `2FA`, and `MFA`;
+- keyword windows and surrounding-line scoring are widened for mail-client title/body/reordered notification extras;
+- promo/coupon/discount/postal/error/status/tracking/order-like false positives are rejected unless strong authentication context is present;
+- `NotificationCodeListenerService` also folds safe loose string extras into extraction text, without logging notification contents;
+- tests cover the Beeper sample layout, notification-order variation, logo-alt-text variation, and a coupon false-positive.
+
+Android build identity for this pass:
+
+- `3.2.1-extended.9-standalone`
+- versionCode `320113`
+
+## Previous latest work
+
+Windows tray ghost icon containment was added after the user reported many `ClipCascade` default/ghost tray icons with owner PID `0`. The patch is staged through `ClipCascade_Desktop/src/scripts/prepare_windows_tray_lifecycle.py` and covered by `tests.test_windows_tray_lifecycle`.
 
 ## Important caveat
 
-At the time this handoff was written, the final GitHub Actions runs were still queued. Do not claim the Windows tray patch green until final Android and Windows CI complete successfully on the latest HEAD.
+At the time this handoff was written, final GitHub Actions runs for the Beeper OTP pass still needed to be checked. Do not claim the OTP pass green until final Android and Windows CI complete successfully on the latest HEAD.
 
 ## Android status
 
-The user reports the latest Android build is very stable, but battery use may be high. The most recent Android package identity remains:
-
-- `3.2.1-extended.8-standalone`
-- versionCode `320112`
-
-Android idle-power changes reduced foreground-service polling, UI polling, and Accessibility event wakeups. P2P/WebRTC keepalive remains unchanged because stability is currently good.
+The user reports the latest Android relay build is very stable, but battery use may be high. Android idle-power changes reduced foreground-service polling, UI polling, and Accessibility event wakeups. P2P/WebRTC keepalive remains unchanged because stability is currently good.
 
 ## Validation reminders
 
 Disable Phone Link and every competing clipboard synchronizer before Android outbound tests.
+
+Notification-code validation must include:
+
+1. synthetic OTP notification;
+2. Beeper-style email notification from the selected mail app;
+3. a real SMS code without storing its contents;
+4. a real email code without storing its contents;
+5. if Beeper still fails, record whether the expanded Android notification visibly contains the code and whether a queue item was created.
 
 Windows tray validation must include:
 
