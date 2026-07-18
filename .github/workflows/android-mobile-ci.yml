@@ -95,10 +95,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected_code=$((320111 + 1))
-          grep -q "3.2.1-extended.8" App.js
+          expected_code=$((320112 + 1))
+          grep -q "3.2.1-extended.9" App.js
           grep -q "versionCode ${expected_code}" android/app/build.gradle
-          grep -q "versionName \"3.2.1-extended.8\"" android/app/build.gradle
+          grep -q "versionName \"3.2.1-extended.9\"" android/app/build.gradle
           grep -q "ユーザー名" App.js
           grep -q "Username" App.js
           grep -q "未接続" App.js
