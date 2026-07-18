@@ -73,6 +73,9 @@ jobs:
       - name: Reduce idle wakeups
         run: node scripts/prepare_idle_power.js
 
+      - name: Prepare broad OTP extraction
+        run: node scripts/prepare_broad_otp_extractor.js
+
       - name: Prepare relay transport acknowledgement
         run: node scripts/prepare_relay_transport_ack.js
 
