@@ -11,6 +11,13 @@ import java.util.UUID
 class NotificationCodeListenerService : NotificationListenerService() {
     companion object {
         private const val TAG = "NotificationCodeListener"
+        private const val MAX_NESTED_EXTRA_DEPTH = 2
+        private val AUTH_HINT = Regex(
+            "(?i)(otp|one[\\s-]?time|verification|security|authentication|auth|" +
+                "login|log[\\s-]?in|sign[\\s-]?in|signin|passcode|pin|" +
+                "認証|確認コード|ログイン|サインイン|ワンタイム|本人確認|" +
+                "验证码|驗證碼|인증)",
+        )
     }
 
     override fun onListenerConnected() {
@@ -80,6 +87,16 @@ class NotificationCodeListenerService : NotificationListenerService() {
                     path = "local_extractor",
                     result = "interrupted",
                 )
+            } else if (joinedText.isBlank() || AUTH_HINT.containsMatchIn(joinedText)) {
+                // Store only the failure class. Never persist notification text,
+                // account identifiers, package names, or the candidate value.
+                RelayHealthStore.record(
+                    applicationContext,
+                    category = "verification",
+                    trigger = "notification_received",
+                    path = "notification_extras",
+                    result = if (joinedText.isBlank()) "empty" else "no_match",
+                )
             }
             return
         }
@@ -118,8 +135,9 @@ class NotificationCodeListenerService : NotificationListenerService() {
     }
 
     private fun collectNotificationText(notification: Notification): String {
-        val extras = notification.extras ?: return ""
         val parts = linkedSetOf<String>()
+        notification.tickerText?.let { addPart(parts, it) }
+        val extras = notification.extras ?: return parts.joinToString("\n")
         listOf(
             Notification.EXTRA_TITLE,
             Notification.EXTRA_TITLE_BIG,
@@ -130,38 +148,50 @@ class NotificationCodeListenerService : NotificationListenerService() {
             Notification.EXTRA_BIG_TEXT,
             Notification.EXTRA_CONVERSATION_TITLE,
         ).forEach { key ->
-            extras.getCharSequence(key)
-                ?.toString()
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-                ?.let(parts::add)
+            extras.getCharSequence(key)?.let { addPart(parts, it) }
         }
         extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
-            ?.map { it.toString().trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.forEach(parts::add)
+            ?.forEach { addPart(parts, it) }
 
         addMessageTexts(extras, Notification.EXTRA_MESSAGES, parts)
         addMessageTexts(extras, Notification.EXTRA_HISTORIC_MESSAGES, parts)
-        addLooseTextExtras(extras, parts)
+        addLooseTextExtras(extras, parts, depth = 0)
+        notification.publicVersion?.tickerText?.let { addPart(parts, it) }
+        notification.publicVersion?.extras?.let {
+            addLooseTextExtras(it, parts, depth = 0)
+        }
         return parts.joinToString("\n")
     }
 
     private fun addLooseTextExtras(
         extras: Bundle,
         parts: MutableSet<String>,
+        depth: Int,
     ) {
+        if (depth > MAX_NESTED_EXTRA_DEPTH) return
         extras.keySet().sorted().forEach { key ->
-            val value = extras.get(key) ?: return@forEach
+            val value = try {
+                extras.get(key)
+            } catch (error: Exception) {
+                null
+            } ?: return@forEach
             when (value) {
                 is CharSequence -> addPart(parts, value)
-                is Array<*> -> value.forEach { item ->
-                    if (item is CharSequence) addPart(parts, item)
-                }
-                is ArrayList<*> -> value.forEach { item ->
-                    if (item is CharSequence) addPart(parts, item)
-                }
+                is Bundle -> addLooseTextExtras(value, parts, depth + 1)
+                is Array<*> -> value.forEach { item -> addLooseExtraValue(item, parts, depth) }
+                is ArrayList<*> -> value.forEach { item -> addLooseExtraValue(item, parts, depth) }
             }
+        }
+    }
+
+    private fun addLooseExtraValue(
+        value: Any?,
+        parts: MutableSet<String>,
+        depth: Int,
+    ) {
+        when (value) {
+            is CharSequence -> addPart(parts, value)
+            is Bundle -> addLooseTextExtras(value, parts, depth + 1)
         }
     }
 
@@ -180,11 +210,7 @@ class NotificationCodeListenerService : NotificationListenerService() {
     ) {
         extras.getParcelableArray(key)?.forEach { parcelable ->
             val message = parcelable as? Bundle ?: return@forEach
-            message.getCharSequence("text")
-                ?.toString()
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
-                ?.let(parts::add)
+            message.getCharSequence("text")?.let { addPart(parts, it) }
         }
     }
 }
