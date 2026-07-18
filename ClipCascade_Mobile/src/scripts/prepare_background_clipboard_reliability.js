@@ -22,6 +22,49 @@ const accessibilityPath = path.resolve(
 );
 let accessibility = fs.readFileSync(accessibilityPath, 'utf8');
 
+accessibility = replaceRequired(
+  accessibility,
+  '        private const val SELECTION_TTL_MS = 60_000L\n',
+  '        private const val SELECTION_TTL_MS = 60_000L\n' +
+    '        private const val CLIPBOARD_CHANGE_SELECTION_WINDOW_MS = 3_000L\n',
+  'clipboard-change selection window',
+);
+
+accessibility = replaceRequired(
+  accessibility,
+  '    private var lastSourcePackage = ""\n\n    override fun onServiceConnected() {\n',
+  '    private var lastSourcePackage = ""\n' +
+    '    private var clipboardManager: ClipboardManager? = null\n' +
+    '    private val clipboardChangedListener = ClipboardManager.OnPrimaryClipChangedListener {\n' +
+    '        if (!RelaySettingsStore.clipboardEnabled(this)) {\n' +
+    '            return@OnPrimaryClipChangedListener\n' +
+    '        }\n' +
+    '        val selected = lastSelectedText\n' +
+    '        val age = System.currentTimeMillis() - lastSelectionAt\n' +
+    '        if (selected.isNullOrBlank() || age !in 0..CLIPBOARD_CHANGE_SELECTION_WINDOW_MS) {\n' +
+    '            return@OnPrimaryClipChangedListener\n' +
+    '        }\n' +
+    '        // Android may hide clipboard contents from a background process, but\n' +
+    '        // the change callback still confirms that a Copy happened. The actual\n' +
+    '        // payload then comes from the recent Accessibility selection fallback.\n' +
+    '        scheduleCapture(null, "clipboard_change")\n' +
+    '    }\n\n' +
+    '    override fun onServiceConnected() {\n',
+  'clipboard-change listener field',
+);
+
+accessibility = replaceRequired(
+  accessibility,
+  '            notificationTimeout = 100\n        }\n        RelayHealthStore.record(\n',
+  '            notificationTimeout = 100\n' +
+    '        }\n' +
+    '        clipboardManager?.removePrimaryClipChangedListener(clipboardChangedListener)\n' +
+    '        clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager\n' +
+    '        clipboardManager?.addPrimaryClipChangedListener(clipboardChangedListener)\n' +
+    '        RelayHealthStore.record(\n',
+  'clipboard-change listener registration',
+);
+
 const narrowedSourceInspection = String.raw`        val inspectSource = event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED ||
             event.eventType == AccessibilityEvent.TYPE_VIEW_CONTEXT_CLICKED ||
             event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
@@ -50,6 +93,46 @@ accessibility = replaceRequired(
   reliableSourceInspection,
   'narrow Accessibility source inspection',
 );
+
+accessibility = replaceRequired(
+  accessibility,
+  '        RelayHealthStore.record(\n' +
+    '            applicationContext,\n' +
+    '            category = "clipboard",\n' +
+    '            trigger = trigger,\n' +
+    '            path = capturePath,\n' +
+    '            result = if (queued) "queued" else "deduplicated",\n' +
+    '        )\n' +
+    '        return true\n',
+  '        RelayHealthStore.record(\n' +
+    '            applicationContext,\n' +
+    '            category = "clipboard",\n' +
+    '            trigger = trigger,\n' +
+    '            path = capturePath,\n' +
+    '            result = if (queued) "queued" else "deduplicated",\n' +
+    '        )\n' +
+    '        // A completed Copy consumes this selection. This prevents an inbound\n' +
+    '        // clipboard update from reusing stale selected text and echoing it back.\n' +
+    '        lastSelectedText = null\n' +
+    '        lastSelectionAt = 0L\n' +
+    '        lastSourcePackage = ""\n' +
+    '        return true\n',
+  'selection consumption after capture',
+);
+
+accessibility = replaceRequired(
+  accessibility,
+  '    override fun onInterrupt() {\n',
+  '    override fun onDestroy() {\n' +
+    '        handler.removeCallbacksAndMessages(null)\n' +
+    '        clipboardManager?.removePrimaryClipChangedListener(clipboardChangedListener)\n' +
+    '        clipboardManager = null\n' +
+    '        super.onDestroy()\n' +
+    '    }\n\n' +
+    '    override fun onInterrupt() {\n',
+  'Accessibility listener cleanup',
+);
+
 fs.writeFileSync(accessibilityPath, accessibility, 'utf8');
 
 const recoveryPath = path.resolve(
@@ -179,4 +262,4 @@ recovery = replaceRequired(
 );
 
 fs.writeFileSync(recoveryPath, recovery, 'utf8');
-console.log('Prepared reliable Accessibility copy cues and in-process React recovery.');
+console.log('Prepared reliable Accessibility copy cues, clipboard-change fallback, and in-process React recovery.');
