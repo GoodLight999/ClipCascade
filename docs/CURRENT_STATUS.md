@@ -7,11 +7,45 @@ Canonical requirements: `docs/REQUIREMENTS.md`
 
 ## Current focus
 
-Current focus is broad notification-code extraction, Windows tray ghost-icon containment, and continued Android isolated validation. PR #1 remains Draft.
+Current focus is deterministic in-app OTP self-test dispatch, broad notification-code extraction, Windows tray ghost-icon containment, and continued Android isolated validation. PR #1 remains Draft.
+
+## Android OTP self-test dispatch
+
+Latest user report: the in-app synthetic verification-code test did not copy/relay the generated test code.
+
+Confirmed design bug:
+
+- the previous self-test generated a code and posted a local synthetic notification;
+- no relay item was queued at post time;
+- the code reached the transport only if Android delivered ClipCascade's own notification back through `NotificationListenerService`;
+- therefore the in-app test could show a code yet fail to copy/relay anything.
+
+Current repair:
+
+- `OtpTestNotificationManager.post()` still posts the local synthetic notification;
+- it immediately runs the same generated notification text through `OtpCodeExtractor.extract()`;
+- if the extracted value matches the generated code, it creates a `synthetic-test:` relay ID and enqueues the value in `OtpRelayStore`;
+- it calls `OtpRelayDispatcher.schedule(context)` so the normal OTP relay path is exercised;
+- if the notification listener later observes the same synthetic notification, `detected`/`deduplicated` cannot downgrade already queued or acknowledged status;
+- UI copy now states that the built-in test deterministically validates extractor + persistent queue + transport + acknowledgement, while real third-party notification coverage still requires separate NotificationListener validation.
+
+Current Android build identity:
+
+- app: `ClipCascade Extended`
+- package: `com.clipcascade.extended`
+- versionName: `3.2.1-extended.11-standalone`
+- versionCode: `320115`
+- deterministic test signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+
+Latest validated code head before documentation commits:
+
+- head: `885bac31c8d10d4a1f172624e6355248a867c411`
+- Android CI `29627885148`: success
+- Windows CI `29627885149`: success
 
 ## Android notification-code extraction
 
-Latest user report: a Beeper login email did not relay its visible six-digit login code, and the user explicitly rejected a Beeper-only fix.
+A previous user report showed that a Beeper login email did not relay its visible six-digit login code, and the user explicitly rejected a Beeper-only fix.
 
 Current patch scope:
 
@@ -23,20 +57,6 @@ Current patch scope:
 - English, Japanese, Chinese, Korean, Spanish, French, and German samples are covered by unit tests;
 - negative contexts reject coupon, promo, discount, postal, error, status, tracking, shipment, delivery, order, booking, ticket, invoice, amount, phone, URL/email-local-part, date/year, and SMS Retriever hash-alone false positives;
 - `NotificationCodeListenerService` folds safe string-like extras into extraction input without logging contents.
-
-Current Android build identity:
-
-- app: `ClipCascade Extended`
-- package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.10-standalone`
-- versionCode: `320114`
-- deterministic test signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-
-Latest validated code head before documentation commits:
-
-- head: `26c719655491afb838e082c882bd2253ae2746ac`
-- Android CI `29627309385`: success
-- Windows CI `29627309390`: success
 
 Do not claim real-device Beeper/Gmail extraction until the target notification app exposes the code text through notification extras and the device test passes.
 
@@ -132,15 +152,16 @@ With Phone Link and all competing synchronizers disabled:
 5. copy one unique value once and confirm exactly one peer clipboard application;
 6. repeat visible, backgrounded, reopened, removed from recents, locked, and screen-off;
 7. confirm queue deletion only after the defined acknowledgement;
-8. run synthetic OTP, then real SMS and email without storing their contents;
-9. test Beeper/Gmail-style real email notifications and record whether notification extras contain the code;
-10. compare Android battery usage over matched idle intervals;
-11. on Windows, force at least 10 reconnect/restart cycles and confirm tray icon count stays one;
-12. Quit from tray and confirm no `ClipCascade` ghost remains without restarting Explorer;
-13. if `scheme http is invalid - goodbye` reappears, preserve adjacent P2P diagnostic lines.
+8. run the built-in synthetic OTP test and confirm it queues/copies via ACK;
+9. run real SMS and email without storing their contents;
+10. test Beeper/Gmail-style real email notifications and record whether notification extras contain the code;
+11. compare Android battery usage over matched idle intervals;
+12. on Windows, force at least 10 reconnect/restart cycles and confirm tray icon count stays one;
+13. Quit from tray and confirm no `ClipCascade` ghost remains without restarting Explorer;
+14. if `scheme http is invalid - goodbye` reappears, preserve adjacent P2P diagnostic lines.
 
 ## Do not claim
 
 Do not describe Android outbound synchronization as beta-ready, exactly-once, screen-off capable, real-SMS validated, real-email validated, notification-code reliable, or battery-efficient until the isolated target-device tests pass.
 
-Do not describe the Windows tray ghost fix or broad OTP extraction pass as real-device proven until target-device tests pass.
+Do not describe third-party SMS/email notification extraction as real-device proven until target-device tests pass. The built-in synthetic OTP test is now deterministic, but it is not proof that every external notification app exposes code text to NotificationListenerService.
