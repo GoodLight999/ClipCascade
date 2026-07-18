@@ -40,11 +40,13 @@ Android build target:
 - `3.2.1-extended.12-standalone`
 - versionCode `320116`
 
-Code head before documentation commits:
+Validated code head before documentation commits:
 
 - `7dda7214ed2f9cf35926dd5faedbd583b6d21341`
 - Android CI `29629825353`: success
 - Windows CI `29629825352`: success
+
+Latest documentation head before this update: `6cc484e32007abf3641e18919fbe277c1f3702e4`. Check Android and Windows CI again after this final handoff update before distributing an artifact.
 
 Implemented:
 
