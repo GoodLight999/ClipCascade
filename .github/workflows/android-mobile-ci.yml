@@ -77,12 +77,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.12" App.js
-          grep -q "versionCode 320116" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.12"' android/app/build.gradle
+          grep -q "3.2.1-extended.13" App.js
+          grep -q "versionCode 320117" android/app/build.gradle
+          grep -q 'versionName "3.2.1-extended.13"' android/app/build.gradle
           grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
           grep -q "notificationTimeout = 100" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "Some floating toolbars and custom app copy controls" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "CopyCueClassifier.isDirectCopyInteraction" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "CopyCueClassifier.isPassiveCopyCompletion" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "selectionToolbarLabelIsNotPassiveCopyCompletion" android/app/src/test/java/com/clipcascade/CopyCueClassifierTest.kt
           grep -q "requestReactContextBootstrap" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q "createReactContextInBackground" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q 'path = "react_bootstrap"' android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
