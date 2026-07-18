@@ -13,8 +13,36 @@ Resume work in this order:
 9. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
 10. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
 11. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
+12. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
 
-Current phase: preserve the now-stable Android relay while proving isolated outbound behavior, exactly-once delivery, runtime-control consistency, acceptable battery use, and Windows tray lifecycle stability. PR #1 remains Draft.
+Current phase: preserve the now-stable Android relay while proving isolated outbound behavior, exactly-once delivery, runtime-control consistency, acceptable battery use, Windows tray lifecycle stability, and notification-code extraction quality. PR #1 remains Draft.
+
+## 2026-07-09 — Beeper-style email OTP extraction repair
+
+User report: a Beeper login email did not relay the visible six-digit login code, while the extractor still produced too many false positives.
+
+Implemented patch:
+
+- added line-structured extraction for standalone code lines near authentication language;
+- added support for logo-alt-text layouts such as `Beeper logo 774464` when login-code context is nearby;
+- widened English authentication context for `login code`, `sign-in code`, `enter the login code above`, `2FA`, and `MFA`;
+- expanded keyword windows and surrounding-line scoring so email title/body/reordered notification extras are less fragile;
+- added negative contexts for coupon, promo, discount, postal, error, status, tracking, and order-like values unless strong authentication context is present;
+- notification listener now also folds loose `CharSequence` extras into the extraction text, without logging contents.
+
+Tests added:
+
+- Beeper standalone code line;
+- title/preview-before-body variant;
+- logo-alt-text same-line variant;
+- coupon/discount false-positive rejection near login-button text.
+
+Build identity:
+
+- version: `3.2.1-extended.9-standalone`
+- versionCode: `320113`
+
+Final Android and Windows CI must still be checked on the latest HEAD before calling this pass green.
 
 ## 2026-07-09 — Windows tray ghost icon repair
 
