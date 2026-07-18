@@ -57,3 +57,7 @@ serviceSource = serviceSource.replace('              if (!accepted && peerAckReq
               if (!accepted && peerAckRequested) {
 `);
 fs.writeFileSync(servicePath, serviceSource, 'utf8');
+
+// This must run after every transport/listener transform because it guards the
+// final Clipboard.setString call sites produced by those transforms.
+require('./prepare_internal_clipboard_guard.js');
