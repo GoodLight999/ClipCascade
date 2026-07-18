@@ -38,6 +38,30 @@ class OtpCodeExtractorTest {
     }
 
     @Test
+    fun extractsJapanesePasswordResetCode() {
+        assertEquals(
+            "135790",
+            OtpCodeExtractor.extract("パスワード再設定コード：135790"),
+        )
+    }
+
+    @Test
+    fun extractsChineseVerificationCode() {
+        assertEquals(
+            "246810",
+            OtpCodeExtractor.extract("您的验证码是 246810，5分钟内有效。"),
+        )
+    }
+
+    @Test
+    fun extractsKoreanVerificationCode() {
+        assertEquals(
+            "864209",
+            OtpCodeExtractor.extract("인증번호는 864209 입니다. 타인에게 공유하지 마세요."),
+        )
+    }
+
+    @Test
     fun extractsEnglishAlphanumericCode() {
         assertEquals(
             "A1B2C3",
@@ -58,6 +82,22 @@ class OtpCodeExtractorTest {
         assertEquals(
             "462881",
             OtpCodeExtractor.extract("Use 462881 to verify your email address."),
+        )
+    }
+
+    @Test
+    fun extractsEnterCodeToSignInPattern() {
+        assertEquals(
+            "552244",
+            OtpCodeExtractor.extract("Enter 552244 to sign in to your account."),
+        )
+    }
+
+    @Test
+    fun extractsUseCodeToAuthenticatePattern() {
+        assertEquals(
+            "A8K4P2",
+            OtpCodeExtractor.extract("Use code A8K4-P2 to authenticate this login."),
         )
     }
 
@@ -116,6 +156,98 @@ class OtpCodeExtractorTest {
                 Your login code for Beeper
                 """.trimIndent(),
             ),
+        )
+    }
+
+    @Test
+    fun extractsWebOtpDomainBoundSms() {
+        assertEquals(
+            "123456",
+            OtpCodeExtractor.extract(
+                """
+                Your verification code is 123456.
+
+                @www.example.com #123456
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun extractsDomainBoundLastLineEvenWhenPreviewDropsBody() {
+        assertEquals(
+            "789012",
+            OtpCodeExtractor.extract("@accounts.example.com #789012"),
+        )
+    }
+
+    @Test
+    fun extractsSmsRetrieverMessageAndIgnoresAppHash() {
+        assertEquals(
+            "123ABC78",
+            OtpCodeExtractor.extract(
+                """
+                Your ExampleApp code is: 123ABC78
+
+                FA+9qCX9VSu
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun extractsAnglePrefixedSmsRetrieverText() {
+        assertEquals(
+            "493827",
+            OtpCodeExtractor.extract("<#> Your ExampleApp verification code is 493827\nFA+9qCX9VSu"),
+        )
+    }
+
+    @Test
+    fun extractsTemporarySecurityCode() {
+        assertEquals(
+            "314159",
+            OtpCodeExtractor.extract("Your temporary security code: 314159. Valid for 5 minutes."),
+        )
+    }
+
+    @Test
+    fun extractsPasswordResetCode() {
+        assertEquals(
+            "778899",
+            OtpCodeExtractor.extract("Your password reset code is 778899. Don't share this code."),
+        )
+    }
+
+    @Test
+    fun extractsDeviceLoginCode() {
+        assertEquals(
+            "A1B2C3D4",
+            OtpCodeExtractor.extract("Device code: A1B2-C3D4. Enter this code to continue."),
+        )
+    }
+
+    @Test
+    fun extractsSpanishVerificationCode() {
+        assertEquals(
+            "431256",
+            OtpCodeExtractor.extract("Su código de verificación es 431256."),
+        )
+    }
+
+    @Test
+    fun extractsFrenchVerificationCode() {
+        assertEquals(
+            "653210",
+            OtpCodeExtractor.extract("Votre code de vérification est 653210."),
+        )
+    }
+
+    @Test
+    fun extractsGermanSecurityCode() {
+        assertEquals(
+            "908877",
+            OtpCodeExtractor.extract("Ihr Sicherheitscode lautet 908877."),
         )
     }
 
@@ -205,6 +337,11 @@ class OtpCodeExtractorTest {
     }
 
     @Test
+    fun rejectsStatusCodeNearAccountText() {
+        assertNull(OtpCodeExtractor.extract("Account status code A1B2C3 means the request is pending."))
+    }
+
+    @Test
     fun rejectsDateNearVerificationWords() {
         assertNull(
             OtpCodeExtractor.extract(
@@ -246,12 +383,24 @@ class OtpCodeExtractorTest {
     }
 
     @Test
+    fun rejectsOrderNumberNearCodeWord() {
+        assertNull(
+            OtpCodeExtractor.extract("Your order code is AB12CD34EF for delivery tracking."),
+        )
+    }
+
+    @Test
     fun rejectsEmailAddressLocalPart() {
         assertNull(
             OtpCodeExtractor.extract(
                 "Verification notices are sent to user1234@example.com",
             ),
         )
+    }
+
+    @Test
+    fun rejectsSmsRetrieverHashAlone() {
+        assertNull(OtpCodeExtractor.extract("FA+9qCX9VSu"))
     }
 
     @Test
