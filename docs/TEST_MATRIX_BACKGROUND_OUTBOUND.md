@@ -1,83 +1,92 @@
 # Android Background Outbound Validation Matrix
 
-This matrix supersedes any older checked Android outbound or real-service success item.
+This matrix supersedes every older checked Android outbound or real-service success item.
 
 Before every run:
 
 - disable Microsoft Phone Link clipboard synchronization;
 - stop every other clipboard synchronization utility;
+- do not use ADB, root, or Shizuku;
 - record commit SHA, Android versionCode, peer build, mode, locale, and screen state;
-- use synthetic text except for the separately controlled real-service test.
+- use a unique synthetic text value for every ordinary-copy row;
+- never store real authentication values.
 
-## Build
+## Current build
 
-- [ ] Android CI green on current HEAD
-- [ ] Windows CI green on current HEAD
-- [ ] Matching artifact IDs and hashes recorded
-- [ ] Android version `3.2.1-extended.9-standalone`
-- [ ] Android versionCode `320113`
-- [ ] Stable signer unchanged
-- [ ] In-place update succeeds
-- [ ] Settings and permissions retained
+- [x] Android code CI green at code head `7dda7214ed2f9cf35926dd5faedbd583b6d21341` — run `29629825353`
+- [x] Windows CI green at the same code head — run `29629825352`
+- [ ] final documentation HEAD CI green
+- [ ] matching artifact ID and hashes recorded
+- [ ] Android version `3.2.1-extended.12-standalone`
+- [ ] Android versionCode `320116`
+- [ ] stable signer unchanged
+- [ ] in-place update succeeds
+- [ ] settings and permissions retained
 
 ## Initialization stability
 
-- [ ] Five consecutive cold launches complete without a closed connection-pool error
-- [ ] Close and reopen the Android UI while synchronization is active
-- [ ] Reopen does not create an additional outbound listener
-- [ ] Foreground service remains connected after UI reopen
+- [ ] five consecutive cold launches complete without a closed connection-pool error
+- [ ] close and reopen the Android UI while synchronization is active
+- [ ] reopen does not create an additional outbound listener
+- [ ] foreground service remains connected after UI reopen
 - [ ] AsyncStorage settings remain readable after queue and recovery checks
+
+## Ordinary-copy matrix
+
+For each state, test both immediate Copy after selecting and Copy after waiting more than three seconds.
+
+| State | Immediate Copy | Copy after >3s | Pending queue after miss | Latest copy diagnostic | Latest recovery diagnostic | Windows applied once | ACK removed queue | Status |
+|---|---:|---:|---:|---|---|---:|---:|---|
+| ClipCascade UI visible | ☐ | ☐ | — | — | — | ☐ | ☐ | untested |
+| UI backgrounded 30s | ☐ | ☐ | — | — | — | ☐ | ☐ | untested |
+| UI reopened then backgrounded | ☐ | ☐ | — | — | — | ☐ | ☐ | untested |
+| Removed from recents | ☐ | ☐ | — | — | — | ☐ | ☐ | untested |
+| Device locked | ☐ | ☐ | — | — | — | ☐ | ☐ | untested |
+| Screen off 1 minute | ☐ | ☐ | — | — | — | ☐ | ☐ | untested |
+| Screen off 15 minutes | ☐ | ☐ | — | — | — | ☐ | ☐ | untested |
+| Screen off 30+ minutes | ☐ | ☐ | — | — | — | ☐ | ☐ | untested |
+| Peer disconnected then restored | ☐ | ☐ | — | — | — | ☐ | ☐ | untested |
+| React/service generation reclaimed | ☐ | ☐ | — | — | — | ☐ | ☐ | untested |
+
+## Capture-stage interpretation
+
+- queue `0` and no recent ordinary-copy diagnostic: Accessibility/clipboard-change capture was missed;
+- `no_text_available`: a cue occurred but no selected range or readable clipboard value was recovered;
+- `clipboard_denied_no_fallback`: Android denied direct background clipboard access and no selection fallback existed;
+- `selected_text_fallback`: remembered Accessibility selection supplied the payload;
+- trigger `clipboard_change`: the selected-text + OS clipboard-change fallback fired;
+- queue nonzero: capture worked and failure is downstream.
+
+## Delivery-stage interpretation
+
+- `transport_enabled / sync_disabled`: synchronization intent is off;
+- `transport_status / retrying`: transport is not connected;
+- `p2p_peer / retrying`: no open peer channel;
+- `react_context / rebind_requested`: native queue survived but React generation is absent;
+- `react_event / emitted`: native queue item reached the JavaScript listener;
+- `peer_ack / retrying`: transport accepted earlier but ACK timed out;
+- `peer_ack / acknowledged`: validated peer application and native deletion path completed;
+- `dispatcher / interrupted`: unexpected dispatcher exception.
 
 ## Exactly-once relay
 
 For each case use one unique synthetic string and perform one Copy action.
 
-- [ ] One native queue item is created
-- [ ] One JavaScript listener obtains the relay claim
-- [ ] Other listeners are rejected for the same relay ID
-- [ ] Exactly one peer clipboard application occurs
-- [ ] Exactly one peer acknowledgement completes the item
-- [ ] Queue returns to zero after acknowledgement
-- [ ] Failed transport releases the claim and later retry succeeds
-- [ ] Same text copied deliberately after more than five seconds is allowed as a new action
+- [ ] one native queue item is created
+- [ ] one JavaScript listener obtains the relay claim
+- [ ] other listeners are rejected for the same relay ID
+- [ ] ClipCascade's internal clipboard writes do not create a second outbound item
+- [ ] exactly one peer clipboard application occurs
+- [ ] exactly one peer acknowledgement completes the item
+- [ ] queue returns to zero only after acknowledgement
+- [ ] failed transport releases the claim and later retry succeeds
+- [ ] same text deliberately copied after more than five seconds is allowed as a new action
 
 Failure classification:
 
-- two native queue items: Accessibility/capture duplicate;
+- two native queue items: capture duplicate or internal-write echo;
 - one queue item and two peer applications: listener/transport duplicate;
 - one peer application and two UI/history observations: receiver UI or another clipboard observer.
-
-## Copy capture stages
-
-- [ ] Copy cue observed
-- [ ] Selected substring recovered
-- [ ] Selection alone does not send
-- [ ] Native queue count increases
-- [ ] Transport accepts the item
-- [ ] Exact peer clipboard update occurs
-- [ ] Defined acknowledgement occurs
-- [ ] Native queue item is deleted after acknowledgement
-
-Failure classification:
-
-- no diagnostic and queue zero: Accessibility missed the cue or selection;
-- `no_text_available`: cue observed but no selected range was recovered;
-- `clipboard_denied_no_fallback`: background clipboard access unavailable and no selection fallback;
-- `selected_text_fallback`: remembered selection used;
-- `active_window_selection`: interactive-window scan used;
-- queue remains nonzero: capture worked but transport or acknowledgement is blocked.
-
-## Screen states
-
-For each representative application:
-
-- [ ] app visible
-- [ ] app backgrounded for 30 seconds
-- [ ] app removed from recents
-- [ ] device locked
-- [ ] screen off for 1 minute
-- [ ] screen off for 15 minutes
-- [ ] screen off for 30+ minutes
 
 ## Representative applications
 
@@ -93,38 +102,45 @@ For each representative application:
 
 ## Recovery
 
-- [ ] Offline transport requests bounded recovery
-- [ ] Missing React context requests bounded recovery
-- [ ] First request after boot is not suppressed
-- [ ] Rejected starts are rate-limited
-- [ ] Zero P2P peers keeps the item queued without restart churn
-- [ ] Network return drains queue
-- [ ] Peer return drains queue
-- [ ] Process replacement drains queue
-- [ ] Reboot and delayed fallback drain queue
+- [ ] missing React context triggers in-process bootstrap without opening UI
+- [ ] React bootstrap remains available during Android Service-start cooldown
+- [ ] rejected Service starts remain rate-limited
+- [ ] zero P2P peers keeps the item queued without restart churn
+- [ ] network return drains queue
+- [ ] peer return drains queue
+- [ ] process/service generation replacement drains queue
+- [ ] reboot and delayed fallback drain queue
 
 ## Notification-code path
 
-- [ ] Synthetic notification succeeds while visible
-- [ ] Synthetic notification succeeds while backgrounded
-- [ ] Synthetic notification succeeds while locked
-- [ ] Synthetic notification succeeds after 1 minute screen-off
-- [ ] Synthetic notification succeeds after 15 minutes screen-off
-- [ ] Synthetic notification succeeds after 30+ minutes screen-off
-- [ ] Beeper-style email notification succeeds: standalone code line followed or preceded by `Your login code` / `login code above`
-- [ ] Email layout with logo alt text and code on the same line succeeds
-- [ ] Real SMS tested without storing its contents
-- [ ] Real email tested without storing its contents
-- [ ] Android redaction recorded separately from extraction and transport
+| Source | Expected classification | Status |
+|---|---|---|
+| Built-in synthetic OTP | extractor -> queue -> transport -> ACK | untested on target |
+| Beeper email | `local_extractor / queued`, `notification_extras / empty`, or `notification_extras / no_match` | untested |
+| Perceptron Network `8F92FE` email | same three-way classification | unit test green; real notification untested |
+| Real SMS numeric OTP | same three-way classification | untested |
+| WebOTP/domain-bound sample | code extracted; domain line not relayed | unit-tested only |
+| SMS Retriever sample | code extracted; 11-char app hash rejected | unit-tested only |
+
+- [ ] built-in synthetic OTP succeeds visible
+- [ ] built-in synthetic OTP succeeds backgrounded
+- [ ] built-in synthetic OTP succeeds locked
+- [ ] built-in synthetic OTP succeeds after screen-off
+- [ ] Beeper-style real email classified without storing content
+- [ ] Perceptron-style real email classified without storing content
+- [ ] real SMS tested without storing content
+- [ ] selected mail/SMS apps are confirmed in the app picker
 
 ## Windows
 
-- [ ] Normal ICE negotiation under ten seconds produces no unhealthy warning
-- [ ] Persistent failure produces a warning after the grace period
-- [ ] Tray Quit removes the process from Task Manager
-- [ ] Immediate relaunch succeeds
-- [ ] Normal startup shows exactly one ClipCascade tray icon
-- [ ] Ten reconnect/restart cycles do not create tray ghosts
-- [ ] Quit leaves zero ClipCascade ghost tray icons without restarting Explorer
+- [ ] normal ICE negotiation under ten seconds produces no unhealthy warning
+- [ ] persistent failure produces warning after grace period
+- [ ] normal startup shows exactly one ClipCascade tray icon
+- [ ] ten reconnect/restart cycles create no tray ghosts
+- [ ] tray Quit removes the process
+- [ ] Quit leaves zero ghost icons without restarting Explorer
+- [ ] immediate relaunch succeeds
 
-Do not restore an Android outbound, exactly-once, notification-code, or initialization-stable claim until the isolated real-device checks pass.
+## Do not claim
+
+Do not mark Android background, removed-from-recents, locked, screen-off, exactly-once, real-SMS, real-email, battery-efficiency, or Windows-tray rows as passed without isolated target-device evidence.
