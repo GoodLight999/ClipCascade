@@ -72,6 +72,54 @@ class OtpCodeExtractorTest {
     }
 
     @Test
+    fun extractsBeeperStandaloneEmailCode() {
+        assertEquals(
+            "774464",
+            OtpCodeExtractor.extract(
+                """
+                Beeper logo
+                774464
+
+                Your login code for Beeper
+
+                Login to Beeper
+                Either click the login button, or manually enter the login code above to verify your account.
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun extractsCodeWhenEmailNotificationTitlePrecedesBody() {
+        assertEquals(
+            "774464",
+            OtpCodeExtractor.extract(
+                """
+                Your login code for Beeper
+                Login to Beeper
+                Either click the login button, or manually enter the login code above to verify your account.
+                If you didn't request this email, you can ignore it.
+                Beeper logo
+                774464
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
+    fun extractsStandaloneCodeLineWithLogoAltText() {
+        assertEquals(
+            "774464",
+            OtpCodeExtractor.extract(
+                """
+                Beeper logo 774464
+                Your login code for Beeper
+                """.trimIndent(),
+            ),
+        )
+    }
+
+    @Test
     fun extractsPrefixedCode() {
         assertEquals(
             "G123456",
@@ -140,6 +188,15 @@ class OtpCodeExtractorTest {
     @Test
     fun rejectsGenericPromotionCode() {
         assertNull(OtpCodeExtractor.extract("Promotion code is SAVE20"))
+    }
+
+    @Test
+    fun rejectsDiscountCodeNearLoginButton() {
+        assertNull(
+            OtpCodeExtractor.extract(
+                "Login to the shop and use this coupon code SAVE20 for a discount.",
+            ),
+        )
     }
 
     @Test
