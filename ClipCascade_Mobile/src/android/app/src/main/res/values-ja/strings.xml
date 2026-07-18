@@ -52,7 +52,7 @@
     <string name="otp_apps_picker_title">認証コード通知の対象アプリ</string>
 
     <string name="otp_test_section">認証コードのエンドツーエンドテスト</string>
-    <string name="otp_test_body">ランダムな架空コードを含む本物のローカル通知を送ります。通知リスナー、抽出器、永続キュー、通信、Windows側のACKまで通常と同じ経路で確認します。</string>
+    <string name="otp_test_body">ランダムな架空コードを含むローカル通知を表示し、その同じ値を通常の認証コードキューへ送ります。抽出器、永続キュー、通信、ACKを確定的に確認します。実アプリの通知から読めるかどうかは別途通知アクセステストが必要です。</string>
     <string name="otp_test_send">認証コードのテスト通知を送る</string>
     <string name="otp_test_channel_name">認証コードの動作テスト</string>
     <string name="otp_test_channel_description">ClipCascadeの認証コード抽出と配送を確認する架空のテスト通知です。</string>
