@@ -7,7 +7,38 @@ Canonical requirements: `docs/REQUIREMENTS.md`
 
 ## Current focus
 
-Current focus is Windows tray ghost-icon containment plus continued Android isolated validation. PR #1 remains Draft.
+Current focus is Beeper-style email OTP extraction, Windows tray ghost-icon containment, and continued Android isolated validation. PR #1 remains Draft.
+
+## Android notification-code extraction
+
+Latest user report: a Beeper login email did not relay its visible six-digit login code. The sample layout was a standalone six-digit code line near `Your login code for Beeper` and `manually enter the login code above` text.
+
+Patch status:
+
+- `OtpCodeExtractor` now has line-structured extraction for standalone code lines near authentication language;
+- logo-alt-text residue such as `Beeper logo 774464` is allowed when login-code context is nearby;
+- English authentication context now includes `login code`, `sign-in code`, `signin code`, `enter the login code above`, `2FA`, and `MFA`;
+- keyword windows and surrounding-line scoring were widened for email title/body/reordered notification extras;
+- negative contexts were added for promo/coupon/discount/postal/error/status/tracking/order-like values unless strong authentication context is present;
+- `NotificationCodeListenerService` keeps explicit `Notification.EXTRA_*` collection and also folds all safe string-like extras into the extraction text;
+- notification contents are not logged.
+
+New tests cover:
+
+- Beeper-style standalone code line;
+- notification-order variant where title/preview precede expanded body;
+- logo-alt-text same-line variant;
+- coupon/discount false-positive rejection near login-button text.
+
+Current Android build identity:
+
+- app: `ClipCascade Extended`
+- package: `com.clipcascade.extended`
+- versionName: `3.2.1-extended.9-standalone`
+- versionCode: `320113`
+- deterministic test signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+
+Do not claim this extraction pass green until final Android and Windows CI complete on the latest HEAD.
 
 ## Windows tray ghost-icon repair
 
@@ -40,9 +71,7 @@ New tests:
 
 - `tests.test_windows_tray_lifecycle` verifies visible-false-before-stop, idempotent stop, replacement-panel disposal, P2P scheme diagnostics, and remembered fatal scheme errors.
 
-Code commit for this patch: `c34057a9cfd10599db68e32f6a98f576d9bc8ed2`.
-
-Final documentation HEAD is newer than the code commit. At this status update, GitHub Actions was still queued; do not call the Windows patch green until final Android and Windows CI complete successfully.
+Code commit for the tray patch: `c34057a9cfd10599db68e32f6a98f576d9bc8ed2`.
 
 ## Android status
 
@@ -54,14 +83,6 @@ Valid user evidence:
 - peer -> Android reception works while ClipCascade is backgrounded and apparently while the screen is off;
 - Android -> peer background sending was not previously working when isolated from Phone Link;
 - recent repaired Android build is reported by the user as very stable, but formal isolated matrix proof remains pending.
-
-Current Android build identity:
-
-- app: `ClipCascade Extended`
-- package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.8-standalone`
-- versionCode: `320112`
-- deterministic test signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 
 ## Android idle-power repair
 
@@ -169,13 +190,14 @@ With Phone Link and all competing synchronizers disabled:
 6. repeat visible, backgrounded, reopened, removed from recents, locked, and screen-off;
 7. confirm queue deletion only after the defined acknowledgement;
 8. run synthetic OTP, then real SMS and email without storing their contents;
-9. compare Android battery usage over matched idle intervals;
-10. on Windows, force at least 10 reconnect/restart cycles and confirm tray icon count remains one;
-11. Quit from tray and confirm no `ClipCascade` ghost remains without restarting Explorer;
-12. if `scheme http is invalid - goodbye` reappears, preserve adjacent P2P diagnostic lines.
+9. test Beeper-style real email notification and record whether the expanded notification visibly contains the code;
+10. compare Android battery usage over matched idle intervals;
+11. on Windows, force at least 10 reconnect/restart cycles and confirm tray icon count remains one;
+12. Quit from tray and confirm no `ClipCascade` ghost remains without restarting Explorer;
+13. if `scheme http is invalid - goodbye` reappears, preserve adjacent P2P diagnostic lines.
 
 ## Do not claim
 
-Do not describe Android outbound synchronization as beta-ready, exactly-once, screen-off capable, real-SMS validated, or battery-efficient until the isolated target-device tests pass.
+Do not describe Android outbound synchronization as beta-ready, exactly-once, screen-off capable, real-SMS validated, real-email validated, notification-code reliable, or battery-efficient until the isolated target-device tests pass.
 
-Do not describe the Windows tray ghost fix as green until final Android and Windows CI complete after the latest documentation HEAD.
+Do not describe the Windows tray ghost fix or Beeper OTP extraction pass as green until final Android and Windows CI complete after the latest documentation HEAD.
