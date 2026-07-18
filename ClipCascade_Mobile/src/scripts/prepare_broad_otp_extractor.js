@@ -50,4 +50,52 @@ if (!source.includes(structuredBefore)) {
 source = source.replace(structuredBefore, structuredAfter);
 
 fs.writeFileSync(extractorPath, source, 'utf8');
-console.log('Prepared broad OTP extraction without swallowing relation words or app-hash lines.');
+
+const testPath = path.resolve(
+  __dirname,
+  '..',
+  'android',
+  'app',
+  'src',
+  'test',
+  'java',
+  'com',
+  'clipcascade',
+  'OtpCodeExtractorTest.kt',
+);
+let tests = fs.readFileSync(testPath, 'utf8');
+const finalBrace = tests.lastIndexOf('\n}');
+if (finalBrace < 0) {
+  throw new Error('Expected OTP extractor test class closing brace was not found');
+}
+const perceptronTest = `
+
+    @Test
+    fun extractsPerceptronNetworkStandaloneAlphanumericCode() {
+        assertEquals(
+            "8F92FE",
+            OtpCodeExtractor.extract(
+                """
+                Perceptron Network
+                Hello!
+
+                Perceptron Network received a request to login with nakanagundam@gmail.com.
+                Use this code to login:
+
+                8F92FE
+                This code will expire in 5 minutes.
+
+                Cheers,
+
+                Perceptron Network Team
+                """.trimIndent(),
+            ),
+        )
+    }
+`;
+if (!tests.includes('extractsPerceptronNetworkStandaloneAlphanumericCode')) {
+  tests = tests.slice(0, finalBrace) + perceptronTest + tests.slice(finalBrace);
+}
+fs.writeFileSync(testPath, tests, 'utf8');
+
+console.log('Prepared broad OTP extraction and Perceptron Network email regression coverage.');
