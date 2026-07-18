@@ -23,6 +23,8 @@ Validated code head before documentation commits:
 - Android standalone CI `29629825353`: success
 - Desktop Windows CI `29629825352`: success
 
+Documentation HEAD after handoff/matrix updates: `a2e8f66a359c2dd589a58e37d12c43f34516b7d6`. Final CI for that documentation HEAD must be checked before distribution.
+
 ## Intermittent ordinary-copy repair
 
 `.11` did not modify the ordinary-copy implementation, so do not claim the OTP self-test change directly caused the regression.
