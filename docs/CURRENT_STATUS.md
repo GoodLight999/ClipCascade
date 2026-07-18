@@ -2,114 +2,121 @@
 
 Branch: `stability-mobile-otp`  
 Draft PR: `#1`  
-Repository: `GoodLight999/ClipCascade` (public)  
+Repository: `GoodLight999/ClipCascade`  
 Canonical requirements: `docs/REQUIREMENTS.md`
 
 ## Current focus
 
-Current focus is deterministic in-app OTP self-test dispatch, broad notification-code extraction, Windows tray ghost-icon containment, and continued Android isolated validation. PR #1 remains Draft.
+Current focus is an intermittent Android ordinary-copy regression: copying often works only while the UI is open, but sometimes works briefly in the background. The exact first bad build is unknown. PR #1 remains Draft.
 
-## Android OTP self-test dispatch
-
-Latest user report: the in-app synthetic verification-code test did not copy/relay the generated test code.
-
-Confirmed design bug:
-
-- the previous self-test generated a code and posted a local synthetic notification;
-- no relay item was queued at post time;
-- the code reached the transport only if Android delivered ClipCascade's own notification back through `NotificationListenerService`;
-- therefore the in-app test could show a code yet fail to copy/relay anything.
-
-Current repair:
-
-- `OtpTestNotificationManager.post()` still posts the local synthetic notification;
-- it immediately runs the same generated notification text through `OtpCodeExtractor.extract()`;
-- if the extracted value matches the generated code, it creates a `synthetic-test:` relay ID and enqueues the value in `OtpRelayStore`;
-- it calls `OtpRelayDispatcher.schedule(context)` so the normal OTP relay path is exercised;
-- if the notification listener later observes the same synthetic notification, `detected`/`deduplicated` cannot downgrade already queued or acknowledged status;
-- UI copy now states that the built-in test deterministically validates extractor + persistent queue + transport + acknowledgement, while real third-party notification coverage still requires separate NotificationListener validation.
-
-Current Android build identity:
+## Current Android build
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.11-standalone`
-- versionCode: `320115`
-- deterministic test signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- versionName: `3.2.1-extended.12-standalone`
+- versionCode: `320116`
+- deterministic signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 
-Latest validated code head before documentation commits:
+Validated code head before documentation commits:
 
-- head: `885bac31c8d10d4a1f172624e6355248a867c411`
-- Android CI `29627885148`: success
-- Windows CI `29627885149`: success
+- `7dda7214ed2f9cf35926dd5faedbd583b6d21341`
+- Android standalone CI `29629825353`: success
+- Desktop Windows CI `29629825352`: success
 
-## Android notification-code extraction
+## Intermittent ordinary-copy repair
 
-A previous user report showed that a Beeper login email did not relay its visible six-digit login code, and the user explicitly rejected a Beeper-only fix.
+`.11` did not modify the ordinary-copy implementation, so do not claim the OTP self-test change directly caused the regression.
 
-Current patch scope:
+Strongest concrete regression candidate:
 
-- `OtpCodeExtractor` now models WebOTP/domain-bound SMS, SMS Retriever-style messages, SMS User Consent-style code lengths, email/push standalone code lines, action phrases, and multilingual authentication labels;
-- WebOTP/domain-bound `@domain #code` is accepted;
-- SMS Retriever app-hash lines are rejected while the actual one-time code is extracted;
-- standalone code lines and logo-alt-text lines are accepted only near authentication language;
-- action phrases such as `Enter 552244 to sign in` and `Use code A8K4-P2 to authenticate` are covered;
-- English, Japanese, Chinese, Korean, Spanish, French, and German samples are covered by unit tests;
-- negative contexts reject coupon, promo, discount, postal, error, status, tracking, shipment, delivery, order, booking, ticket, invoice, amount, phone, URL/email-local-part, date/year, and SMS Retriever hash-alone false positives;
-- `NotificationCodeListenerService` folds safe string-like extras into extraction input without logging contents.
+- `.8` reduced Accessibility source-node inspection to click, context-click, and window-state events;
+- window-content, announcement, and notification-state events then used only lightweight event text;
+- some OEM/custom floating toolbars expose their Copy marker only through the source node, producing app/event-order-dependent misses.
 
-Do not claim real-device Beeper/Gmail extraction until the target notification app exposes the code text through notification extras and the device test passes.
+Current `.12` repair:
 
-## Windows tray ghost-icon repair
+- retains lightweight event-text checks;
+- restores inspection of the single event source node for every copy-relevant event type;
+- adds a three-second fallback using a recent Accessibility selection plus `OnPrimaryClipChangedListener`;
+- uses the selected text when Android hides background clipboard data;
+- clears the remembered selection after a completed queue/dedup result;
+- marks ClipCascade's own text/image clipboard writes with `ClipboardWriteGuard` so inbound/local writes do not echo back;
+- preserves the existing persistent queue and ACK semantics.
 
-User-reported Windows 11 evidence:
+## Background delivery recovery
 
-- many default-looking ClipCascade tray ghosts remain in the notification area;
-- ghost tooltip is `ClipCascade`;
-- owner PID is `0`, meaning the tray HWND/process is already gone;
-- the issue existed upstream before Extended;
-- Extended watchdog/restart behavior made it worse;
-- repeated logs include `scheme http is invalid - goodbye`, repeated `Restarting synchronization engine`, and watchdog full restart roughly every minute;
-- persisted config still showed `server_url=https://clipcascade.sathvik.dev`, `websocket_url=wss://clipcascade.sathvik.dev/p2psignaling`, and `server_mode=P2P`.
+A persistent native queue item may outlive the React/Notifee foreground-service generation. This matches the symptom where reopening the app suddenly restores delivery.
 
-Patch status:
+Current `.12` repair:
 
-- `scripts/prepare_windows_tray_lifecycle.py` adds tray lifecycle control, watchdog bounds, and P2P scheme diagnostics during desktop build/test;
-- pystray disposal is centralized and idempotent;
-- disposal order is `icon.visible = False` followed by `icon.stop()`;
-- tray create/run/visible-false/stop lifecycle events are logged with panel id, icon id, process id, and reason;
-- only one active `TaskbarPanel` may own a pystray icon per process;
-- constructing a replacement panel disposes the previous icon first;
-- explicit Quit, Logoff, and run-finally all use the same disposal path;
-- P2P signaling validates that the URL scheme is `ws` or `wss` before constructing the WebSocket;
-- P2P logs runtime `websocket_url`, parsed scheme, `server_url`, close args, and latest transport error;
-- remembered `scheme http is invalid - goodbye` is classified as fatal for watchdog purposes;
-- watchdog full restarts are capped at three consecutive attempts and then backed off for 15 minutes;
-- fatal scheme errors suppress full restart amplification and trigger the long backoff.
+- `RecoveryCoordinator` can bootstrap `ReactInstanceManager` in-process when no active Catalyst instance exists;
+- it polls for up to four seconds and emits the existing recovery event when React becomes active;
+- Headless JS remains as a compatibility fallback;
+- the 60-second Android Service-start cooldown remains, but does not suppress the lighter React bootstrap;
+- queue retries therefore no longer have to wait a minute or require opening the UI before attempting React recovery.
 
-## Android status
+Content-free ordinary-copy delivery diagnostics now distinguish:
 
-Earlier Android outbound successes were misattributed to ClipCascade because Microsoft Phone Link clipboard synchronization was active. Phone Link and every competing clipboard synchronizer must remain disabled for validation.
+- `transport_enabled / sync_disabled`;
+- `transport_status / retrying`;
+- `p2p_peer / retrying`;
+- `react_context / rebind_requested`;
+- `react_event / emitted`;
+- `peer_ack / retrying`;
+- `peer_ack / acknowledged`;
+- `dispatcher / interrupted`.
 
-Valid user evidence:
+No clipboard text or source-app name is stored.
 
-- Windows authentication, GUI, and synchronization work;
-- peer -> Android reception works while ClipCascade is backgrounded and apparently while the screen is off;
-- Android -> peer background sending was not previously working when isolated from Phone Link;
-- recent repaired Android build is reported by the user as very stable, but formal isolated matrix proof remains pending.
+## Notification-code extraction
 
-## Android idle-power repair
+The broad extractor still covers WebOTP/domain-bound SMS, SMS Retriever, standalone email code lines, action phrases, multilingual labels, and false-positive rejection.
 
-Implemented after user reported large battery use despite good stability:
+Latest reported sample:
 
-- foreground-service flag poll: 1 second -> 3 seconds;
-- visible-UI poll: 300 ms -> 1 second;
-- Accessibility notification timeout: 25 ms -> 100 ms;
-- lightweight event text is checked before source-node binder access;
-- source-node inspection remains for click, context-click, and window-state events;
-- the 15-minute WorkManager heartbeat waits up to 4 seconds for the slower service loop.
+- Perceptron Network email;
+- `Use this code to login:`;
+- standalone six-character alphanumeric code `8F92FE`;
+- destination email elsewhere in the message;
+- five-minute expiry text after the code.
 
-P2P/WebRTC and its 20-second application-level keepalive remain unchanged because transport stability is currently good. If battery drain remains high, measure that layer separately before changing keepalive cadence.
+The complete message is now a unit-test fixture and must extract `8F92FE`.
+
+Notification collection now also includes:
+
+- ticker text;
+- known notification text extras;
+- message and historic-message Bundles;
+- safe nested Bundle CharSequences to depth two;
+- public-version ticker/extras.
+
+For an authentication-looking notification that still fails, only `notification_extras / empty` or `notification_extras / no_match` is recorded. Notification text, app/package name, email address, and code are not stored.
+
+Do not claim real Gmail/Beeper/Perceptron extraction until the target device proves that the mail app exposes the code through notification surfaces.
+
+## OTP self-test
+
+The built-in synthetic OTP test is deterministic for:
+
+`extractor -> persistent OTP queue -> dispatcher -> transport -> ACK`
+
+It still posts a real local notification, but it does not depend on Android delivering that self-owned notification back through NotificationListener. It is not a pure test of third-party notification access.
+
+## Android idle power
+
+Retained:
+
+- foreground-service flag polling: 3 seconds;
+- visible UI polling: 1 second;
+- Accessibility notification timeout: 100 ms;
+- 15-minute worker heartbeat bounded wait: up to 4 seconds;
+- P2P/WebRTC 20-second keepalive unchanged.
+
+The `.12` repair partially revises the `.8` source-node restriction for reliability, but inspects only the event source node rather than traversing every active window on every event.
+
+## Windows tray repair
+
+The branch retains centralized idempotent pystray disposal, `visible = False -> stop()`, single panel ownership, P2P URL/scheme diagnostics, fatal scheme classification, and bounded watchdog full restarts. Real Explorer ghost-icon validation remains pending.
 
 ## Delivery acknowledgement — preserve
 
@@ -129,39 +136,31 @@ Old/non-Extended peer:
 
 `LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
 
-Preserve:
-
-- `relayId` and `ackRequested`;
-- peer ACK only after validated clipboard application or duplicate-already-applied handling;
-- ACK-envelope handling before clipboard parsing;
-- receive-hash commit only after validation;
-- generation-scoped timers;
-- native acknowledgement-based deletion;
-- queue wakeup after `SHARED_TEXT` listener registration.
-
-P2S and old-peer fallback are not peer-applied acknowledgement.
+Preserve `relayId`, `ackRequested`, validation-before-ACK, generation-scoped timers, relay claims, and native acknowledgement-based deletion.
 
 ## Mandatory next proof
 
-With Phone Link and all competing synchronizers disabled:
+With Microsoft Phone Link and every competing synchronizer disabled:
 
-1. update Android without uninstalling and repeat the isolated matrix;
-2. confirm no connection-pool initialization error across repeated cold launches;
-3. confirm an active service opens with `停止`, not `開始`;
-4. confirm Stop completes within about three seconds and Start reconnects;
-5. copy one unique value once and confirm exactly one peer clipboard application;
-6. repeat visible, backgrounded, reopened, removed from recents, locked, and screen-off;
-7. confirm queue deletion only after the defined acknowledgement;
-8. run the built-in synthetic OTP test and confirm it queues/copies via ACK;
-9. run real SMS and email without storing their contents;
-10. test Beeper/Gmail-style real email notifications and record whether notification extras contain the code;
-11. compare Android battery usage over matched idle intervals;
-12. on Windows, force at least 10 reconnect/restart cycles and confirm tray icon count stays one;
-13. Quit from tray and confirm no `ClipCascade` ghost remains without restarting Explorer;
-14. if `scheme http is invalid - goodbye` reappears, preserve adjacent P2P diagnostic lines.
+1. update to `.12 / 320116` without uninstalling;
+2. verify Accessibility and synchronization remain enabled;
+3. copy unique values with the UI visible and backgrounded;
+4. test immediate Copy after selection and Copy after waiting more than three seconds;
+5. repeat removed from recents, locked, and screen-off;
+6. after a miss, record only ordinary-copy queue count, latest ordinary-copy diagnostic, and latest recovery diagnostic;
+7. confirm exactly one peer application and queue deletion only after ACK;
+8. rerun synthetic OTP;
+9. retry Perceptron/Gmail-style real notification and record `empty`, `no_match`, or `queued` classification;
+10. continue battery and Windows tray tests.
+
+Interpretation:
+
+- queue `0` and no recent copy diagnostic: capture missed;
+- queue `>0` plus `react_context / rebind_requested`: React generation absent;
+- queue `>0` plus `transport_status / retrying`: transport unavailable;
+- queue `>0` plus `p2p_peer / retrying`: no peer channel;
+- `react_event / emitted` then `peer_ack / acknowledged`: peer-applied path completed.
 
 ## Do not claim
 
-Do not describe Android outbound synchronization as beta-ready, exactly-once, screen-off capable, real-SMS validated, real-email validated, notification-code reliable, or battery-efficient until the isolated target-device tests pass.
-
-Do not describe third-party SMS/email notification extraction as real-device proven until target-device tests pass. The built-in synthetic OTP test is now deterministic, but it is not proof that every external notification app exposes code text to NotificationListenerService.
+Do not describe Android background, locked, or screen-off outbound copy as reliable or exactly-once proven until the isolated target-device matrix passes. Do not describe real third-party OTP extraction, battery efficiency, or Windows tray ghost prevention as target-device proven yet.
