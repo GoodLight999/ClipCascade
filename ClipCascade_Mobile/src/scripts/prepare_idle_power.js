@@ -102,4 +102,9 @@ schedule = replaceRequired(
 );
 fs.writeFileSync(schedulePath, schedule, 'utf8');
 
-console.log('Prepared lower-power idle polling and Accessibility event handling.');
+// Reliability follow-up: restore copy-cue source inspection for OEM/custom
+// toolbars and bootstrap React in-process when a queued relay outlives the
+// Notifee/React service generation.
+require('./prepare_background_clipboard_reliability.js');
+
+console.log('Prepared lower-power idle polling with reliable background clipboard recovery.');
