@@ -15,8 +15,33 @@ Resume work in this order:
 11. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
 12. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
 13. `docs/LATEST_BROAD_OTP_EXTRACTION_HANDOFF.md`
+14. `docs/LATEST_OTP_SELF_TEST_HANDOFF.md`
 
-Current phase: preserve the now-stable Android relay while proving isolated outbound behavior, exactly-once delivery, runtime-control consistency, acceptable battery use, Windows tray lifecycle stability, and broad notification-code extraction quality. PR #1 remains Draft.
+Current phase: preserve the now-stable Android relay while proving isolated outbound behavior, exactly-once delivery, runtime-control consistency, acceptable battery use, Windows tray lifecycle stability, broad notification-code extraction quality, and a non-fake in-app OTP self-test path. PR #1 remains Draft.
+
+## 2026-07-18 — OTP self-test dispatch repair
+
+User report: the in-app synthetic verification-code test did not copy/relay the test code. The old test path posted a local synthetic notification and then depended on Android delivering the app's own notification back through `NotificationListenerService` before the value entered the OTP queue.
+
+Implemented patch:
+
+- the test still posts a real local notification;
+- the generated notification text is immediately passed through `OtpCodeExtractor.extract()`;
+- when extraction returns the expected value, a `synthetic-test:` relay ID is enqueued into `OtpRelayStore`;
+- the test explicitly calls `OtpRelayDispatcher.schedule(context)`;
+- listener-delivered `detected`/`deduplicated` states can no longer downgrade already queued or acknowledged self-test status;
+- UI wording now states that the built-in test deterministically validates extractor + queue + transport + acknowledgement, while real third-party notifications still need separate NotificationListener validation.
+
+Build identity:
+
+- version: `3.2.1-extended.11-standalone`
+- versionCode: `320115`
+
+Validation before documentation-only commits:
+
+- code head `885bac31c8d10d4a1f172624e6355248a867c411`
+- Android CI `29627885148`: success
+- Windows CI `29627885149`: success
 
 ## 2026-07-18 — Broad OTP extraction pass
 
