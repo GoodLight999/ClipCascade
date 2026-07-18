@@ -117,6 +117,13 @@ Earlier intermediate failure:
 - Android CI run `29629386165` failed only because the workflow still asserted `.11 / 320115` after the code was bumped to `.12 / 320116`;
 - the workflow was then updated and the actual transformed source, unit tests, Kotlin compilation, APK assembly, embedded bundle, and signer verification passed.
 
+Documentation trial/error:
+
+- the first attempt to update `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md` used a stale blob SHA and received HTTP 409;
+- the matrix was fetched again and committed successfully as `0147db0913786aa5e787e07931671264a54f673f`;
+- the first attempt to append this note to the handoff also used a stale guessed blob SHA and received HTTP 409;
+- this update uses the fetched current blob SHA.
+
 ## Mandatory target-device test
 
 Keep Microsoft Phone Link and every competing clipboard synchronizer disabled.
