@@ -81,7 +81,7 @@ object OtpTestStatusStore {
         relayId: String,
     ) {
         val current = read(context)
-        if (current?.value == value && current.state in PROGRESSED_STATES) return
+        if (current != null && current.value == value && current.state in PROGRESSED_STATES) return
         save(context, state, value, relayId)
     }
 
@@ -93,7 +93,7 @@ object OtpTestStatusStore {
         relayId: String,
     ) {
         val current = read(context)
-        if (current?.value == value && current.state == ACKNOWLEDGED) return
+        if (current != null && current.value == value && current.state == ACKNOWLEDGED) return
         save(context, state, value, relayId)
     }
 
