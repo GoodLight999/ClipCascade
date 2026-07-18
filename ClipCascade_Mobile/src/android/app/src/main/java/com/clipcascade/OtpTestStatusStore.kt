@@ -15,6 +15,11 @@ object OtpTestStatusStore {
     private const val FILE_NAME = "synthetic_verification_test"
     private const val STATUS_TTL_MS = 5 * 60_000L
 
+    private val PROGRESSED_STATES = setOf(
+        QUEUED,
+        ACKNOWLEDGED,
+    )
+
     data class Snapshot(
         val state: String,
         val value: String,
@@ -24,16 +29,16 @@ object OtpTestStatusStore {
 
     fun start(context: Context, value: String) = save(context, POSTED, value, "")
 
-    fun detected(context: Context, value: String) = save(context, DETECTED, value, "")
+    fun detected(context: Context, value: String) = saveUnlessProgressed(context, DETECTED, value, "")
 
     fun queued(context: Context, value: String, relayId: String) =
-        save(context, QUEUED, value, relayId)
+        saveUnlessAcknowledged(context, QUEUED, value, relayId)
 
     fun extractionFailed(context: Context, value: String) =
-        save(context, EXTRACT_FAILED, value, "")
+        saveUnlessProgressed(context, EXTRACT_FAILED, value, "")
 
     fun deduplicated(context: Context, value: String) =
-        save(context, DEDUPLICATED, value, "")
+        saveUnlessProgressed(context, DEDUPLICATED, value, "")
 
     fun postFailed(context: Context, detail: String) =
         save(context, POST_FAILED, detail.take(80), "")
@@ -66,6 +71,30 @@ object OtpTestStatusStore {
             relayId = preferences.getString("relay_id", "").orEmpty(),
             timestamp = timestamp,
         )
+    }
+
+    @Synchronized
+    private fun saveUnlessProgressed(
+        context: Context,
+        state: String,
+        value: String,
+        relayId: String,
+    ) {
+        val current = read(context)
+        if (current?.value == value && current.state in PROGRESSED_STATES) return
+        save(context, state, value, relayId)
+    }
+
+    @Synchronized
+    private fun saveUnlessAcknowledged(
+        context: Context,
+        state: String,
+        value: String,
+        relayId: String,
+    ) {
+        val current = read(context)
+        if (current?.value == value && current.state == ACKNOWLEDGED) return
+        save(context, state, value, relayId)
     }
 
     @Synchronized
