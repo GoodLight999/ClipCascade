@@ -65,34 +65,53 @@ accessibility = replaceRequired(
   'clipboard-change listener registration',
 );
 
-const narrowedSourceInspection = String.raw`        val inspectSource = event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED ||
-            event.eventType == AccessibilityEvent.TYPE_VIEW_CONTEXT_CLICKED ||
-            event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-        if (!inspectSource) return false
-`;
-const reliableSourceInspection = String.raw`        // Some floating toolbars and custom app copy controls expose the Copy
-        // marker only through the event source, including window-content,
-        // announcement, and notification-state events. Inspect only that source
-        // node (not the whole tree) so reliability is restored without reviving
-        // the former unbounded traversal cost.
-        val inspectSource = when (event.eventType) {
+const copyFunctionStart = accessibility.indexOf(
+  '    private fun looksLikeCopyConfirmation(event: AccessibilityEvent): Boolean {\n',
+);
+const copyFunctionEnd = accessibility.indexOf(
+  '    private fun scheduleCapture(event: AccessibilityEvent?, trigger: String) {\n',
+  copyFunctionStart,
+);
+if (copyFunctionStart < 0 || copyFunctionEnd < 0 || copyFunctionEnd <= copyFunctionStart) {
+  throw new Error('Expected Accessibility copy-confirmation function was not found');
+}
+const classifiedCopyFunction = String.raw`    private fun looksLikeCopyConfirmation(event: AccessibilityEvent): Boolean {
+        if (event.action == AccessibilityNodeInfo.ACTION_COPY) return true
+
+        val eventText = buildString {
+            append(event.text.joinToString(" "))
+            append(' ')
+            append(event.contentDescription?.toString().orEmpty())
+        }
+        val node = event.source
+        val nodeText = buildString {
+            append(node?.text?.toString().orEmpty())
+            append(' ')
+            append(node?.contentDescription?.toString().orEmpty())
+            append(' ')
+            append(node?.viewIdResourceName.orEmpty())
+        }
+
+        return when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_CLICKED,
             AccessibilityEvent.TYPE_VIEW_CONTEXT_CLICKED,
+            -> CopyCueClassifier.isDirectCopyInteraction(eventText, nodeText)
+
             AccessibilityEvent.TYPE_ANNOUNCEMENT,
             AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED,
-            -> true
+            -> CopyCueClassifier.isPassiveCopyCompletion(eventText, nodeText)
+
             else -> false
         }
-        if (!inspectSource) return false
+    }
+
 `;
-accessibility = replaceRequired(
-  accessibility,
-  narrowedSourceInspection,
-  reliableSourceInspection,
-  'narrow Accessibility source inspection',
-);
+accessibility =
+  accessibility.slice(0, copyFunctionStart) +
+  classifiedCopyFunction +
+  accessibility.slice(copyFunctionEnd);
 
 accessibility = replaceRequired(
   accessibility,
@@ -262,4 +281,4 @@ recovery = replaceRequired(
 );
 
 fs.writeFileSync(recoveryPath, recovery, 'utf8');
-console.log('Prepared reliable Accessibility copy cues, clipboard-change fallback, and in-process React recovery.');
+console.log('Prepared reliable Accessibility copy actions, clipboard-change fallback, and in-process React recovery.');
