@@ -13,15 +13,36 @@ Before every run:
 
 ## Current build
 
-- [x] Android code CI green at code head `7dda7214ed2f9cf35926dd5faedbd583b6d21341` — run `29629825353`
-- [x] Windows CI green at the same code head — run `29629825352`
+- [x] Android code CI green at code head `594c37224bdcfbd96c54b41bd0509cf97f22ef5b` — run `29632041698`
+- [x] Windows CI green at the same code head — run `29632041722`
 - [ ] final documentation HEAD CI green
 - [ ] matching artifact ID and hashes recorded
-- [ ] Android version `3.2.1-extended.12-standalone`
-- [ ] Android versionCode `320116`
+- [ ] Android version `3.2.1-extended.13-standalone`
+- [ ] Android versionCode `320117`
 - [ ] stable signer unchanged
 - [ ] in-place update succeeds
 - [ ] settings and permissions retained
+
+## Selection-only negative matrix
+
+For every row, select a unique value and leave the floating toolbar open without pressing Copy.
+
+| Application/state | Toolbar visible 3s | Toolbar visible 15s | Selection dismissed | Queue unchanged | Windows unchanged | Latest diagnostic has no queued copy | Status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Chrome visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Firefox-family visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Gmail visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| notes/editor visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| WebView app visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| ClipCascade backgrounded | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+
+Required distinctions:
+
+- passive toolbar label `Copy` / `コピー`: must not queue;
+- direct tap on the toolbar Copy command: must queue exactly once;
+- passive `Copied` / `コピーしました` completion notice: may confirm a real copy;
+- real `OnPrimaryClipChangedListener` callback within three seconds of selection: may confirm a real copy;
+- ClipCascade's own inbound/local clipboard write: must be ignored by `ClipboardWriteGuard`.
 
 ## Initialization stability
 
@@ -143,4 +164,4 @@ Failure classification:
 
 ## Do not claim
 
-Do not mark Android background, removed-from-recents, locked, screen-off, exactly-once, real-SMS, real-email, battery-efficiency, or Windows-tray rows as passed without isolated target-device evidence.
+Do not mark selection-only suppression, Android background, removed-from-recents, locked, screen-off, exactly-once, real-SMS, real-email, battery-efficiency, or Windows-tray rows as passed without isolated target-device evidence.
