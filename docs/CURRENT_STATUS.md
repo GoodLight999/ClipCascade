@@ -4,7 +4,7 @@ Branch: `stability-mobile-otp`
 Draft PR: `#1`  
 Repository: `GoodLight999/ClipCascade`
 
-## Current Android target
+## Latest green Android target
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
@@ -18,13 +18,42 @@ Repository: `GoodLight999/ClipCascade`
 
 Artifact hashes and expiry are recorded in `docs/LATEST_GREEN_ARTIFACTS.md`.
 
-## Current focus
+## Candidate under CI
 
-The current focus is isolated target-device proof of ACK-safe bounded Android outbound delivery plus language-neutral Copy confirmation.
+Candidate `.17 / 320121` treats real Gmail notification ingestion as non-functional until target-device proof exists.
+
+It adds:
+
+- actual notification-listener binding state separate from Android authorization;
+- content-free stage counters;
+- settings and WorkManager rebind requests;
+- active-notification scan on listener connection;
+- manual reconnect/rescan;
+- deeper bounded extras collection;
+- Gmail-shaped extractor tests;
+- a default-OFF outbound transport-accepted debug notification switch.
+
+See `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`.
+
+## Gmail / real notification status
+
+The deterministic synthetic OTP test proves extractor, queue, transport, and ACK components. It does not prove that Gmail, Beeper, Perceptron, or SMS notifications reach `NotificationListenerService` with usable extras.
+
+The `.17` runtime display distinguishes:
+
+- listener not connected;
+- notification unseen;
+- notification seen but text extras empty;
+- text present but no authentication hint;
+- authentication hint present but extractor no-match;
+- queued/deduplicated;
+- transport accepted when optional outbound debug notification is enabled.
+
+No real Gmail success is claimed.
 
 ## ACK-safe ordinary clipboard retention
 
-Current behavior:
+Current behavior retained:
 
 - accepted ordinary clipboard items do not expire by wall-clock age;
 - capacity remains bounded at 16 items;
@@ -37,28 +66,14 @@ Current behavior:
 - new work/reconnect/recovery resets the delay and attempts immediately;
 - in-flight ACK waiting remains at three seconds with the existing 15-second timeout.
 
-## Trial and error retained
-
-Initial `.16` commit `dd92a6e7...` passed transform invariants but failed Android compilation because the settings test still treated the new enqueue enum as Boolean. Corrected commit `f86705c...` added exact three-way settings handling and localized queue-full feedback. The corrected Android and Windows CIs are green.
-
-## Language-neutral copy confirmation
+## Language-neutral copy confirmation retained
 
 - selection events only remember the selected range;
 - selection itself never queues or sends;
 - OS `OnPrimaryClipChangedListener` is primary proof of a real clipboard mutation;
 - ClipCascade-owned writes are filtered by `ClipboardWriteGuard`;
 - ACTION_COPY and Ctrl+C schedule a 700 ms fallback only if clipboard serial did not advance;
-- translated labels, content descriptions, toast text, and completion wording are not used for Copy correctness;
-- final behavior is transform-produced and CI rejects old localized classifier remnants.
-
-## Background recovery retained
-
-- persistent native clipboard and OTP queues;
-- in-process React context bootstrap;
-- recovery during Android service-start cooldown;
-- content-free delivery diagnostics;
-- internal-write echo suppression;
-- relay claim protection.
+- translated labels, content descriptions, toast text, and completion wording are not used for Copy correctness.
 
 ## Delivery acknowledgement — preserve
 
@@ -74,31 +89,16 @@ Old/non-Extended peer:
 
 `LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
 
-Do not weaken or bypass the Extended Windows-applied acknowledgement. Do not restore time-based expiry or overflow eviction of accepted unacknowledged items.
-
-## OTP status
-
-Broad extraction and deterministic synthetic OTP delivery remain present. Real Gmail/Beeper/Perceptron extraction is not proven until target notification surfaces expose the code and device tests pass.
+The outbound debug notification is observational only. Its failure is caught and cannot alter transport acceptance, relay claims, ACK ordering, or queue deletion.
 
 ## Mandatory proof
 
-Disable Phone Link and every competing synchronizer. Verify:
+Disable Phone Link and every competing synchronizer. Install `.17` in place, confirm notification authorization and actual listener runtime both show connected, clear counters, then send a Gmail OTP whose expanded notification visibly includes the code. Use the content-free stage counters to locate the failure before changing extraction rules.
 
-- selection without Copy in Japanese, English, and a third UI language;
-- actual Copy after 0/3/15/60 seconds;
-- visible/background/recents/locked/screen-off states;
-- disconnected retention beyond ten and thirty minutes;
-- 16 accepted items plus 17th `queue_full` rejection;
-- accepted items drain in order, exactly once, only after ACK;
-- new Copy is accepted after capacity returns;
-- no inbound echo;
-- synthetic OTP and privacy-safe real-notification classification;
-- battery and reconnect latency.
-
-Use `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`.
+Also validate ordinary copy, long disconnect, queue-full, exactly-once, ACK deletion, no echo, battery behavior, and Windows tray behavior through the existing matrices.
 
 ## Do not claim
 
-CI is not HONOR target-device proof. Do not claim multilingual correctness, selection-only suppression, background/screen-off reliability, long-disconnect retention, queue-full preservation, exactly-once, real third-party OTP extraction, battery efficiency, or tray behavior until isolated evidence exists.
+Do not claim `.17` green until both CIs and artifact identity are recorded. CI is not HONOR target-device proof. Do not claim real Gmail success until isolated device evidence exists.
 
 Canonical handoff: `docs/NEXT_CHATGPT_HANDOFF.md`. Keep PR #1 Draft.
