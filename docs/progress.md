@@ -22,27 +22,32 @@ Resume work in this order:
 18. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
 19. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
 
-Current phase: finish `.16 / 320120` CI and artifact verification, then validate ACK-safe bounded ordinary-copy delivery and language-neutral Copy confirmation on the HONOR target while preserving Extended P2P peer-applied ACK and PR #1 Draft state.
+Current phase: finish corrected `.16 / 320120` CI and artifact verification, then validate ACK-safe bounded ordinary-copy delivery and language-neutral Copy confirmation on the HONOR target while preserving Extended P2P peer-applied ACK and PR #1 Draft state.
+
+## 2026-07-19 — `.16` first CI failure and targeted repair
+
+Initial `.16` commit `dd92a6e7c566f2f830201f55b4176eb8011c7412` passed every final transform and invariant assertion, then Android CI `29675268087` failed at Kotlin compilation.
+
+Build-log diagnosis:
+
+- `RelaySettingsActivity.kt:327` and `:340` expected Boolean;
+- `ClipboardRelayStore.enqueue()` now returned `ClipboardRelayStore.EnqueueResult`;
+- the Accessibility enqueue path was already transformed correctly;
+- the settings-screen manual test path had been missed.
+
+Correction:
+
+- `prepare_ack_safe_queue_overflow.js` now transforms the settings test to exact `QUEUED / DEDUPLICATED / QUEUE_FULL` handling;
+- schedules dispatch only for `QUEUED`;
+- records content-free exact result for all three outcomes;
+- adds localized English/Japanese queue-full Toast text and diagnostic labels;
+- preserves all accepted queue items, ACK semantics, and `.15` retry behavior.
+
+This was a real implementation omission, not an infrastructure failure. It is recorded explicitly so a later thread does not repeat it.
 
 ## 2026-07-19 — ACK-safe bounded queue overflow follow-up
 
-After `.15` removed ten-minute time-based deletion, a second deterministic ACK violation was found:
-
-- the 16-item ordinary queue admitted a new item and silently removed the oldest item on overflow;
-- that oldest relay could still be awaiting Windows-applied ACK;
-- bounded storage and ACK-safe deletion must both hold.
-
-Prepared `.16 / 320120` candidate:
-
-- accepted pending items are never evicted to admit a newer Copy;
-- a full 16-item queue rejects new input with `EnqueueResult.QUEUE_FULL`;
-- final transformed Accessibility diagnostics record content-free `queue_full`;
-- added pure `ClipboardRelayQueuePolicyTest`;
-- CI rejects overflow eviction code and verifies the final transformed queue-full branch;
-- `.15` no-TTL retention and bounded idle retry remain intact;
-- ACK protocol, relay claims, internal-write guard, language-neutral confirmation, OTP, and Windows code are unchanged.
-
-The queue-full transform is intentionally last after internal-write guard and language-neutral copy transforms. Candidate implementation/CI/artifact details remain pending and must be recorded after both workflows complete.
+After `.15` removed ten-minute time-based deletion, the 16-item ordinary queue still silently removed the oldest item on overflow. `.16 / 320120` changes full-queue behavior to reject the new Copy with `queue_full`, preserving every accepted unacknowledged relay. A pure capacity policy test and CI guards were added. Candidate CI/artifact details remain pending.
 
 ## 2026-07-19 — ACK-safe durable clipboard queue and bounded retry
 
@@ -50,13 +55,9 @@ The queue-full transform is intentionally last after internal-write guard and la
 
 `.15` is superseded for target-device validation by `.16` once `.16` becomes green, because `.15` still retained overflow eviction.
 
-## 2026-07-19 — Documentation consistency correction
+## 2026-07-19 — Documentation and language-neutral history
 
-`docs/TEST_MATRIX.md` was rewritten to remove stale `.4 / 320107` identity and the Phone Link-contaminated Yahoo! JAPAN SMS success. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md` remains authoritative for Priority 1 device evidence.
-
-## 2026-07-19 — Language-neutral copy confirmation redesign
-
-`.14+` uses OS clipboard mutation, internal-write guard, and semantic ACTION_COPY/Ctrl+C fallback. Selection alone never queues. UI text and translations do not participate in correctness. Target-device multilingual and selection-only proof remains pending.
+`docs/TEST_MATRIX.md` was rewritten to remove stale `.4 / 320107` identity and Phone Link-contaminated success. `.14+` uses OS clipboard mutation, internal-write guard, and semantic ACTION_COPY/Ctrl+C fallback; selection alone never queues and UI translations do not control correctness.
 
 ## 2026-07-18 — Background and OTP recovery history
 

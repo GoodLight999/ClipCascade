@@ -39,6 +39,30 @@ This ordering is deliberate because `prepare_background_clipboard_reliability.js
 - package: `com.clipcascade.extended`;
 - signer: unchanged deterministic public test signer.
 
+## First CI attempt and repair
+
+Initial candidate commit:
+
+- SHA: `dd92a6e7c566f2f830201f55b4176eb8011c7412`;
+- Android CI: `29675268087` — failure during Kotlin compilation;
+- every source transform and final invariant check passed before compilation.
+
+Root cause:
+
+- `ClipboardRelayStore.enqueue()` changed from Boolean to `EnqueueResult`;
+- the Accessibility path was transformed correctly;
+- `RelaySettingsActivity.enqueueClipboardTest()` still used the return value as a Boolean in two places.
+
+Repair:
+
+- final transform now updates the settings test path to the same three-way `queued / deduplicated / queue_full` branch;
+- manual test diagnostics always record the exact result;
+- English and Japanese queue-full Toast text was added;
+- English and Japanese diagnostic labels for `queue_full` were added;
+- no ACK, transport, queue retention, or Windows code changed.
+
+This failure is retained as part of the trial-and-error record. Do not hide or reinterpret it as an infrastructure failure.
+
 ## CI guards and tests
 
 Android CI must verify:
@@ -47,7 +71,8 @@ Android CI must verify:
 - `ClipboardRelayStore` contains no `TTL_MS`;
 - `ClipboardRelayStore` contains no overflow `while (pending.size ...)` eviction;
 - `ClipboardRelayQueuePolicyTest` proves capacity is accepted only below 16;
-- all language-neutral Copy, retry, OTP, ACK, bundle, build, and signer checks remain green.
+- transform execution successfully patches both Accessibility and settings-test paths;
+- all language-neutral Copy, retry, OTP, ACK, bundle, build, resource, and signer checks remain green.
 
 ## Required target-device proof
 
@@ -55,10 +80,11 @@ Android CI must verify:
 2. Fill the ordinary queue to 16 unique synthetic Copy items.
 3. Perform a 17th Copy.
 4. Confirm the existing 16 items remain unchanged and the latest diagnostic is `queue_full`.
-5. Reconnect the peer.
-6. Confirm the accepted 16 items drain in order and each is deleted only after its defined ACK.
-7. After capacity becomes available, perform another Copy and confirm it is accepted and delivered exactly once.
+5. Confirm the settings test displays the localized queue-full result when capacity is exhausted.
+6. Reconnect the peer.
+7. Confirm the accepted 16 items drain in order and each is deleted only after its defined ACK.
+8. After capacity becomes available, perform another Copy and confirm it is accepted and delivered exactly once.
 
-No target-device success is claimed. At handoff-writing time, candidate CI and artifact metadata were not yet recorded.
+No target-device success is claimed. Corrected candidate CI and artifact metadata remain pending.
 
 PR #1 must remain Draft.
