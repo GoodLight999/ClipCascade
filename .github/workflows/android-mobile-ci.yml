@@ -77,14 +77,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.13" App.js
-          grep -q "versionCode 320117" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.13"' android/app/build.gradle
+          grep -q "3.2.1-extended.14" App.js
+          grep -q "versionCode 320118" android/app/build.gradle
+          grep -q 'versionName "3.2.1-extended.14"' android/app/build.gradle
           grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
           grep -q "notificationTimeout = 100" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "CopyCueClassifier.isDirectCopyInteraction" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "CopyCueClassifier.isPassiveCopyCompletion" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "selectionToolbarLabelIsNotPassiveCopyCompletion" android/app/src/test/java/com/clipcascade/CopyCueClassifierTest.kt
+          grep -q "ClipboardCopySignalPolicy.shouldCaptureClipboardChange" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "ClipboardCopySignalPolicy.shouldRunActionFallback" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "selectionAloneNeverCaptures" android/app/src/test/java/com/clipcascade/ClipboardCopySignalPolicyTest.kt
+          if grep -q "CopyCueClassifier" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt; then
+            echo "Localized copy-label classifier still controls the transformed service" >&2
+            exit 1
+          fi
+          if grep -q "looksLikeCopyConfirmation" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt; then
+            echo "Localized copy-confirmation function still remains" >&2
+            exit 1
+          fi
           grep -q "requestReactContextBootstrap" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q "createReactContextInBackground" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q 'path = "react_bootstrap"' android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
