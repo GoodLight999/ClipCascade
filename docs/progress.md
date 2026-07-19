@@ -22,38 +22,46 @@ Resume work in this order:
 18. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
 19. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
 
-Current phase: finish corrected `.16 / 320120` CI and artifact verification, then validate ACK-safe bounded ordinary-copy delivery and language-neutral Copy confirmation on the HONOR target while preserving Extended P2P peer-applied ACK and PR #1 Draft state.
+Current phase: validate `.16 / 320120` ACK-safe bounded ordinary-copy delivery and language-neutral Copy confirmation on the HONOR target while preserving Extended P2P peer-applied ACK and PR #1 Draft state.
+
+## 2026-07-19 — `.16` green: no TTL and no overflow eviction
+
+A fresh audit found two deterministic pre-ACK deletion paths in the ordinary clipboard queue:
+
+1. wall-clock expiry after ten minutes;
+2. silent oldest-item eviction when the 16-item queue overflowed.
+
+The combined `.16 / 320120` result:
+
+- no wall-clock expiry;
+- no eviction of accepted items to admit newer items;
+- bounded capacity remains 16;
+- item 17 is rejected with content-free `queue_full` while items 1–16 remain;
+- idle disconnected retry backs off `3s -> 6s -> 12s -> 15s`;
+- new work/recovery/ACK resets retry and runs immediately;
+- in-flight ACK timeout behavior remains unchanged;
+- language-neutral Copy confirmation, internal-write guard, relay claims, React recovery, OTP, and Windows peer-applied ACK remain intact.
+
+Green implementation evidence:
+
+- source: `f86705c513c56a9fd24e218f8513dad9cead2ed8`;
+- Android CI: `29675438972`, success;
+- Windows CI: `29675438978`, success;
+- Android artifact ID: `8438725636`;
+- ZIP SHA-256: `dda947ceb29452edc4defc94ee3c09852a87529b2db581a0f1d304b0182564f6`;
+- APK SHA-256: `1bb1301e0a44a06f42cb04cbe55de03e9abc0baa6c224738d89f4686409a5def`;
+- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`;
+- expiry: `2026-10-17T05:49:26Z`.
+
+No target-device success is claimed.
 
 ## 2026-07-19 — `.16` first CI failure and targeted repair
 
-Initial `.16` commit `dd92a6e7c566f2f830201f55b4176eb8011c7412` passed every final transform and invariant assertion, then Android CI `29675268087` failed at Kotlin compilation.
+Initial commit `dd92a6e7c566f2f830201f55b4176eb8011c7412` passed transforms/invariants but Android CI `29675268087` failed because `RelaySettingsActivity` still treated enum enqueue result as Boolean. Corrected commit `f86705c...` transformed the settings test to three-way result handling and added localized queue-full feedback. This was a real implementation omission and is retained in the record.
 
-Build-log diagnosis:
+## 2026-07-19 — `.15` intermediate repair
 
-- `RelaySettingsActivity.kt:327` and `:340` expected Boolean;
-- `ClipboardRelayStore.enqueue()` now returned `ClipboardRelayStore.EnqueueResult`;
-- the Accessibility enqueue path was already transformed correctly;
-- the settings-screen manual test path had been missed.
-
-Correction:
-
-- `prepare_ack_safe_queue_overflow.js` now transforms the settings test to exact `QUEUED / DEDUPLICATED / QUEUE_FULL` handling;
-- schedules dispatch only for `QUEUED`;
-- records content-free exact result for all three outcomes;
-- adds localized English/Japanese queue-full Toast text and diagnostic labels;
-- preserves all accepted queue items, ACK semantics, and `.15` retry behavior.
-
-This was a real implementation omission, not an infrastructure failure. It is recorded explicitly so a later thread does not repeat it.
-
-## 2026-07-19 — ACK-safe bounded queue overflow follow-up
-
-After `.15` removed ten-minute time-based deletion, the 16-item ordinary queue still silently removed the oldest item on overflow. `.16 / 320120` changes full-queue behavior to reject the new Copy with `queue_full`, preserving every accepted unacknowledged relay. A pure capacity policy test and CI guards were added. Candidate CI/artifact details remain pending.
-
-## 2026-07-19 — ACK-safe durable clipboard queue and bounded retry
-
-`.15 / 320119` removed the ten-minute ordinary clipboard TTL and added `3s -> 6s -> 12s -> 15s` idle retry backoff. It is green at source `1e3aae70e2052420bfbcf2e326e04638787dfc1c`, Android CI `29674843116`, Windows CI `29674843145`, artifact ID `8438520128`, ZIP SHA-256 `e3f50c87ebea56fe0039e3e08a909d282dc10631bb2dc808d6a01e86a1792e2a`, and APK SHA-256 `15ee61ad66e68f114b3a52c160773976ac705954a3a278b6b892559bae6b8ee2`.
-
-`.15` is superseded for target-device validation by `.16` once `.16` becomes green, because `.15` still retained overflow eviction.
+`.15 / 320119` removed the ten-minute TTL and added bounded retry, green at source `1e3aae70...`, but was superseded because overflow eviction remained.
 
 ## 2026-07-19 — Documentation and language-neutral history
 

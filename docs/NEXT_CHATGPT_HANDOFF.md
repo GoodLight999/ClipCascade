@@ -9,6 +9,9 @@ This is the canonical handoff. Read the listed documents before changing code.
 - PR: `#1`
 - PR state: open and Draft
 - never mark Ready, merge, or weaken the Extended P2P ACK path
+- current implementation anchor: `f86705c513c56a9fd24e218f8513dad9cead2ed8`
+
+Commits after the implementation anchor may be documentation-only. Verify current PR head and both CIs before distributing any artifact.
 
 ## Read in this exact order
 
@@ -40,61 +43,71 @@ Windows/peer-to-Android background reception does not prove Android outbound.
 
 Disable Phone Link and every competing synchronizer during every validation run.
 
-## Latest green build before current candidate
+## Current green Android build
 
-`.15 / 320119`:
-
-- implementation anchor: `1e3aae70e2052420bfbcf2e326e04638787dfc1c`
-- Android CI: `29674843116` — success
-- Windows CI: `29674843145` — success
-- Android artifact ID: `8438520128`
-- ZIP SHA-256: `e3f50c87ebea56fe0039e3e08a909d282dc10631bb2dc808d6a01e86a1792e2a`
-- APK SHA-256: `15ee61ad66e68f114b3a52c160773976ac705954a3a278b6b892559bae6b8ee2`
-- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- expiry: `2026-10-17T05:26:07Z`
-
-`.15` removed the ten-minute ordinary clipboard TTL and added bounded retry backoff. It is superseded for target-device validation once `.16` is green because `.15` still evicted the oldest item on queue overflow.
-
-## Current `.16 / 320120` candidate
-
-Static follow-up audit found the second pre-ACK deletion path:
-
-- queue capacity was 16;
-- enqueueing item 17 removed item 1 even if item 1 had no ACK;
-- this violated `ACK前にキューを削除しない`.
-
-Candidate repair:
-
-- accepted pending items are never evicted to admit newer items;
-- queue remains bounded at 16;
-- item 17 is rejected with `EnqueueResult.QUEUE_FULL`;
-- latest clipboard diagnostic records `queue_full` without storing content;
-- after ACK creates capacity, later Copy can be accepted normally;
-- `.15` no-TTL retention and `3s -> 6s -> 12s -> 15s` idle retry backoff remain;
-- ACK protocol, relay claims, internal-write guard, language-neutral Copy confirmation, React recovery, and OTP paths remain unchanged.
-
-Candidate identity:
-
+- app: `ClipCascade Extended`
+- package: `com.clipcascade.extended`
 - versionName: `3.2.1-extended.16-standalone`
 - versionCode: `320120`
-- package: `com.clipcascade.extended`
-- signer unchanged
+- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- implementation anchor: `f86705c513c56a9fd24e218f8513dad9cead2ed8`
 
-Do not call `.16` green or distribute its artifact until implementation SHA, Android CI, Windows CI, artifact ID, ZIP/APK hashes, signer, and expiry are recorded.
+CI:
+
+- Android standalone CI: `29675438972` — success
+- Desktop Windows CI: `29675438978` — success
+
+Artifact:
+
+- artifact ID: `8438725636`
+- ZIP SHA-256: `dda947ceb29452edc4defc94ee3c09852a87529b2db581a0f1d304b0182564f6`
+- extracted APK SHA-256: `1bb1301e0a44a06f42cb04cbe55de03e9abc0baa6c224738d89f4686409a5def`
+- expiry: `2026-10-17T05:49:26Z`
+
+See `docs/LATEST_GREEN_ARTIFACTS.md`.
+
+## Priority 1 defects fixed in `.15` and `.16`
+
+Two deterministic pre-ACK deletion paths were found:
+
+1. ordinary clipboard items expired after ten minutes without ACK;
+2. item 17 silently evicted item 1 from the 16-item queue without ACK.
+
+Current `.16` behavior:
+
+- no wall-clock expiry for accepted ordinary clipboard items;
+- bounded capacity remains 16;
+- accepted items are never evicted to admit newer items;
+- when full, the new Copy returns `EnqueueResult.QUEUE_FULL` and is not inserted;
+- content-free diagnostics record `queue_full`;
+- settings test shows localized English/Japanese queue-full feedback;
+- disconnected/no-peer/no-React retry backs off `3s -> 6s -> 12s -> 15s`;
+- new work/reconnect/recovery/ACK resets retry and runs immediately;
+- in-flight ACK waiting remains at three seconds with existing 15-second timeout.
+
+Do not restore time-based deletion or overflow eviction.
+
+## Trial-and-error record
+
+Initial `.16` commit `dd92a6e7c566f2f830201f55b4176eb8011c7412` passed all final transform assertions but Android CI `29675268087` failed at Kotlin compilation because the settings-screen test still treated the new enqueue enum as Boolean.
+
+Corrected commit `f86705c...` transforms the settings test to explicit `QUEUED / DEDUPLICATED / QUEUE_FULL` handling and adds localized queue-full strings. Corrected Android and Windows CIs are green.
+
+This was an implementation omission, not CI infrastructure noise. Keep it in the record.
 
 ## Final Android transform order
 
 The final APK behavior is not determined by raw `ClipboardAccessibilityService.kt` alone.
 
-The workflow runs `prepare_relay_claim.js` after every transport/listener transform. It then applies:
+`prepare_relay_claim.js` runs last and applies:
 
 1. `prepare_internal_clipboard_guard.js`
 2. `prepare_language_neutral_clipboard_copy.js`
 3. `prepare_ack_safe_queue_overflow.js`
 
-Do not reorder these casually. The overflow transform must run after the earlier reliability transform has finished editing the enqueue block.
+Do not reorder these casually. The overflow transform must run after the earlier reliability transform edits the enqueue block.
 
-CI must reject:
+CI rejects:
 
 - final `CopyCueClassifier` references;
 - final `looksLikeCopyConfirmation` references;
@@ -109,7 +122,7 @@ CI must reject:
 - OS `OnPrimaryClipChangedListener` is primary Copy proof;
 - `ClipboardWriteGuard` suppresses ClipCascade-owned writes;
 - ACTION_COPY and Ctrl+C use a 700 ms fallback only if clipboard serial does not advance;
-- UI labels, content descriptions, toasts, and translated completion strings do not participate in correctness.
+- UI labels, content descriptions, toasts, and translated completion strings do not participate in Copy correctness.
 
 Never restore `.13` text dictionaries or add translations as a correctness mechanism.
 
@@ -153,9 +166,9 @@ For real notifications record only:
 
 Do not store raw notification text, code, email address, app name, or package name.
 
-## Mandatory next validation after `.16` becomes green
+## Mandatory next target-device validation
 
-Install over the prior stable-signed build without uninstalling. Confirm settings and permissions survive.
+Install `.16 / 320120` over the prior stable-signed build without uninstalling. Confirm settings and permissions survive.
 
 1. Selection-only negative test in Japanese UI for 3, 15, and 60 seconds.
 2. Repeat in English UI.
@@ -166,25 +179,26 @@ Install over the prior stable-signed build without uninstalling. Confirm setting
 7. Repeat for more than thirty minutes with screen off.
 8. Fill queue with 16 unique values while peer is disconnected.
 9. Copy item 17 and verify existing 16 remain plus diagnostic `queue_full`.
-10. Reconnect and verify accepted 16 drain in order, exactly once, only after ACK.
-11. Copy again after capacity returns and verify acceptance.
-12. Verify Windows-to-Android inbound write does not echo.
-13. Run synthetic OTP and one privacy-safe real notification classification.
-14. Record comparable battery use and reconnect latency.
+10. Verify settings test shows localized queue-full feedback.
+11. Reconnect and verify accepted 16 drain in order, exactly once, only after ACK.
+12. Copy again after capacity returns and verify acceptance.
+13. Verify Windows-to-Android inbound write does not echo.
+14. Run synthetic OTP and one privacy-safe real notification classification.
+15. Record comparable battery use and reconnect latency.
 
 Use `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`.
 
 ## Diagnostics
 
 - queue `0` and no capture diagnostic: capture missed;
-- `no_text_available`: Copy confirmation existed but payload unavailable;
-- `selected_text_fallback`: Accessibility selection supplied payload;
-- `queue_full`: existing 16 accepted items were preserved and new input was rejected;
+- `no_text_available`: confirmation but no payload;
+- `selected_text_fallback`: Accessibility selection used;
+- `queue_full`: existing accepted items preserved and new input rejected;
 - `transport_status / retrying`: transport unavailable;
 - `p2p_peer / retrying`: peer unavailable;
-- `react_context / rebind_requested`: React generation absent;
-- `react_event / emitted` then `peer_ack / acknowledged`: Windows-applied ACK completed;
-- `dispatcher / interrupted`: dispatcher exception.
+- `react_context / rebind_requested`: React absent;
+- `react_event / emitted` then `peer_ack / acknowledged`: full Windows-applied ACK path;
+- `dispatcher / interrupted`: internal exception.
 
 ## Engineering procedure
 

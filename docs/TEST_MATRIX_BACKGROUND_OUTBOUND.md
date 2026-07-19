@@ -11,34 +11,26 @@ Before every run:
 - use a unique synthetic text value for every ordinary-copy row;
 - never store real authentication values.
 
-## Latest green baseline
+## Current green build
 
-- [x] `.15` implementation SHA `1e3aae70e2052420bfbcf2e326e04638787dfc1c`
-- [x] Android CI `29674843116`
-- [x] Windows CI `29674843145`
-- [x] artifact ID `8438520128`
-- [x] ZIP SHA-256 `e3f50c87ebea56fe0039e3e08a909d282dc10631bb2dc808d6a01e86a1792e2a`
-- [x] APK SHA-256 `15ee61ad66e68f114b3a52c160773976ac705954a3a278b6b892559bae6b8ee2`
+- [x] implementation SHA `f86705c513c56a9fd24e218f8513dad9cead2ed8`
+- [x] Android CI `29675438972`
+- [x] Windows CI `29675438978`
+- [x] artifact ID `8438725636`
+- [x] ZIP SHA-256 `dda947ceb29452edc4defc94ee3c09852a87529b2db581a0f1d304b0182564f6`
+- [x] APK SHA-256 `1bb1301e0a44a06f42cb04cbe55de03e9abc0baa6c224738d89f4686409a5def`
 - [x] signer `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-
-`.15` is superseded for new device validation once `.16` is green because `.15` still evicted the oldest unacknowledged item on overflow.
-
-## `.16 / 320120` candidate
-
-- [ ] implementation SHA recorded
-- [ ] Android CI green
-- [ ] Windows CI green
-- [ ] matching artifact ID recorded
-- [ ] ZIP and APK SHA-256 recorded
-- [ ] signer and expiry recorded
-- [ ] no ordinary clipboard TTL
-- [ ] no overflow eviction of accepted items
-- [ ] final transformed `queue_full` diagnostic present
-- [ ] capacity policy unit tests pass
+- [x] expiry `2026-10-17T05:49:26Z`
+- [x] Android version `3.2.1-extended.16-standalone`
+- [x] versionCode `320120`
+- [x] no ordinary clipboard TTL
+- [x] no overflow eviction of accepted items
+- [x] final transformed `queue_full` handling present
+- [x] capacity and retry policy unit tests pass
 - [ ] in-place update succeeds
 - [ ] settings and permissions retained
 
-Do not distribute `.16` until the CI/artifact rows are complete.
+CI proves transformed source and build invariants, not HONOR target-device behavior.
 
 ## Selection-only negative matrix
 
@@ -84,6 +76,7 @@ Keep the peer disconnected and use 17 unique values.
 - [ ] item 1 remains present and unchanged
 - [ ] no accepted item is deleted before ACK
 - [ ] latest content-free diagnostic is `queue_full`
+- [ ] settings test displays localized queue-full feedback
 - [ ] reconnect drains accepted items in order
 - [ ] each accepted item is applied once
 - [ ] each accepted item is removed only after ACK
