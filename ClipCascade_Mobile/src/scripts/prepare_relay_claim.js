@@ -58,6 +58,8 @@ serviceSource = serviceSource.replace('              if (!accepted && peerAckReq
 `);
 fs.writeFileSync(servicePath, serviceSource, 'utf8');
 
-// This must run after every transport/listener transform because it guards the
-// final Clipboard.setString call sites produced by those transforms.
+// These must run after every transport/listener transform. First guard the final
+// Clipboard.setString call sites, then replace localized UI-text heuristics with
+// language-neutral clipboard-change and semantic ACTION_COPY confirmation.
 require('./prepare_internal_clipboard_guard.js');
+require('./prepare_language_neutral_clipboard_copy.js');
