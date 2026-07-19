@@ -8,29 +8,68 @@ Before every run:
 - stop every other clipboard synchronization utility;
 - do not use ADB, root, or Shizuku;
 - record commit SHA, versionCode, Windows peer build, mode, UI language, and screen state;
-- use a unique synthetic text value for every ordinary-copy row;
-- never store real authentication values.
+- use unique synthetic values;
+- never store real authentication values or raw notification text.
 
 ## Current green build
 
-- [x] implementation SHA `f86705c513c56a9fd24e218f8513dad9cead2ed8`
-- [x] Android CI `29675438972`
-- [x] Windows CI `29675438978`
-- [x] artifact ID `8438725636`
-- [x] ZIP SHA-256 `dda947ceb29452edc4defc94ee3c09852a87529b2db581a0f1d304b0182564f6`
-- [x] APK SHA-256 `1bb1301e0a44a06f42cb04cbe55de03e9abc0baa6c224738d89f4686409a5def`
+- [x] implementation SHA `a010d7f0fb3871252580666df3264980b32c93cb`
+- [x] Android CI `29681462233`
+- [x] Windows CI `29681462236`
+- [x] artifact ID `8440717410`
+- [x] ZIP SHA-256 `5e545d9210a97819cfae79bde5a278e69631b395f55aa6cad0f260e4cd38134e`
+- [x] APK SHA-256 `f3bba473b78d1f44f73fe529cd6c0187881269615aeb709651a6f8cd675ffb86`
 - [x] signer `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- [x] expiry `2026-10-17T05:49:26Z`
-- [x] Android version `3.2.1-extended.16-standalone`
-- [x] versionCode `320120`
-- [x] no ordinary clipboard TTL
-- [x] no overflow eviction of accepted items
-- [x] final transformed `queue_full` handling present
-- [x] capacity and retry policy unit tests pass
+- [x] expiry `2026-10-17T09:22:32Z`
+- [x] Android version `3.2.1-extended.17-standalone`
+- [x] versionCode `320121`
+- [x] Gmail-shaped positive and no-code negative unit tests
+- [x] listener rebind/rescan and content-free diagnostic source assertions
+- [x] outbound debug notification source/ACK-isolation assertions
+- [x] no ordinary clipboard TTL or overflow eviction
+- [x] final transformed `queue_full` handling
 - [ ] in-place update succeeds
 - [ ] settings and permissions retained
 
 CI proves transformed source and build invariants, not HONOR target-device behavior.
+
+## Gmail / notification-listener stage matrix
+
+Before each row:
+
+1. confirm Android notification access is authorized;
+2. confirm actual listener runtime shows connected;
+3. enable outbound debug notification only for the diagnostic run;
+4. clear content-free diagnostics/counters;
+5. use a fresh Gmail OTP whose expanded notification visibly contains the code.
+
+| State | Runtime connected | Seen +1 | Text chars > 0 | Auth hint +1 | Queued +1 | Debug notice | Windows applied once | Peer ACK deletion | Status |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| Settings/UI visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| App backgrounded 30s | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Removed from recents | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Device locked | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Screen off 1 minute | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Active Gmail notification + manual reconnect/rescan | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+
+Interpretation:
+
+- runtime disconnected: listener binding/recovery failure;
+- runtime connected but seen remains zero: notification delivery failure;
+- seen increases and text characters remain zero: Gmail/Android exposed no text extras;
+- text exists and auth hint remains zero: Gmail preview omitted authentication wording;
+- auth hint increases and no-match increases: extractor defect;
+- queued increases: notification ingestion succeeded;
+- debug notification appears: P2S publish or at least one open P2P DataChannel accepted the item;
+- Windows applied once plus peer ACK deletion: full Extended P2P path succeeded.
+
+The debug notification proves transport acceptance only. It must contain no code, clipboard text, package name, relay ID, account identifier, or server address.
+
+After the diagnostic rows:
+
+- [ ] turn outbound debug notification OFF
+- [ ] send another accepted outbound item
+- [ ] confirm no debug notification appears
 
 ## Selection-only negative matrix
 
@@ -92,30 +131,12 @@ Keep the peer disconnected and use 17 unique values.
 - [ ] inbound ClipCascade writes create no outbound item
 - [ ] failed transport releases claim and later retry succeeds
 
-## Notification-code path
+## Other notification-code paths
 
 - [ ] synthetic OTP extractor -> queue -> transport -> ACK succeeds
 - [ ] Beeper real notification classified without content storage
 - [ ] Perceptron real notification classified without content storage
 - [ ] real SMS classified without content storage
-
-Allowed classifications:
-
-- `local_extractor / queued`
-- `notification_extras / empty`
-- `notification_extras / no_match`
-
-## Diagnostics interpretation
-
-- queue `0`, no diagnostic: capture missed
-- `no_text_available`: confirmation but no payload
-- `selected_text_fallback`: Accessibility selection used
-- `queue_full`: accepted items preserved; new item rejected
-- `transport_status / retrying`: transport unavailable
-- `p2p_peer / retrying`: no peer
-- `react_context / rebind_requested`: React absent
-- `react_event / emitted` then `peer_ack / acknowledged`: full ACK path
-- `dispatcher / interrupted`: internal exception
 
 ## Battery/usability observation
 
@@ -123,8 +144,9 @@ Allowed classifications:
 - [ ] foreground/background active time recorded
 - [ ] battery percentage recorded
 - [ ] reconnect latency with 15-second cap acceptable
-- [ ] queue-full behavior is understandable from diagnostics
+- [ ] listener rebind/rescan controls are understandable
+- [ ] outbound debug switch defaults OFF and is easy to disable
 
 ## Do not claim
 
-Do not mark target-device behavior passed from CI. Multilingual selection suppression, background/screen-off delivery, long-disconnect retention, queue-full preservation, exactly-once, real notification extraction, battery behavior, and Windows tray behavior remain unproven until isolated device evidence exists.
+Do not mark target-device behavior passed from CI. Real Gmail ingestion, listener recovery, debug ON/OFF behavior, multilingual selection suppression, background/screen-off delivery, long-disconnect retention, queue-full preservation, exactly-once, other real notification extraction, battery behavior, and Windows tray behavior remain unproven until isolated target-device evidence exists.
