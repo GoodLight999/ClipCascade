@@ -5,9 +5,9 @@ const gradlePath = path.resolve(__dirname, '..', 'android', 'app', 'build.gradle
 let gradle = fs.readFileSync(gradlePath, 'utf8');
 
 const previousCode = '        versionCode 320108';
-const currentCode = `        versionCode ${320116 + 1}`;
+const currentCode = '        versionCode 320118';
 const previousName = '        versionName "3.2.1-extended.4"';
-const currentName = '        versionName "3.2.1-extended.13"';
+const currentName = '        versionName "3.2.1-extended.14"';
 
 if (!gradle.includes(previousCode) || !gradle.includes(previousName)) {
   throw new Error('Expected Android update-probe version was not found');
@@ -17,4 +17,4 @@ gradle = gradle.replace(previousCode, currentCode);
 gradle = gradle.replace(previousName, currentName);
 fs.writeFileSync(gradlePath, gradle, 'utf8');
 
-console.log('Prepared Android Extended selection-only copy fix build.');
+console.log('Prepared Android Extended language-neutral copy confirmation build.');
