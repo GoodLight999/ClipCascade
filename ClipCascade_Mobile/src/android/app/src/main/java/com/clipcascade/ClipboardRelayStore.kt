@@ -11,7 +11,6 @@ object ClipboardRelayStore {
     private const val KEY_QUEUE = "items"
     private const val MAX_ITEMS = 16
     private const val MAX_TEXT_LENGTH = 500_000
-    private const val TTL_MS = 10 * 60_000L
     private const val DEDUP_MS = 2_000L
 
     data class Item(
@@ -26,8 +25,8 @@ object ClipboardRelayStore {
         val normalized = item.text.take(MAX_TEXT_LENGTH)
         if (normalized.isBlank()) return false
 
-        val active = activeItems(context).toMutableList()
-        if (active.any {
+        val pending = read(context).toMutableList()
+        if (pending.any {
                 it.text == normalized &&
                     item.createdAt - it.createdAt in 0..DEDUP_MS
             }
@@ -35,18 +34,18 @@ object ClipboardRelayStore {
             return false
         }
 
-        active += item.copy(text = normalized)
-        while (active.size > MAX_ITEMS) active.removeAt(0)
-        write(context, active)
+        pending += item.copy(text = normalized)
+        while (pending.size > MAX_ITEMS) pending.removeAt(0)
+        write(context, pending)
         return true
     }
 
     @Synchronized
-    fun pending(context: Context): Item? = activeItems(context).firstOrNull()
+    fun pending(context: Context): Item? = read(context).firstOrNull()
 
     @Synchronized
     fun remove(context: Context, id: String) {
-        write(context, activeItems(context).filterNot { it.id == id })
+        write(context, read(context).filterNot { it.id == id })
     }
 
     @Synchronized
@@ -55,16 +54,14 @@ object ClipboardRelayStore {
     }
 
     @Synchronized
-    fun count(context: Context): Int = activeItems(context).size
+    fun count(context: Context): Int = read(context).size
 
-    private fun activeItems(context: Context): List<Item> {
-        val now = System.currentTimeMillis()
-        val all = read(context)
-        val active = all.filter { now - it.createdAt in 0..TTL_MS }
-        if (active.size != all.size) write(context, active)
-        return active
-    }
-
+    /**
+     * Ordinary clipboard items are retained until acknowledgement or an explicit
+     * clear. The queue is already bounded by [MAX_ITEMS], so time-based expiry
+     * would only discard an unacknowledged Copy during a long screen-off or peer
+     * disconnect interval.
+     */
     private fun read(context: Context): List<Item> {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_QUEUE, null) ?: return emptyList()

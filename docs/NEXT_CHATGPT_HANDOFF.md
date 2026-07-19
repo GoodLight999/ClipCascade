@@ -9,9 +9,9 @@ This is the canonical single-document handoff for the next conversation. Read th
 - PR: `#1`
 - PR status: open and Draft
 - mandatory: keep PR #1 Draft; do not merge or mark ready
-- implementation anchor: `20ef493a3b322ec2d95f76cee8902426b7623559`
+- latest green implementation anchor: `20ef493a3b322ec2d95f76cee8902426b7623559`
 
-Commits after the implementation anchor may be documentation-only handoff consolidation. Verify the current PR head and CI before distributing a new artifact.
+A `.15 / 320119` candidate is being prepared for ACK-safe ordinary clipboard retention. Record its exact implementation SHA and both CIs before calling it green or distributing it.
 
 ## 2. Read in this exact order
 
@@ -19,18 +19,19 @@ Commits after the implementation anchor may be documentation-only handoff consol
 2. `docs/REQUIREMENTS.md`
 3. `docs/CURRENT_STATUS.md`
 4. `docs/NEXT_CHATGPT_HANDOFF.md`
-5. `docs/LATEST_LANGUAGE_NEUTRAL_COPY_HANDOFF.md`
-6. `docs/LATEST_GREEN_ARTIFACTS.md`
-7. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
-8. `docs/LATEST_SELECTION_ONLY_COPY_FALSE_POSITIVE_HANDOFF.md`
-9. `docs/LATEST_BACKGROUND_CLIPBOARD_INTERMITTENT_HANDOFF.md`
-10. `docs/LATEST_OTP_SELF_TEST_HANDOFF.md`
-11. `docs/LATEST_BROAD_OTP_EXTRACTION_HANDOFF.md`
-12. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
-13. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
-14. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
-15. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
-16. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
+5. `docs/LATEST_ACK_SAFE_CLIPBOARD_QUEUE_HANDOFF.md`
+6. `docs/LATEST_LANGUAGE_NEUTRAL_COPY_HANDOFF.md`
+7. `docs/LATEST_GREEN_ARTIFACTS.md`
+8. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
+9. `docs/LATEST_SELECTION_ONLY_COPY_FALSE_POSITIVE_HANDOFF.md`
+10. `docs/LATEST_BACKGROUND_CLIPBOARD_INTERMITTENT_HANDOFF.md`
+11. `docs/LATEST_OTP_SELF_TEST_HANDOFF.md`
+12. `docs/LATEST_BROAD_OTP_EXTRACTION_HANDOFF.md`
+13. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
+14. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
+15. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
+16. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
+17. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
 
 ## 3. User requirements that must not be weakened
 
@@ -43,6 +44,7 @@ The target behavior is:
 - UI language must not affect correctness;
 - ClipCascade's own inbound/local clipboard writes must not echo back;
 - persistent queue items are deleted only after the defined acknowledgement path;
+- a disconnected item must survive long screen-off / reconnect intervals instead of expiring before ACK;
 - real OTP extraction must not be claimed without real third-party notification proof;
 - Microsoft Phone Link and every competing clipboard synchronizer must be disabled during validation.
 
@@ -54,7 +56,7 @@ Windows/peer-to-Android reception has worked backgrounded and apparently screen-
 
 Never restore old success claims without isolated real-device evidence.
 
-## 5. Current Android build
+## 5. Latest green Android build
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
@@ -62,12 +64,12 @@ Never restore old success claims without isolated real-device evidence.
 - versionCode: `320118`
 - deterministic signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 
-Latest implementation-anchor CI:
+Latest green implementation-anchor CI:
 
 - Android standalone CI: `29669730768` — success
 - Desktop Windows CI: `29669730745` — success
 
-Latest Android artifact:
+Latest green Android artifact:
 
 - artifact ID: `8436928714`
 - artifact ZIP SHA-256: `a569ff44a9b998754fc6190c742993508801b030c3237ed9b67b556d8e66154a`
@@ -76,11 +78,35 @@ Latest Android artifact:
 
 See `docs/LATEST_GREEN_ARTIFACTS.md` for recovery details.
 
-## 6. Latest architecture correction: language-neutral copy confirmation
+## 6. `.15` ACK-safe durable clipboard queue candidate
 
-The `.13` approach was rejected by the user because it used English/Japanese strings such as `Copy`, `Copied`, `コピー`, and `コピーしました`. That design would fail on other UI languages. Do not restore it and do not solve it by adding more translations.
+Static audit found that `ClipboardRelayStore` removed ordinary clipboard items after ten minutes without peer ACK. That contradicted the 15-minute / 30+ minute screen-off tests, peer-disconnect recovery, and the rule that Extended P2P deletion follows Windows-applied ACK.
 
-The `.14` design is semantic and language-neutral:
+Candidate identity:
+
+- versionName: `3.2.1-extended.15-standalone`;
+- versionCode: `320119`;
+- package and signer unchanged.
+
+Candidate behavior:
+
+- ordinary clipboard items have no wall-clock expiry;
+- the existing 16-item queue bound remains;
+- relay-disable and explicit-clear paths still clear pending sensitive data;
+- defined acknowledgement still removes by `relayId`;
+- disconnected/no-peer/no-React retry backs off `3s -> 6s -> 12s -> 15s`;
+- new work, reconnect, recovery, or ACK resets the dispatcher and runs immediately;
+- in-flight ACK waiting remains at 3 seconds with the existing 15-second ACK timeout.
+
+The retry cap reduces idle wakeups without making a reconnect wait longer than approximately 15 seconds when no explicit recovery event arrives.
+
+Do not call `.15` green until its implementation SHA, Android CI, Windows CI, artifact ID, hashes, signer, and expiry are recorded.
+
+## 7. Language-neutral copy confirmation
+
+The `.13` approach was rejected because it used English/Japanese strings such as `Copy`, `Copied`, `コピー`, and `コピーしました`. Do not restore it and do not solve it by adding translations.
+
+The `.14+` design is semantic and language-neutral:
 
 1. `TYPE_VIEW_TEXT_SELECTION_CHANGED` only remembers the selected range.
 2. Selection itself never queues or sends.
@@ -107,13 +133,13 @@ Important transform detail:
 
 The old localized `CopyCueClassifier.kt` and its tests were deleted.
 
-## 7. Background-delivery recovery retained from `.12`
+## 8. Background-delivery recovery retained
 
 The intermittent symptom was: ordinary sharing often worked only while the UI was open, but sometimes worked briefly in the background. The exact first bad build is unknown.
 
 Retained repair mechanisms:
 
-- persistent native clipboard queue;
+- persistent native clipboard and OTP queues;
 - selected-text recovery when Android hides clipboard contents from background processes;
 - `ClipboardWriteGuard` echo suppression;
 - in-process React context bootstrap when the native queue outlives the React/Notifee generation;
@@ -123,7 +149,7 @@ Retained repair mechanisms:
 
 Do not attribute the regression solely to `.11`; `.11` did not modify ordinary-copy source files. The strongest concrete earlier regression candidate was the `.8` idle-power transform, but real-device evidence has not isolated one cause.
 
-## 8. Acknowledgement path that must be preserved
+## 9. Acknowledgement path that must be preserved
 
 Common local path:
 
@@ -147,13 +173,13 @@ Preserve:
 - acknowledgement-based deletion;
 - the already implemented Windows-applied ACK.
 
-Do not replace Extended P2P ACK with local transport acceptance or P2S semantics.
+Do not replace Extended P2P ACK with local transport acceptance or P2S semantics. Do not reintroduce ordinary-copy wall-clock expiry before ACK.
 
-## 9. OTP state
+## 10. OTP state
 
 Broad OTP extraction remains implemented, including standalone alphanumeric codes such as the Perceptron Network example `8F92FE`.
 
-The built-in synthetic OTP test now deterministically exercises:
+The built-in synthetic OTP test deterministically exercises:
 
 `extractor -> persistent OTP queue -> dispatcher -> transport -> ACK`
 
@@ -167,7 +193,7 @@ Real Gmail, Beeper, Perceptron, or SMS extraction remains unproven. If the synth
 
 Do not immediately loosen the regex. Confirm selected source app, notification access, expanded notification surfaces, and whether the code is exposed in notification extras. Never store raw notification text, email addresses, app/package names, or authentication codes in diagnostics.
 
-## 10. Diagnostics interpretation
+## 11. Diagnostics interpretation
 
 For ordinary copy:
 
@@ -183,9 +209,9 @@ For ordinary copy:
 
 Do not store clipboard text or source-app identity in diagnostics.
 
-## 11. Mandatory next target-device validation
+## 12. Mandatory next target-device validation
 
-Use the `.14 / 320118` APK installed over the existing build without uninstalling.
+Use the latest green APK. Do not use the `.15` candidate until both CIs and artifact identity are recorded. Install over the existing build without uninstalling.
 
 Before testing:
 
@@ -205,13 +231,14 @@ Run in this order:
 6. Confirm exactly one Windows clipboard application per unique Copy.
 7. Confirm native queue deletion occurs only after peer ACK.
 8. Confirm Windows-to-Android inbound writes do not create a new Android outbound item.
-9. Disconnect the peer, copy once, reconnect, and confirm the persistent queue drains once.
-10. Rerun the synthetic OTP test.
-11. Retry one real Perceptron/Gmail-style notification and record only `queued`, `empty`, or `no_match` classification.
+9. Disconnect the peer, copy once, keep it disconnected for more than ten minutes, reconnect, and confirm the persistent queue drains once.
+10. Repeat the disconnected test for more than thirty minutes with the screen off. Confirm the queue is still present before reconnect and is removed only after ACK.
+11. Rerun the synthetic OTP test.
+12. Retry one real Perceptron/Gmail-style notification and record only `queued`, `empty`, or `no_match` classification.
 
 Use `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md` as the record. Do not mark any row passed without isolated target-device evidence.
 
-## 12. Required engineering procedure for every new change
+## 13. Required engineering procedure for every new change
 
 1. Read the documents in the order above.
 2. Check the current PR head and confirm PR #1 is still Draft.
@@ -226,16 +253,17 @@ Use `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md` as the record. Do not mark any row
 
 If a GitHub write is rejected because a blob SHA is stale, refetch the file and retry. Do not omit the documentation update.
 
-## 13. Do not claim
+## 14. Do not claim
 
 Until isolated target-device evidence exists, do not claim:
 
 - selection-only suppression is proven;
 - multilingual behavior is proven;
 - Android background, removed-from-recents, locked, or screen-off outbound is reliable;
+- long-disconnect queue retention is proven on the target device;
 - exactly-once delivery is proven on the target device;
 - real third-party OTP extraction works;
 - battery efficiency is proven;
 - Windows tray ghost prevention is proven.
 
-CI proves build consistency and unit-level invariants, not HONOR target-device behavior.
+CI proves build consistency and unit-level invariants, not HONOR target-device behavior. Keep PR #1 Draft.

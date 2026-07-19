@@ -11,9 +11,9 @@ Before every run:
 - use a unique synthetic text value for every ordinary-copy row;
 - never store real authentication values.
 
-## Current build
+## Latest green build
 
-- [x] Android CI green at implementation anchor `20ef493a3b322ec2d95f76cee8902426b7623559` — run `29669730768`
+- [x] Android CI green at `.14` implementation anchor `20ef493a3b322ec2d95f76cee8902426b7623559` — run `29669730768`
 - [x] Windows CI green at the same implementation anchor — run `29669730745`
 - [x] matching Android artifact recorded — ID `8436928714`
 - [x] artifact ZIP SHA-256 recorded — `a569ff44a9b998754fc6190c742993508801b030c3237ed9b67b556d8e66154a`
@@ -21,10 +21,20 @@ Before every run:
 - [x] Android version `3.2.1-extended.14-standalone`
 - [x] Android versionCode `320118`
 - [x] stable signer unchanged — `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+
+## `.15` ACK-safe queue candidate
+
+- [ ] implementation SHA recorded
+- [ ] Android CI green
+- [ ] Windows CI green
+- [ ] matching `.15 / 320119` Android artifact recorded
+- [ ] artifact ZIP and APK SHA-256 recorded
+- [ ] ordinary clipboard store contains no wall-clock TTL
+- [ ] idle retry backoff policy unit tests pass
 - [ ] in-place update succeeds
 - [ ] settings and permissions retained
 
-The current PR head may contain documentation-only commits after the implementation anchor. Confirm its CI in PR metadata before beginning device validation; do not represent documentation CI as device proof.
+The `.15` candidate must not be distributed or called green until the unchecked CI/artifact rows are completed.
 
 ## Language-neutral selection-only negative matrix
 
@@ -64,6 +74,16 @@ For each state, test immediate Copy and Copy after waiting 3, 15, and 60 seconds
 | Peer disconnected then restored | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | React/service generation reclaimed | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
+## ACK-safe long-disconnect matrix
+
+Use one unique Copy per row. Do not reconnect early merely to inspect Windows.
+
+| Disconnected/screen-off interval | Queue retained before reconnect | Windows applied once after reconnect | Peer ACK observed | Queue deleted only after ACK | Retry latency acceptable | Status |
+|---|---:|---:|---:|---:|---:|---|
+| More than 10 minutes | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| More than 30 minutes | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Process/service generation recreated while pending | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+
 ## Delivery interpretation
 
 - queue `0`, no recent diagnostic: capture missed;
@@ -101,4 +121,4 @@ Allowed privacy-safe real-notification classifications:
 
 ## Do not claim
 
-Do not mark multilingual copy confirmation, selection-only suppression, background, removed-from-recents, locked, screen-off, exactly-once, real-SMS, real-email, battery-efficiency, or Windows-tray behavior as passed without isolated target-device evidence.
+Do not mark multilingual copy confirmation, selection-only suppression, background, removed-from-recents, locked, screen-off, long-disconnect retention, exactly-once, real-SMS, real-email, battery-efficiency, or Windows-tray behavior as passed without isolated target-device evidence.

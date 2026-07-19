@@ -6,21 +6,44 @@ Resume work in this order:
 2. `docs/CURRENT_STATUS.md`
 3. `docs/NEXT_CHATGPT_HANDOFF.md`
 4. `docs/TEST_MATRIX.md`
-5. `docs/LATEST_LANGUAGE_NEUTRAL_COPY_HANDOFF.md`
-6. `docs/LATEST_GREEN_ARTIFACTS.md`
-7. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
-8. `docs/LATEST_SELECTION_ONLY_COPY_FALSE_POSITIVE_HANDOFF.md`
-9. `docs/LATEST_BACKGROUND_CLIPBOARD_INTERMITTENT_HANDOFF.md`
-10. `docs/LATEST_OTP_SELF_TEST_HANDOFF.md`
-11. `docs/LATEST_BROAD_OTP_EXTRACTION_HANDOFF.md`
-12. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
-13. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
-14. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
-15. `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`
-16. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
-17. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
+5. `docs/LATEST_ACK_SAFE_CLIPBOARD_QUEUE_HANDOFF.md`
+6. `docs/LATEST_LANGUAGE_NEUTRAL_COPY_HANDOFF.md`
+7. `docs/LATEST_GREEN_ARTIFACTS.md`
+8. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
+9. `docs/LATEST_SELECTION_ONLY_COPY_FALSE_POSITIVE_HANDOFF.md`
+10. `docs/LATEST_BACKGROUND_CLIPBOARD_INTERMITTENT_HANDOFF.md`
+11. `docs/LATEST_OTP_SELF_TEST_HANDOFF.md`
+12. `docs/LATEST_BROAD_OTP_EXTRACTION_HANDOFF.md`
+13. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
+14. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
+15. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
+16. `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`
+17. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
+18. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
 
-Current phase: prove language-neutral Android Copy confirmation and reliable background delivery while preserving Extended P2P peer-applied ACK, persistent queues, OTP extraction, and PR #1 Draft state.
+Current phase: validate the `.15` ACK-safe durable ordinary-copy queue and language-neutral Android Copy confirmation while preserving Extended P2P peer-applied ACK, persistent OTP extraction, and PR #1 Draft state.
+
+## 2026-07-19 — ACK-safe durable clipboard queue and bounded retry
+
+A fresh static audit found a deterministic Priority 1 defect before additional target-device guessing:
+
+- `ClipboardRelayStore` silently removed ordinary clipboard items after ten minutes;
+- the removal did not require peer ACK;
+- this contradicted the 15-minute / 30+ minute screen-off matrix, peer-disconnect recovery, and the explicit rule that Extended P2P queue deletion follows Windows-applied ACK.
+
+Candidate `.15 / 320119` repair:
+
+- removed wall-clock expiry from the ordinary clipboard queue;
+- retained the existing 16-item storage bound, deduplication, explicit clear, and relay-disable clear;
+- added idle retry backoff `3s -> 6s -> 12s -> 15s` to avoid replacing TTL with a permanent 3-second wakeup loop;
+- explicit schedule/reconnect/recovery requests reset the delay and run immediately;
+- ACK waiting remains on the 3-second cadence and the existing 15-second timeout;
+- added pure retry-policy unit tests and CI assertions that ordinary clipboard TTL cannot return;
+- preserved relay IDs, relay claims, validation-before-ACK, old-peer fallback, and Extended Windows-applied ACK.
+
+No target-device success is claimed. The required proof is a disconnected Copy retained beyond ten and thirty minutes, followed by exactly one Windows application and ACK-based deletion after reconnection.
+
+Implementation/CI/artifact details are pending and must be added after both workflows finish.
 
 ## 2026-07-19 — Final handoff consolidation audit
 
@@ -58,7 +81,7 @@ Implemented `.14 / 320118`:
 - floating-toolbar labels, toast text, and translated completion strings are not consulted;
 - added `ClipboardCopySignalPolicy` and locale-free unit tests;
 - deleted `CopyCueClassifier` and its localized tests;
-- CI fails if transformed service code still references `CopyCueClassifier` or `looksLikeCopyConfirmation`.
+- CI fails if the transformed service still references `CopyCueClassifier` or `looksLikeCopyConfirmation`.
 
 Target-device multilingual and selection-only proof remains pending.
 

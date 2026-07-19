@@ -77,9 +77,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.14" App.js
-          grep -q "versionCode 320118" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.14"' android/app/build.gradle
+          grep -q "3.2.1-extended.15" App.js
+          grep -q "versionCode 320119" android/app/build.gradle
+          grep -q 'versionName "3.2.1-extended.15"' android/app/build.gradle
           grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
           grep -q "notificationTimeout = 100" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
           grep -q "ClipboardCopySignalPolicy.shouldCaptureClipboardChange" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
@@ -93,6 +93,12 @@ jobs:
             echo "Localized copy-confirmation function still remains" >&2
             exit 1
           fi
+          if grep -q "TTL_MS" android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt; then
+            echo "Ordinary clipboard queue still expires before acknowledgement" >&2
+            exit 1
+          fi
+          grep -q "MAX_IDLE_DELAY_MS = 15_000L" android/app/src/main/java/com/clipcascade/ClipboardRelayRetryPolicy.kt
+          grep -q "idleRetryBacksOffWithoutExceedingCap" android/app/src/test/java/com/clipcascade/ClipboardRelayRetryPolicyTest.kt
           grep -q "requestReactContextBootstrap" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q "createReactContextInBackground" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q 'path = "react_bootstrap"' android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt

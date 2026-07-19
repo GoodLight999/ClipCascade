@@ -9,7 +9,6 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 
 object ClipboardRelayDispatcher {
     private const val TAG = "ClipboardRelayDispatcher"
-    private const val RETRY_DELAY_MS = 3_000L
     private const val ACK_TIMEOUT_MS = 15_000L
     private val handler = Handler(Looper.getMainLooper())
 
@@ -25,6 +24,9 @@ object ClipboardRelayDispatcher {
     @Volatile
     private var inFlightSince = 0L
 
+    @Volatile
+    private var retryDelayMs = ClipboardRelayRetryPolicy.INITIAL_DELAY_MS
+
     private val retryTask = object : Runnable {
         override fun run() {
             val context = appContext
@@ -35,12 +37,23 @@ object ClipboardRelayDispatcher {
 
             tryDispatch(context)
             if (ClipboardRelayStore.count(context) > 0) {
-                handler.postDelayed(this, RETRY_DELAY_MS)
+                val waitingForAck = inFlightId != null
+                val delay = if (waitingForAck) {
+                    ClipboardRelayRetryPolicy.INITIAL_DELAY_MS
+                } else {
+                    retryDelayMs
+                }
+                retryDelayMs = ClipboardRelayRetryPolicy.nextDelayMs(
+                    currentDelayMs = delay,
+                    waitingForAck = waitingForAck,
+                )
+                handler.postDelayed(this, delay)
             } else {
                 scheduled = false
                 appContext = null
                 inFlightId = null
                 inFlightSince = 0L
+                retryDelayMs = ClipboardRelayRetryPolicy.INITIAL_DELAY_MS
             }
         }
     }
@@ -48,7 +61,14 @@ object ClipboardRelayDispatcher {
     @Synchronized
     fun schedule(context: Context) {
         appContext = context.applicationContext
-        if (scheduled) return
+        retryDelayMs = ClipboardRelayRetryPolicy.INITIAL_DELAY_MS
+        if (scheduled) {
+            // A new item, reconnect, or recovery event should not wait behind an
+            // old idle-backoff timer.
+            handler.removeCallbacks(retryTask)
+            handler.post(retryTask)
+            return
+        }
         scheduled = true
         handler.post(retryTask)
     }
@@ -62,6 +82,9 @@ object ClipboardRelayDispatcher {
             inFlightSince = 0L
         }
         record(context, "peer_ack", "acknowledged")
+        // Drain the next durable item immediately rather than waiting for the
+        // previous retry timer.
+        schedule(context.applicationContext)
         return true
     }
 
