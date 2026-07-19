@@ -21,7 +21,7 @@ Resume work in this order:
 17. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
 18. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
 
-Current phase: validate the `.15` ACK-safe durable ordinary-copy queue and language-neutral Android Copy confirmation while preserving Extended P2P peer-applied ACK, persistent OTP extraction, and PR #1 Draft state.
+Current phase: validate `.15 / 320119` ACK-safe durable ordinary-copy delivery and language-neutral Copy confirmation while preserving Extended P2P peer-applied ACK, OTP extraction, and PR #1 Draft state.
 
 ## 2026-07-19 — ACK-safe durable clipboard queue and bounded retry
 
@@ -31,48 +31,44 @@ A fresh static audit found a deterministic Priority 1 defect before additional t
 - the removal did not require peer ACK;
 - this contradicted the 15-minute / 30+ minute screen-off matrix, peer-disconnect recovery, and the explicit rule that Extended P2P queue deletion follows Windows-applied ACK.
 
-Candidate `.15 / 320119` repair:
+Implemented `.15 / 320119`:
 
 - removed wall-clock expiry from the ordinary clipboard queue;
 - retained the existing 16-item storage bound, deduplication, explicit clear, and relay-disable clear;
-- added idle retry backoff `3s -> 6s -> 12s -> 15s` to avoid replacing TTL with a permanent 3-second wakeup loop;
+- added idle retry backoff `3s -> 6s -> 12s -> 15s` to avoid replacing TTL with a permanent three-second wakeup loop;
 - explicit schedule/reconnect/recovery requests reset the delay and run immediately;
-- ACK waiting remains on the 3-second cadence and the existing 15-second timeout;
+- ACK waiting remains on the three-second cadence with the existing 15-second timeout;
 - added pure retry-policy unit tests and CI assertions that ordinary clipboard TTL cannot return;
 - preserved relay IDs, relay claims, validation-before-ACK, old-peer fallback, and Extended Windows-applied ACK.
 
-No target-device success is claimed. The required proof is a disconnected Copy retained beyond ten and thirty minutes, followed by exactly one Windows application and ACK-based deletion after reconnection.
+Implementation evidence:
 
-Implementation/CI/artifact details are pending and must be added after both workflows finish.
+- source: `1e3aae70e2052420bfbcf2e326e04638787dfc1c`;
+- Android CI: `29674843116`, success;
+- Windows CI: `29674843145`, success;
+- Android artifact ID: `8438520128`;
+- artifact ZIP SHA-256: `e3f50c87ebea56fe0039e3e08a909d282dc10631bb2dc808d6a01e86a1792e2a`;
+- APK SHA-256: `15ee61ad66e68f114b3a52c160773976ac705954a3a278b6b892559bae6b8ee2`;
+- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`;
+- artifact expiry: `2026-10-17T05:26:07Z`.
+
+No implementation CI failure occurred. No target-device success is claimed. Required proof is a disconnected Copy retained beyond ten and thirty minutes, followed by exactly one Windows application and ACK-based deletion after reconnection.
+
+## 2026-07-19 — Documentation consistency finding
+
+`docs/TEST_MATRIX.md` still contains historical `.4 / 320107` identity and a Yahoo! JAPAN SMS success that was later invalidated by Phone Link contamination. The canonical live matrix is `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`, which explicitly supersedes all older Android outbound success rows. Do not treat the older checked rows as current evidence.
 
 ## 2026-07-19 — Final handoff consolidation audit
 
-The long development conversation was audited before handoff.
+The prior conversation audited the handoff documents and established `.14 / 320118` as the first language-neutral Copy candidate. Its implementation anchor was `20ef493a3b322ec2d95f76cee8902426b7623559`, with Android CI `29669730768`, Windows CI `29669730745`, and artifact ID `8436928714`. `.14` remains useful as the comparison anchor before the separate `.15` queue-lifetime repair.
 
-Findings:
-
-- `NEXT_CHATGPT_HANDOFF.md`, `CURRENT_STATUS.md`, and the focused `.14` handoff already described the language-neutral architecture;
-- `LATEST_GREEN_ARTIFACTS.md` was stale at `.5` and was replaced with the `.14` implementation anchor, CI runs, artifact ID, hashes, signer, expiry, and unproven scope;
-- `TEST_MATRIX_BACKGROUND_OUTBOUND.md` had not recorded the green `.14` CI and artifact and was corrected;
-- the canonical next-thread handoff was expanded to include history, architecture, transform ordering, ACK invariants, OTP limits, diagnostics, exact device-test order, and mandatory engineering procedure;
-- all handoff-only commits continue to trigger Android and Windows CI; verify both on the final documentation HEAD before closing the conversation.
-
-Implementation anchor and matching build:
-
-- source: `20ef493a3b322ec2d95f76cee8902426b7623559`;
-- Android CI: `29669730768`, success;
-- Windows CI: `29669730745`, success;
-- Android artifact ID: `8436928714`;
-- artifact ZIP SHA-256: `a569ff44a9b998754fc6190c742993508801b030c3237ed9b67b556d8e66154a`;
-- APK SHA-256: `29c8e4a88b556aa9d94a07643b894d15d746740d5207e543671d8875196d63ba`.
-
-No new real-device success was claimed.
+No real-device success was claimed.
 
 ## 2026-07-19 — Language-neutral copy confirmation redesign
 
 The user correctly rejected `.13`: using English/Japanese `Copy`, `Copied`, `コピー`, and `コピーしました` strings in the correctness path would fail on other UI languages. Adding translations was rejected as the wrong architecture.
 
-Implemented `.14 / 320118`:
+Implemented `.14 / 320118` and retained in `.15`:
 
 - selection events only remember text and never queue/send;
 - `OnPrimaryClipChangedListener` is the primary proof of a real OS clipboard mutation;
@@ -87,20 +83,12 @@ Target-device multilingual and selection-only proof remains pending.
 
 ## 2026-07-18 — Selection-only false-positive repair
 
-The user reported that an older build could relay text after selection alone. Audit showed that `.12` still had a gap: opening the floating selection toolbar could emit a passive window event whose node contained the `Copy` / `コピー` command, and the generic marker check could treat that appearance as completion.
-
-Implemented `.13 / 320117` repair:
-
-- generic `Copy` / `コピー` labels were accepted only for direct click or context-click events;
-- passive events required completion wording;
-- `ACTION_COPY`, clipboard-change fallback, and internal-write suppression remained.
-
-This was CI-green but superseded by `.14` because the text-based distinction was language-dependent.
+`.13 / 320117` distinguished direct copy interaction from passive toolbar appearance, but it was superseded because the distinction still depended on English/Japanese UI strings.
 
 ## 2026-07-18 — Intermittent background ordinary-copy recovery
 
-User report: ordinary sharing often worked only while the UI was open, sometimes worked briefly in the background, and the first bad build was unknown. `.12 / 320116` restored source-node inspection, added selected-text plus clipboard-change fallback, internal-write suppression, React bootstrap recovery, diagnostics, and Perceptron OTP coverage. Real-device proof remains pending.
+`.12 / 320116` restored source-node inspection, added selected-text plus clipboard-change fallback, internal-write suppression, React bootstrap recovery, diagnostics, and Perceptron OTP coverage. Real-device proof remains pending.
 
 ## 2026-07-18 — OTP self-test dispatch repair
 
-The synthetic test now passes its generated notification text through the extractor, persistent OTP queue, dispatcher, transport, and acknowledgement path directly. Real third-party notification access remains a separate device test.
+The synthetic test passes its generated notification text through the extractor, persistent OTP queue, dispatcher, transport, and acknowledgement path directly. Real third-party notification access remains a separate device test.

@@ -4,43 +4,37 @@ Branch: `stability-mobile-otp`
 Draft PR: `#1`  
 Repository: `GoodLight999/ClipCascade`
 
-## Latest green Android target
+## Current Android target
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.14-standalone`
-- versionCode: `320118`
+- versionName: `3.2.1-extended.15-standalone`
+- versionCode: `320119`
 - deterministic signer unchanged
-- implementation anchor: `20ef493a3b322ec2d95f76cee8902426b7623559`
-- Android CI: `29669730768`, success
-- Windows CI: `29669730745`, success
-- Android artifact ID: `8436928714`
+- implementation anchor: `1e3aae70e2052420bfbcf2e326e04638787dfc1c`
+- Android CI: `29674843116`, success
+- Windows CI: `29674843145`, success
+- Android artifact ID: `8438520128`
 
 Artifact hashes and expiry are recorded in `docs/LATEST_GREEN_ARTIFACTS.md`.
 
-## Candidate under CI
-
-Candidate `.15 / 320119` removes the ordinary clipboard queue's ten-minute unacknowledged expiry and adds bounded idle retry backoff. Exact implementation SHA, CI runs, and artifact details must be recorded after both workflows complete.
-
-See `docs/LATEST_ACK_SAFE_CLIPBOARD_QUEUE_HANDOFF.md`.
-
 ## Current focus
 
-The current focus is ACK-safe durable Android outbound delivery plus language-neutral Copy confirmation. The `.14` semantic copy design remains intact; `.15` corrects a separate queue-lifetime defect discovered by static audit.
+The current focus is isolated target-device proof of ACK-safe durable Android outbound delivery plus language-neutral Copy confirmation. `.15` fixes a deterministic queue-lifetime defect while retaining the `.14` semantic Copy architecture.
 
 ## ACK-safe ordinary clipboard retention
 
 The pre-`.15` store could remove an ordinary clipboard item after ten minutes without any acknowledgement. This contradicted the 15-minute / 30+ minute screen-off matrix, peer-disconnect recovery, and the Extended P2P ACK invariant.
 
-Candidate `.15` behavior:
+Current behavior:
 
 - no wall-clock expiry for ordinary clipboard queue items;
 - existing 16-item bound remains;
 - explicit relay-disable and user-clear paths still clear pending sensitive values;
-- defined acknowledgement still removes by `relayId`;
-- disconnected retry backs off `3s -> 6s -> 12s -> 15s`;
+- defined acknowledgement removes by `relayId`;
+- disconnected/no-peer/no-React retry backs off `3s -> 6s -> 12s -> 15s`;
 - new work/reconnect/recovery resets the delay and attempts immediately;
-- in-flight ACK waiting remains at 3 seconds with the existing 15-second timeout.
+- in-flight ACK waiting remains at three seconds with the existing 15-second timeout.
 
 ## Language-neutral copy confirmation
 
@@ -80,11 +74,15 @@ Old/non-Extended peer:
 
 `LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
 
-Do not weaken or bypass the Extended Windows-applied acknowledgement.
+Do not weaken or bypass the Extended Windows-applied acknowledgement. Do not restore ordinary-copy time-based expiry.
 
 ## OTP status
 
 Broad extraction and deterministic synthetic OTP delivery remain present. Real Gmail/Beeper/Perceptron extraction is not proven until the target notification surfaces expose the code and device tests pass.
+
+## Documentation correction
+
+`docs/TEST_MATRIX.md` contains older `.4` identity and Phone Link-contaminated success history. It is historical and not authoritative for Android outbound. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md` supersedes those rows.
 
 ## Mandatory proof
 
@@ -94,6 +92,6 @@ Use `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`.
 
 ## Do not claim
 
-Do not claim `.15` green until both CIs succeed. Do not claim multilingual correctness, selection-only suppression, reliable background or screen-off outbound, long-disconnect retention, exactly-once delivery, or real third-party OTP extraction until isolated target-device evidence exists.
+Do not claim multilingual correctness, selection-only suppression, reliable background or screen-off outbound, long-disconnect retention, exactly-once delivery, or real third-party OTP extraction until isolated target-device evidence exists.
 
 Canonical complete handoff: `docs/NEXT_CHATGPT_HANDOFF.md`. Keep PR #1 Draft.

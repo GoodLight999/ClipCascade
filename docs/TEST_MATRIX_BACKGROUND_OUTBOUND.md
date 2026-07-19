@@ -1,6 +1,6 @@
 # Android Background Outbound Validation Matrix
 
-This matrix supersedes every older checked Android outbound or real-service success item.
+This matrix supersedes every older checked Android outbound or real-service success item, including the Phone Link-contaminated Yahoo! JAPAN SMS row in `docs/TEST_MATRIX.md`.
 
 Before every run:
 
@@ -11,30 +11,23 @@ Before every run:
 - use a unique synthetic text value for every ordinary-copy row;
 - never store real authentication values.
 
-## Latest green build
+## Current green build
 
-- [x] Android CI green at `.14` implementation anchor `20ef493a3b322ec2d95f76cee8902426b7623559` — run `29669730768`
-- [x] Windows CI green at the same implementation anchor — run `29669730745`
-- [x] matching Android artifact recorded — ID `8436928714`
-- [x] artifact ZIP SHA-256 recorded — `a569ff44a9b998754fc6190c742993508801b030c3237ed9b67b556d8e66154a`
-- [x] extracted APK SHA-256 recorded — `29c8e4a88b556aa9d94a07643b894d15d746740d5207e543671d8875196d63ba`
-- [x] Android version `3.2.1-extended.14-standalone`
-- [x] Android versionCode `320118`
-- [x] stable signer unchanged — `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-
-## `.15` ACK-safe queue candidate
-
-- [ ] implementation SHA recorded
-- [ ] Android CI green
-- [ ] Windows CI green
-- [ ] matching `.15 / 320119` Android artifact recorded
-- [ ] artifact ZIP and APK SHA-256 recorded
-- [ ] ordinary clipboard store contains no wall-clock TTL
-- [ ] idle retry backoff policy unit tests pass
+- [x] implementation SHA `1e3aae70e2052420bfbcf2e326e04638787dfc1c`
+- [x] Android CI green — run `29674843116`
+- [x] Windows CI green — run `29674843145`
+- [x] matching Android artifact — ID `8438520128`
+- [x] artifact ZIP SHA-256 — `e3f50c87ebea56fe0039e3e08a909d282dc10631bb2dc808d6a01e86a1792e2a`
+- [x] extracted APK SHA-256 — `15ee61ad66e68f114b3a52c160773976ac705954a3a278b6b892559bae6b8ee2`
+- [x] Android version `3.2.1-extended.15-standalone`
+- [x] Android versionCode `320119`
+- [x] stable signer — `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- [x] ordinary clipboard store contains no wall-clock TTL
+- [x] idle retry backoff policy unit tests pass
 - [ ] in-place update succeeds
 - [ ] settings and permissions retained
 
-The `.15` candidate must not be distributed or called green until the unchecked CI/artifact rows are completed.
+CI proves transformed source and build invariants, not HONOR target-device behavior.
 
 ## Language-neutral selection-only negative matrix
 
@@ -118,6 +111,16 @@ Allowed privacy-safe real-notification classifications:
 - `local_extractor / queued`;
 - `notification_extras / empty`;
 - `notification_extras / no_match`.
+
+## Battery observation
+
+Record the same network/peer configuration and comparable idle interval:
+
+- [ ] foreground-service active time;
+- [ ] background active time;
+- [ ] battery percentage consumed;
+- [ ] reconnect latency after 15-second idle retry cap;
+- [ ] no usability regression from bounded backoff.
 
 ## Do not claim
 

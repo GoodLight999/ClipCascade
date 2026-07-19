@@ -9,9 +9,9 @@ This is the canonical single-document handoff for the next conversation. Read th
 - PR: `#1`
 - PR status: open and Draft
 - mandatory: keep PR #1 Draft; do not merge or mark ready
-- latest green implementation anchor: `20ef493a3b322ec2d95f76cee8902426b7623559`
+- current implementation anchor: `1e3aae70e2052420bfbcf2e326e04638787dfc1c`
 
-A `.15 / 320119` candidate is being prepared for ACK-safe ordinary clipboard retention. Record its exact implementation SHA and both CIs before calling it green or distributing it.
+Commits after the implementation anchor may be documentation-only. Verify the current PR head and both CIs before distributing an artifact.
 
 ## 2. Read in this exact order
 
@@ -32,6 +32,8 @@ A `.15 / 320119` candidate is being prepared for ACK-safe ordinary clipboard ret
 15. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
 16. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
 17. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
+
+`docs/TEST_MATRIX.md` is an older broad matrix. It still contains `.4 / 320107` identity and a Yahoo! JAPAN SMS success later invalidated by Phone Link contamination. For Android outbound evidence, `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md` is authoritative and supersedes those rows.
 
 ## 3. User requirements that must not be weakened
 
@@ -56,51 +58,55 @@ Windows/peer-to-Android reception has worked backgrounded and apparently screen-
 
 Never restore old success claims without isolated real-device evidence.
 
-## 5. Latest green Android build
+## 5. Current green Android build
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.14-standalone`
-- versionCode: `320118`
+- versionName: `3.2.1-extended.15-standalone`
+- versionCode: `320119`
 - deterministic signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- implementation anchor: `1e3aae70e2052420bfbcf2e326e04638787dfc1c`
 
-Latest green implementation-anchor CI:
+Implementation-anchor CI:
 
-- Android standalone CI: `29669730768` — success
-- Desktop Windows CI: `29669730745` — success
+- Android standalone CI: `29674843116` — success
+- Desktop Windows CI: `29674843145` — success
 
-Latest green Android artifact:
+Android artifact:
 
-- artifact ID: `8436928714`
-- artifact ZIP SHA-256: `a569ff44a9b998754fc6190c742993508801b030c3237ed9b67b556d8e66154a`
-- extracted APK SHA-256: `29c8e4a88b556aa9d94a07643b894d15d746740d5207e543671d8875196d63ba`
-- expiry: `2026-10-17T02:08:43Z`
+- artifact ID: `8438520128`
+- artifact ZIP SHA-256: `e3f50c87ebea56fe0039e3e08a909d282dc10631bb2dc808d6a01e86a1792e2a`
+- extracted APK SHA-256: `15ee61ad66e68f114b3a52c160773976ac705954a3a278b6b892559bae6b8ee2`
+- expiry: `2026-10-17T05:26:07Z`
 
 See `docs/LATEST_GREEN_ARTIFACTS.md` for recovery details.
 
-## 6. `.15` ACK-safe durable clipboard queue candidate
+## 6. Latest repair: ACK-safe durable ordinary clipboard queue
 
-Static audit found that `ClipboardRelayStore` removed ordinary clipboard items after ten minutes without peer ACK. That contradicted the 15-minute / 30+ minute screen-off tests, peer-disconnect recovery, and the rule that Extended P2P deletion follows Windows-applied ACK.
+Static audit found that the previous `ClipboardRelayStore` removed ordinary clipboard items after ten minutes without peer ACK. That contradicted the 15-minute / 30+ minute screen-off tests, peer-disconnect recovery, and the rule that Extended P2P deletion follows Windows-applied ACK.
 
-Candidate identity:
-
-- versionName: `3.2.1-extended.15-standalone`;
-- versionCode: `320119`;
-- package and signer unchanged.
-
-Candidate behavior:
+`.15 / 320119` behavior:
 
 - ordinary clipboard items have no wall-clock expiry;
 - the existing 16-item queue bound remains;
 - relay-disable and explicit-clear paths still clear pending sensitive data;
-- defined acknowledgement still removes by `relayId`;
+- defined acknowledgement removes by `relayId`;
 - disconnected/no-peer/no-React retry backs off `3s -> 6s -> 12s -> 15s`;
 - new work, reconnect, recovery, or ACK resets the dispatcher and runs immediately;
-- in-flight ACK waiting remains at 3 seconds with the existing 15-second ACK timeout.
+- in-flight ACK waiting remains at three seconds with the existing 15-second ACK timeout.
 
 The retry cap reduces idle wakeups without making a reconnect wait longer than approximately 15 seconds when no explicit recovery event arrives.
 
-Do not call `.15` green until its implementation SHA, Android CI, Windows CI, artifact ID, hashes, signer, and expiry are recorded.
+Files:
+
+- `ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt`
+- `ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/ClipboardRelayDispatcher.kt`
+- `ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/ClipboardRelayRetryPolicy.kt`
+- `ClipCascade_Mobile/src/android/app/src/test/java/com/clipcascade/ClipboardRelayRetryPolicyTest.kt`
+
+Android CI rejects any ordinary clipboard store containing `TTL_MS` and runs the retry-policy unit tests.
+
+Do not restore time-based deletion before ACK. Queue pressure remains bounded by 16 items; overflow eviction is a separate explicit bound, not a time-based success substitute.
 
 ## 7. Language-neutral copy confirmation
 
@@ -211,7 +217,7 @@ Do not store clipboard text or source-app identity in diagnostics.
 
 ## 12. Mandatory next target-device validation
 
-Use the latest green APK. Do not use the `.15` candidate until both CIs and artifact identity are recorded. Install over the existing build without uninstalling.
+Use `.15 / 320119`, installed over the existing stable-signed build without uninstalling.
 
 Before testing:
 
@@ -233,8 +239,9 @@ Run in this order:
 8. Confirm Windows-to-Android inbound writes do not create a new Android outbound item.
 9. Disconnect the peer, copy once, keep it disconnected for more than ten minutes, reconnect, and confirm the persistent queue drains once.
 10. Repeat the disconnected test for more than thirty minutes with the screen off. Confirm the queue is still present before reconnect and is removed only after ACK.
-11. Rerun the synthetic OTP test.
-12. Retry one real Perceptron/Gmail-style notification and record only `queued`, `empty`, or `no_match` classification.
+11. Record reconnect latency and comparable battery consumption; the bounded backoff must not create an unacceptable usability delay.
+12. Rerun the synthetic OTP test.
+13. Retry one real Perceptron/Gmail-style notification and record only `queued`, `empty`, or `no_match` classification.
 
 Use `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md` as the record. Do not mark any row passed without isolated target-device evidence.
 
