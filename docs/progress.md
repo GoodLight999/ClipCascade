@@ -6,23 +6,40 @@ Resume work in this order:
 2. `docs/CURRENT_STATUS.md`
 3. `docs/NEXT_CHATGPT_HANDOFF.md`
 4. `docs/TEST_MATRIX.md`
-5. `docs/LATEST_ACK_SAFE_QUEUE_OVERFLOW_HANDOFF.md`
-6. `docs/LATEST_ACK_SAFE_CLIPBOARD_QUEUE_HANDOFF.md`
-7. `docs/LATEST_LANGUAGE_NEUTRAL_COPY_HANDOFF.md`
-8. `docs/LATEST_GREEN_ARTIFACTS.md`
-9. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
-10. `docs/LATEST_SELECTION_ONLY_COPY_FALSE_POSITIVE_HANDOFF.md`
-11. `docs/LATEST_BACKGROUND_CLIPBOARD_INTERMITTENT_HANDOFF.md`
-12. `docs/LATEST_OTP_SELF_TEST_HANDOFF.md`
-13. `docs/LATEST_BROAD_OTP_EXTRACTION_HANDOFF.md`
-14. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
-15. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
-16. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
-17. `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`
-18. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
-19. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
+5. `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`
+6. `docs/LATEST_ACK_SAFE_QUEUE_OVERFLOW_HANDOFF.md`
+7. `docs/LATEST_ACK_SAFE_CLIPBOARD_QUEUE_HANDOFF.md`
+8. `docs/LATEST_LANGUAGE_NEUTRAL_COPY_HANDOFF.md`
+9. `docs/LATEST_GREEN_ARTIFACTS.md`
+10. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
+11. `docs/LATEST_SELECTION_ONLY_COPY_FALSE_POSITIVE_HANDOFF.md`
+12. `docs/LATEST_BACKGROUND_CLIPBOARD_INTERMITTENT_HANDOFF.md`
+13. `docs/LATEST_OTP_SELF_TEST_HANDOFF.md`
+14. `docs/LATEST_BROAD_OTP_EXTRACTION_HANDOFF.md`
+15. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
+16. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
+17. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
+18. `docs/LATEST_ANDROID_INIT_DUPLICATE_HANDOFF.md`
+19. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
+20. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
 
-Current phase: validate `.16 / 320120` ACK-safe bounded ordinary-copy delivery and language-neutral Copy confirmation on the HONOR target while preserving Extended P2P peer-applied ACK and PR #1 Draft state.
+Current phase: repair and validate `.17 / 320121` real Gmail notification ingestion, actual notification-listener binding recovery, and optional content-free outbound transport debug notifications while preserving Extended P2P peer-applied ACK and PR #1 Draft state.
+
+## 2026-07-19 — Gmail notification path treated as non-functional
+
+User evidence is decisive: no Gmail notification has ever produced a relayed verification code. Synthetic OTP tests prove extractor/queue/transport/ACK components only; they do not prove third-party `NotificationListenerService` ingestion.
+
+Static audit found that the previous implementation:
+
+- conflated Android notification-access authorization with a live listener binding;
+- silently returned from many notification gates;
+- did not scan already-active notifications after listener rebind;
+- depended mainly on `onListenerDisconnected()` for recovery;
+- exposed no content-free counters to distinguish listener failure from missing Gmail extras or extractor failure.
+
+Candidate `.17 / 320121` adds actual listener connection state, stage counters, settings/WorkManager rebind, active-notification scan, manual reconnect/rescan, deeper bounded extras collection, Gmail-shaped extractor regression tests, and an optional outbound transport-accepted debug notification switch. The debug switch defaults OFF and its failure cannot alter transport acceptance or ACK behavior.
+
+Detailed handoff: `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`.
 
 ## 2026-07-19 — `.16` green: no TTL and no overflow eviction
 
