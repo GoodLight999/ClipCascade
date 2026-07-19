@@ -11,6 +11,12 @@ Repository: `GoodLight999/ClipCascade`
 - versionName: `3.2.1-extended.14-standalone`
 - versionCode: `320118`
 - deterministic signer unchanged
+- implementation anchor: `20ef493a3b322ec2d95f76cee8902426b7623559`
+- Android CI: `29669730768`, success
+- Windows CI: `29669730745`, success
+- Android artifact ID: `8436928714`
+
+Artifact hashes and expiry are recorded in `docs/LATEST_GREEN_ARTIFACTS.md`.
 
 ## Current focus
 
@@ -28,6 +34,8 @@ Current design:
 - translated button labels, content descriptions, toast text, and completion wording are not used;
 - localized `CopyCueClassifier` source and tests were deleted;
 - CI fails if the transformed Accessibility service still contains the old classifier or `looksLikeCopyConfirmation`.
+
+The final Android behavior is transform-produced. Preserve the final ordering documented in `docs/NEXT_CHATGPT_HANDOFF.md`.
 
 ## Background recovery retained
 
@@ -62,6 +70,10 @@ Broad extraction and deterministic synthetic OTP delivery remain present. Real G
 
 Disable Phone Link and every competing clipboard synchronizer. Verify selection without Copy, actual Copy under multiple UI languages, delayed Copy up to 60 seconds, visible/background/recents/locked/screen-off states, exactly-once Windows application, ACK-based deletion, and no inbound echo.
 
+Use `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`.
+
 ## Do not claim
 
 Do not claim multilingual correctness, selection-only suppression, reliable background or screen-off outbound, exactly-once delivery, or real third-party OTP extraction until isolated target-device evidence exists.
+
+Canonical complete handoff: `docs/NEXT_CHATGPT_HANDOFF.md`. Keep PR #1 Draft.
