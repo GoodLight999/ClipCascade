@@ -60,8 +60,9 @@ fs.writeFileSync(servicePath, serviceSource, 'utf8');
 
 // These must run after every transport/listener transform. First guard the final
 // Clipboard.setString call sites, then replace localized UI-text heuristics with
-// language-neutral confirmation, and finally install bounded queue-full handling
-// after the earlier reliability transform has finished editing the enqueue block.
+// language-neutral confirmation, install bounded queue-full handling, and finally
+// add notification-listener recovery plus content-free outbound debug reporting.
 require('./prepare_internal_clipboard_guard.js');
 require('./prepare_language_neutral_clipboard_copy.js');
 require('./prepare_ack_safe_queue_overflow.js');
+require('./prepare_gmail_notification_reliability.js');
