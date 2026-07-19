@@ -1,37 +1,74 @@
-# Latest Green Artifacts — 2026-06-28
+# Latest Green Artifacts — 2026-07-19
 
-This file records the final matching Android and Windows artifacts prepared for isolated background-outbound validation.
+This file records the latest matching Android source, CI runs, and Android artifact prepared for isolated Priority 1 validation.
 
-## Source and CI
+## Source and PR
 
-- source commit: `f4e9945e8e69aba7b1a7d8bfd554f7bbf6ceab0e`
-- PR #1 state at inspection: open and Draft
-- Android CI run: `28316868414` — success
-- Windows CI run: `28316868423` — success
+- repository: `GoodLight999/ClipCascade`
+- branch: `stability-mobile-otp`
+- implementation anchor: `20ef493a3b322ec2d95f76cee8902426b7623559`
+- PR: `#1`
+- PR state: open and Draft; keep it Draft
 
-## Android
+The implementation anchor includes the language-neutral ordinary-copy redesign and the updated validation matrix. Later commits may be documentation-only; compare against this anchor before attributing behavior changes.
+
+## CI at implementation anchor
+
+- Android standalone CI run: `29669730768` — success
+- Desktop Windows CI run: `29669730745` — success
+
+Android CI passed:
+
+- all source transforms;
+- rejection of transformed `CopyCueClassifier` / `looksLikeCopyConfirmation` remnants;
+- JavaScript bundle generation;
+- `ClipboardCopySignalPolicy` and OTP unit tests;
+- Android resource and Kotlin compilation;
+- APK assembly;
+- embedded-bundle verification;
+- deterministic signer verification;
+- artifact upload.
+
+Windows CI passed the retained desktop tests and packaging path, including the Extended P2P peer-applied acknowledgement implementation.
+
+## Android artifact
 
 - application: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.5-standalone`
-- versionCode: `320109`
-- artifact ID: `7932913870`
-- artifact ZIP SHA-256: `8e6e861eb98417122fef0c9a713c5171152d6ab33d5ec90ce85eaef7a686033a`
-- extracted APK SHA-256: `c2b80e0cd63dbb72ce8d595c51238e2e15aa8a812e733367f44f1caabdc0f934`
-- expected signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- versionName: `3.2.1-extended.14-standalone`
+- versionCode: `320118`
+- GitHub Actions artifact ID: `8436928714`
+- artifact ZIP SHA-256: `a569ff44a9b998754fc6190c742993508801b030c3237ed9b67b556d8e66154a`
+- extracted APK SHA-256: `29c8e4a88b556aa9d94a07643b894d15d746740d5207e543671d8875196d63ba`
+- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- artifact expiry: `2026-10-17T02:08:43Z`
 
-Android CI passed source transforms, JavaScript bundle generation, unit tests, Android resource/Kotlin compilation, APK assembly, embedded-bundle verification, and stable-signer verification.
+## Local filenames used in the producing conversation
 
-## Windows
+- APK: `ClipCascade-Extended-3.2.1-extended.14-vc320118-20ef493.apk`
+- artifact ZIP: `ClipCascade-Extended-3.2.1-extended.14-20ef493.zip`
 
-- artifact ID: `7932907208`
-- artifact ZIP SHA-256: `63ac365c1907438e469b7b741e3752533e8e2c4ac03834cdf2f3b5acc148b801`
-- extracted EXE SHA-256: `a0ef1c1f39d02d36acbc153434614d8304f1d6cac4f519ca504a60552299e810`
-
-Windows CI passed authenticated HTTP tests, existing P2P peer-acknowledgement tests, shutdown/status tests, compilation, and PyInstaller packaging.
+These local paths are not repository assets. Use artifact ID `8436928714` when recovering the build from GitHub Actions.
 
 ## Test isolation
 
-Before Android outbound validation, disable Microsoft Phone Link clipboard synchronization and every other clipboard synchronizer. A successful test must be attributed using the native queue, exact peer clipboard application, and the defined acknowledgement—not clipboard appearance alone.
+Before every Android outbound validation:
 
-Keep PR #1 Draft until the real target-device matrix passes.
+1. disable Microsoft Phone Link clipboard synchronization;
+2. stop every competing clipboard synchronization tool;
+3. do not use ADB, root, or Shizuku;
+4. use a unique synthetic value for each copy action;
+5. attribute success through native queue state, exactly one Windows application, peer ACK, and ACK-based deletion—not clipboard appearance alone.
+
+## Not proven by CI
+
+The following remain unproven until isolated target-device evidence exists:
+
+- selection-only suppression on the HONOR target;
+- multilingual behavior;
+- background, removed-from-recents, locked, and screen-off ordinary-copy delivery;
+- exactly-once target-device behavior;
+- real Gmail, Beeper, Perceptron, or SMS notification extraction;
+- battery behavior and Windows tray ghost prevention.
+
+Do not mark PR #1 ready or merge it until the target-device matrix passes.
