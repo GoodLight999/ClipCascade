@@ -21,10 +21,10 @@ Before every run:
 - [x] Android version `3.2.1-extended.14-standalone`
 - [x] Android versionCode `320118`
 - [x] stable signer unchanged — `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- [ ] final documentation-only branch HEAD Android CI green
-- [ ] final documentation-only branch HEAD Windows CI green
 - [ ] in-place update succeeds
 - [ ] settings and permissions retained
+
+The current PR head may contain documentation-only commits after the implementation anchor. Confirm its CI in PR metadata before beginning device validation; do not represent documentation CI as device proof.
 
 ## Language-neutral selection-only negative matrix
 
