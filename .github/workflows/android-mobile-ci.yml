@@ -77,9 +77,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.15" App.js
-          grep -q "versionCode 320119" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.15"' android/app/build.gradle
+          grep -q "3.2.1-extended.16" App.js
+          grep -q "versionCode 320120" android/app/build.gradle
+          grep -q 'versionName "3.2.1-extended.16"' android/app/build.gradle
           grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
           grep -q "notificationTimeout = 100" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
           grep -q "ClipboardCopySignalPolicy.shouldCaptureClipboardChange" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
@@ -97,6 +97,13 @@ jobs:
             echo "Ordinary clipboard queue still expires before acknowledgement" >&2
             exit 1
           fi
+          if grep -q "while (pending.size" android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt; then
+            echo "Ordinary clipboard queue still evicts unacknowledged items on overflow" >&2
+            exit 1
+          fi
+          grep -q "EnqueueResult.QUEUE_FULL" android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt
+          grep -q 'EnqueueResult.QUEUE_FULL -> "queue_full"' android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "boundedQueueAcceptsOnlyBelowCapacity" android/app/src/test/java/com/clipcascade/ClipboardRelayQueuePolicyTest.kt
           grep -q "MAX_IDLE_DELAY_MS = 15_000L" android/app/src/main/java/com/clipcascade/ClipboardRelayRetryPolicy.kt
           grep -q "idleRetryBacksOffWithoutExceedingCap" android/app/src/test/java/com/clipcascade/ClipboardRelayRetryPolicyTest.kt
           grep -q "requestReactContextBootstrap" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt

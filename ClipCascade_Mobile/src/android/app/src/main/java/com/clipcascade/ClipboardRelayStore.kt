@@ -9,9 +9,14 @@ object ClipboardRelayStore {
     private const val TAG = "ClipboardRelayStore"
     private const val PREFS = "clipboard_relay_queue"
     private const val KEY_QUEUE = "items"
-    private const val MAX_ITEMS = 16
     private const val MAX_TEXT_LENGTH = 500_000
     private const val DEDUP_MS = 2_000L
+
+    enum class EnqueueResult {
+        QUEUED,
+        DEDUPLICATED,
+        QUEUE_FULL,
+    }
 
     data class Item(
         val id: String,
@@ -21,9 +26,9 @@ object ClipboardRelayStore {
     )
 
     @Synchronized
-    fun enqueue(context: Context, item: Item): Boolean {
+    fun enqueue(context: Context, item: Item): EnqueueResult {
         val normalized = item.text.take(MAX_TEXT_LENGTH)
-        if (normalized.isBlank()) return false
+        if (normalized.isBlank()) return EnqueueResult.DEDUPLICATED
 
         val pending = read(context).toMutableList()
         if (pending.any {
@@ -31,13 +36,17 @@ object ClipboardRelayStore {
                     item.createdAt - it.createdAt in 0..DEDUP_MS
             }
         ) {
-            return false
+            return EnqueueResult.DEDUPLICATED
+        }
+
+        if (!ClipboardRelayQueuePolicy.hasCapacity(pending.size)) {
+            // Never evict an unacknowledged relay merely to admit a newer Copy.
+            return EnqueueResult.QUEUE_FULL
         }
 
         pending += item.copy(text = normalized)
-        while (pending.size > MAX_ITEMS) pending.removeAt(0)
         write(context, pending)
-        return true
+        return EnqueueResult.QUEUED
     }
 
     @Synchronized
@@ -58,9 +67,9 @@ object ClipboardRelayStore {
 
     /**
      * Ordinary clipboard items are retained until acknowledgement or an explicit
-     * clear. The queue is already bounded by [MAX_ITEMS], so time-based expiry
-     * would only discard an unacknowledged Copy during a long screen-off or peer
-     * disconnect interval.
+     * clear. The queue is bounded by [ClipboardRelayQueuePolicy.MAX_ITEMS], and a
+     * full queue rejects new input rather than deleting an older unacknowledged
+     * relay.
      */
     private fun read(context: Context): List<Item> {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

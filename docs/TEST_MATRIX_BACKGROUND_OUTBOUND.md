@@ -1,39 +1,48 @@
 # Android Background Outbound Validation Matrix
 
-This matrix supersedes every older checked Android outbound or real-service success item, including the Phone Link-contaminated Yahoo! JAPAN SMS row in `docs/TEST_MATRIX.md`.
+This matrix supersedes every older checked Android outbound or real-service success item, including Phone Link-contaminated rows.
 
 Before every run:
 
 - disable Microsoft Phone Link clipboard synchronization;
 - stop every other clipboard synchronization utility;
 - do not use ADB, root, or Shizuku;
-- record commit SHA, Android versionCode, peer build, mode, UI language, and screen state;
+- record commit SHA, versionCode, Windows peer build, mode, UI language, and screen state;
 - use a unique synthetic text value for every ordinary-copy row;
 - never store real authentication values.
 
-## Current green build
+## Latest green baseline
 
-- [x] implementation SHA `1e3aae70e2052420bfbcf2e326e04638787dfc1c`
-- [x] Android CI green — run `29674843116`
-- [x] Windows CI green — run `29674843145`
-- [x] matching Android artifact — ID `8438520128`
-- [x] artifact ZIP SHA-256 — `e3f50c87ebea56fe0039e3e08a909d282dc10631bb2dc808d6a01e86a1792e2a`
-- [x] extracted APK SHA-256 — `15ee61ad66e68f114b3a52c160773976ac705954a3a278b6b892559bae6b8ee2`
-- [x] Android version `3.2.1-extended.15-standalone`
-- [x] Android versionCode `320119`
-- [x] stable signer — `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- [x] ordinary clipboard store contains no wall-clock TTL
-- [x] idle retry backoff policy unit tests pass
+- [x] `.15` implementation SHA `1e3aae70e2052420bfbcf2e326e04638787dfc1c`
+- [x] Android CI `29674843116`
+- [x] Windows CI `29674843145`
+- [x] artifact ID `8438520128`
+- [x] ZIP SHA-256 `e3f50c87ebea56fe0039e3e08a909d282dc10631bb2dc808d6a01e86a1792e2a`
+- [x] APK SHA-256 `15ee61ad66e68f114b3a52c160773976ac705954a3a278b6b892559bae6b8ee2`
+- [x] signer `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+
+`.15` is superseded for new device validation once `.16` is green because `.15` still evicted the oldest unacknowledged item on overflow.
+
+## `.16 / 320120` candidate
+
+- [ ] implementation SHA recorded
+- [ ] Android CI green
+- [ ] Windows CI green
+- [ ] matching artifact ID recorded
+- [ ] ZIP and APK SHA-256 recorded
+- [ ] signer and expiry recorded
+- [ ] no ordinary clipboard TTL
+- [ ] no overflow eviction of accepted items
+- [ ] final transformed `queue_full` diagnostic present
+- [ ] capacity policy unit tests pass
 - [ ] in-place update succeeds
 - [ ] settings and permissions retained
 
-CI proves transformed source and build invariants, not HONOR target-device behavior.
+Do not distribute `.16` until the CI/artifact rows are complete.
 
-## Language-neutral selection-only negative matrix
+## Selection-only negative matrix
 
-For every row, select a unique value and leave the localized floating toolbar open without pressing Copy.
-
-| UI language / application | Toolbar visible 3s | Toolbar visible 15s | Toolbar visible 60s | Queue unchanged | Windows unchanged | Status |
+| UI language / application | 3s | 15s | 60s | Queue unchanged | Windows unchanged | Status |
 |---|---:|---:|---:|---:|---:|---|
 | Japanese / Chrome | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | English / Chrome | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
@@ -42,86 +51,87 @@ For every row, select a unique value and leave the localized floating toolbar op
 | Third language / notes/editor | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | ClipCascade backgrounded | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
-Required distinctions:
+## Ordinary-copy state matrix
 
-- selection event alone: never queues;
-- translated toolbar label appearance: never queues;
-- real OS `OnPrimaryClipChangedListener` callback with recent selection: queues exactly once;
-- semantic `ACTION_COPY` or Ctrl+C with a missing callback: bounded fallback queues exactly once;
-- ClipCascade-owned inbound/local clipboard write: ignored by `ClipboardWriteGuard`;
-- no English, Japanese, or other translated Copy wording participates in the decision.
+Test immediate Copy and Copy after 3, 15, and 60 seconds after selection.
 
-## Ordinary-copy matrix
-
-For each state, test immediate Copy and Copy after waiting 3, 15, and 60 seconds after selection.
-
-| State | Immediate | 3s | 15s | 60s | Windows applied once | ACK removed queue | Status |
+| State | Immediate | 3s | 15s | 60s | Applied once | ACK deletion | Status |
 |---|---:|---:|---:|---:|---:|---:|---|
-| ClipCascade UI visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| UI backgrounded 30s | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| UI visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Backgrounded 30s | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | Removed from recents | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Device locked | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Locked | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | Screen off 1 minute | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | Screen off 15 minutes | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | Screen off 30+ minutes | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Peer disconnected then restored | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| React/service generation reclaimed | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Peer disconnected/restored | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| React/service generation recreated | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
-## ACK-safe long-disconnect matrix
+## Long-disconnect durability
 
-Use one unique Copy per row. Do not reconnect early merely to inspect Windows.
+| Interval | Queue retained | Applied once after reconnect | Peer ACK | Deleted only after ACK | Status |
+|---|---:|---:|---:|---:|---|
+| More than 10 minutes | ☐ | ☐ | ☐ | ☐ | untested |
+| More than 30 minutes | ☐ | ☐ | ☐ | ☐ | untested |
+| Process/service generation recreated | ☐ | ☐ | ☐ | ☐ | untested |
 
-| Disconnected/screen-off interval | Queue retained before reconnect | Windows applied once after reconnect | Peer ACK observed | Queue deleted only after ACK | Retry latency acceptable | Status |
-|---|---:|---:|---:|---:|---:|---|
-| More than 10 minutes | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| More than 30 minutes | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Process/service generation recreated while pending | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+## Bounded queue-full matrix
 
-## Delivery interpretation
+Keep the peer disconnected and use 17 unique values.
 
-- queue `0`, no recent diagnostic: capture missed;
-- `no_text_available`: semantic confirmation occurred but no payload was recoverable;
-- `selected_text_fallback`: remembered Accessibility selection supplied the payload;
-- trigger `clipboard_change`: OS clipboard mutation confirmed the Copy;
-- `react_context / rebind_requested`: React generation absent;
-- `transport_status / retrying`: transport unavailable;
-- `p2p_peer / retrying`: no peer channel;
-- `react_event / emitted` then `peer_ack / acknowledged`: Windows-applied ACK path completed;
-- `dispatcher / interrupted`: unexpected dispatcher failure.
+- [ ] items 1–16 are accepted as distinct pending relays
+- [ ] item 17 is not inserted
+- [ ] item 1 remains present and unchanged
+- [ ] no accepted item is deleted before ACK
+- [ ] latest content-free diagnostic is `queue_full`
+- [ ] reconnect drains accepted items in order
+- [ ] each accepted item is applied once
+- [ ] each accepted item is removed only after ACK
+- [ ] a new Copy is accepted after capacity returns
 
 ## Exactly-once and echo prevention
 
-- [ ] one native queue item per actual Copy;
-- [ ] selection alone creates zero items;
-- [ ] one JavaScript listener obtains the relay claim;
-- [ ] exactly one Windows clipboard application;
-- [ ] queue deleted only after defined acknowledgement;
-- [ ] inbound ClipCascade writes create no outbound item;
-- [ ] failed transport releases claim and later retry succeeds.
+- [ ] one native item per actual Copy
+- [ ] selection alone creates zero items
+- [ ] one JS listener obtains relay claim
+- [ ] exactly one Windows application
+- [ ] queue deletion only after defined ACK
+- [ ] inbound ClipCascade writes create no outbound item
+- [ ] failed transport releases claim and later retry succeeds
 
 ## Notification-code path
 
-- [ ] built-in synthetic OTP succeeds through extractor, queue, transport, and ACK;
-- [ ] Beeper-style real notification classified without storing content;
-- [ ] Perceptron-style real notification classified without storing content;
-- [ ] real SMS tested without storing content.
+- [ ] synthetic OTP extractor -> queue -> transport -> ACK succeeds
+- [ ] Beeper real notification classified without content storage
+- [ ] Perceptron real notification classified without content storage
+- [ ] real SMS classified without content storage
 
-Allowed privacy-safe real-notification classifications:
+Allowed classifications:
 
-- `local_extractor / queued`;
-- `notification_extras / empty`;
-- `notification_extras / no_match`.
+- `local_extractor / queued`
+- `notification_extras / empty`
+- `notification_extras / no_match`
 
-## Battery observation
+## Diagnostics interpretation
 
-Record the same network/peer configuration and comparable idle interval:
+- queue `0`, no diagnostic: capture missed
+- `no_text_available`: confirmation but no payload
+- `selected_text_fallback`: Accessibility selection used
+- `queue_full`: accepted items preserved; new item rejected
+- `transport_status / retrying`: transport unavailable
+- `p2p_peer / retrying`: no peer
+- `react_context / rebind_requested`: React absent
+- `react_event / emitted` then `peer_ack / acknowledged`: full ACK path
+- `dispatcher / interrupted`: internal exception
 
-- [ ] foreground-service active time;
-- [ ] background active time;
-- [ ] battery percentage consumed;
-- [ ] reconnect latency after 15-second idle retry cap;
-- [ ] no usability regression from bounded backoff.
+## Battery/usability observation
+
+- [ ] comparable idle interval recorded
+- [ ] foreground/background active time recorded
+- [ ] battery percentage recorded
+- [ ] reconnect latency with 15-second cap acceptable
+- [ ] queue-full behavior is understandable from diagnostics
 
 ## Do not claim
 
-Do not mark multilingual copy confirmation, selection-only suppression, background, removed-from-recents, locked, screen-off, long-disconnect retention, exactly-once, real-SMS, real-email, battery-efficiency, or Windows-tray behavior as passed without isolated target-device evidence.
+Do not mark target-device behavior passed from CI. Multilingual selection suppression, background/screen-off delivery, long-disconnect retention, queue-full preservation, exactly-once, real notification extraction, battery behavior, and Windows tray behavior remain unproven until isolated device evidence exists.

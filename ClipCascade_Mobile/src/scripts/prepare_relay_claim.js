@@ -52,14 +52,16 @@ serviceSource = serviceSource.replace('            const relaySource = event?.so
             }
 `);
 serviceSource = serviceSource.replace('              if (!accepted && peerAckRequested) {\n', `              if (!accepted && relayId && RelaySettingsModule?.releaseRelayDispatch) {
-                await RelaySettingsModule.releaseRelayDispatch(relayId);
-              }
-              if (!accepted && peerAckRequested) {
+                 await RelaySettingsModule.releaseRelayDispatch(relayId);
+               }
+               if (!accepted && peerAckRequested) {
 `);
 fs.writeFileSync(servicePath, serviceSource, 'utf8');
 
 // These must run after every transport/listener transform. First guard the final
 // Clipboard.setString call sites, then replace localized UI-text heuristics with
-// language-neutral clipboard-change and semantic ACTION_COPY confirmation.
+// language-neutral confirmation, and finally install bounded queue-full handling
+// after the earlier reliability transform has finished editing the enqueue block.
 require('./prepare_internal_clipboard_guard.js');
 require('./prepare_language_neutral_clipboard_copy.js');
+require('./prepare_ack_safe_queue_overflow.js');
