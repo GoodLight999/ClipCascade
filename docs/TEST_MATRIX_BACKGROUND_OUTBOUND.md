@@ -13,12 +13,16 @@ Before every run:
 
 ## Current build
 
-- [ ] final Android CI green on current HEAD
-- [ ] final Windows CI green on current HEAD
-- [ ] matching artifact ID and hashes recorded
-- [ ] Android version `3.2.1-extended.14-standalone`
-- [ ] Android versionCode `320118`
-- [ ] stable signer unchanged
+- [x] Android CI green at implementation anchor `20ef493a3b322ec2d95f76cee8902426b7623559` — run `29669730768`
+- [x] Windows CI green at the same implementation anchor — run `29669730745`
+- [x] matching Android artifact recorded — ID `8436928714`
+- [x] artifact ZIP SHA-256 recorded — `a569ff44a9b998754fc6190c742993508801b030c3237ed9b67b556d8e66154a`
+- [x] extracted APK SHA-256 recorded — `29c8e4a88b556aa9d94a07643b894d15d746740d5207e543671d8875196d63ba`
+- [x] Android version `3.2.1-extended.14-standalone`
+- [x] Android versionCode `320118`
+- [x] stable signer unchanged — `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- [ ] final documentation-only branch HEAD Android CI green
+- [ ] final documentation-only branch HEAD Windows CI green
 - [ ] in-place update succeeds
 - [ ] settings and permissions retained
 
@@ -42,7 +46,7 @@ Required distinctions:
 - real OS `OnPrimaryClipChangedListener` callback with recent selection: queues exactly once;
 - semantic `ACTION_COPY` or Ctrl+C with a missing callback: bounded fallback queues exactly once;
 - ClipCascade-owned inbound/local clipboard write: ignored by `ClipboardWriteGuard`;
-- no English/Japanese/other translated Copy wording participates in the decision.
+- no English, Japanese, or other translated Copy wording participates in the decision.
 
 ## Ordinary-copy matrix
 
@@ -63,10 +67,14 @@ For each state, test immediate Copy and Copy after waiting 3, 15, and 60 seconds
 ## Delivery interpretation
 
 - queue `0`, no recent diagnostic: capture missed;
+- `no_text_available`: semantic confirmation occurred but no payload was recoverable;
+- `selected_text_fallback`: remembered Accessibility selection supplied the payload;
+- trigger `clipboard_change`: OS clipboard mutation confirmed the Copy;
 - `react_context / rebind_requested`: React generation absent;
 - `transport_status / retrying`: transport unavailable;
 - `p2p_peer / retrying`: no peer channel;
-- `react_event / emitted` then `peer_ack / acknowledged`: Windows-applied ACK path completed.
+- `react_event / emitted` then `peer_ack / acknowledged`: Windows-applied ACK path completed;
+- `dispatcher / interrupted`: unexpected dispatcher failure.
 
 ## Exactly-once and echo prevention
 
@@ -84,6 +92,12 @@ For each state, test immediate Copy and Copy after waiting 3, 15, and 60 seconds
 - [ ] Beeper-style real notification classified without storing content;
 - [ ] Perceptron-style real notification classified without storing content;
 - [ ] real SMS tested without storing content.
+
+Allowed privacy-safe real-notification classifications:
+
+- `local_extractor / queued`;
+- `notification_extras / empty`;
+- `notification_extras / no_match`.
 
 ## Do not claim
 
