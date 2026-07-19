@@ -77,9 +77,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.16" App.js
-          grep -q "versionCode 320120" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.16"' android/app/build.gradle
+          grep -q "3.2.1-extended.17" App.js
+          grep -q "versionCode 320121" android/app/build.gradle
+          grep -q 'versionName "3.2.1-extended.17"' android/app/build.gradle
           grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
           grep -q "notificationTimeout = 100" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
           grep -q "ClipboardCopySignalPolicy.shouldCaptureClipboardChange" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
@@ -110,6 +110,14 @@ jobs:
           grep -q "createReactContextInBackground" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q 'path = "react_bootstrap"' android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q "extractsPerceptronNetworkStandaloneAlphanumericCode" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
+          grep -q "extractsCodeFromGmailTitlePreviewAndExpandedBody" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
+          grep -q "scanActiveNotifications" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
+          grep -q "MAX_ACTIVE_SCAN_AGE_MS" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
+          grep -q "NotificationListenerRuntimeStore" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
+          grep -q "NotificationCodeListenerService.ensureBound" android/app/src/main/java/com/clipcascade/ScheduleService.kt
+          grep -q "outboundDebugNotificationEnabled" android/app/src/main/java/com/clipcascade/RelaySettingsStore.kt
+          grep -q "showOutboundDebugNotification" android/app/src/main/java/com/clipcascade/NativeBridgeModule.kt
+          grep -q "Debug UI must never change transport acceptance or ACK behavior" StartForegroundService.js
           grep -q "queueSyntheticValue(applicationContext, text, value)" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
           grep -q "claimRelayDispatch" StartForegroundService.js
           grep -q "releaseRelayDispatch" android/app/src/main/java/com/clipcascade/RelaySettingsModule.kt
