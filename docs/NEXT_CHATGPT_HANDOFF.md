@@ -9,7 +9,7 @@ This is the canonical handoff. Read the listed documents before changing code.
 - PR: `#1`
 - PR state: open and Draft
 - never mark Ready, merge, or weaken the Extended P2P ACK path
-- current implementation anchor: `f86705c513c56a9fd24e218f8513dad9cead2ed8`
+- current implementation anchor: `a010d7f0fb3871252580666df3264980b32c93cb`
 
 Commits after the implementation anchor may be documentation-only. Verify current PR head and both CIs before distributing any artifact.
 
@@ -19,21 +19,22 @@ Commits after the implementation anchor may be documentation-only. Verify curren
 2. `docs/REQUIREMENTS.md`
 3. `docs/CURRENT_STATUS.md`
 4. `docs/NEXT_CHATGPT_HANDOFF.md`
-5. `docs/LATEST_ACK_SAFE_QUEUE_OVERFLOW_HANDOFF.md`
-6. `docs/LATEST_ACK_SAFE_CLIPBOARD_QUEUE_HANDOFF.md`
-7. `docs/LATEST_LANGUAGE_NEUTRAL_COPY_HANDOFF.md`
-8. `docs/LATEST_GREEN_ARTIFACTS.md`
-9. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
-10. `docs/TEST_MATRIX.md`
-11. `docs/LATEST_SELECTION_ONLY_COPY_FALSE_POSITIVE_HANDOFF.md`
-12. `docs/LATEST_BACKGROUND_CLIPBOARD_INTERMITTENT_HANDOFF.md`
-13. `docs/LATEST_OTP_SELF_TEST_HANDOFF.md`
-14. `docs/LATEST_BROAD_OTP_EXTRACTION_HANDOFF.md`
-15. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
-16. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
-17. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
-18. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
-19. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
+5. `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`
+6. `docs/LATEST_GREEN_ARTIFACTS.md`
+7. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
+8. `docs/TEST_MATRIX.md`
+9. `docs/LATEST_ACK_SAFE_QUEUE_OVERFLOW_HANDOFF.md`
+10. `docs/LATEST_ACK_SAFE_CLIPBOARD_QUEUE_HANDOFF.md`
+11. `docs/LATEST_LANGUAGE_NEUTRAL_COPY_HANDOFF.md`
+12. `docs/LATEST_SELECTION_ONLY_COPY_FALSE_POSITIVE_HANDOFF.md`
+13. `docs/LATEST_BACKGROUND_CLIPBOARD_INTERMITTENT_HANDOFF.md`
+14. `docs/LATEST_OTP_SELF_TEST_HANDOFF.md`
+15. `docs/LATEST_BROAD_OTP_EXTRACTION_HANDOFF.md`
+16. `docs/LATEST_OTP_EMAIL_EXTRACTION_HANDOFF.md`
+17. `docs/LATEST_ANDROID_IDLE_POWER_HANDOFF.md`
+18. `docs/LATEST_RUNTIME_CONTROL_STATE_HANDOFF.md`
+19. `docs/LATEST_BACKGROUND_SYNC_FAILURE_HANDOFF.md`
+20. `docs/LATEST_WINDOWS_TRAY_GHOST_HANDOFF.md`
 
 ## Corrected historical truth
 
@@ -41,90 +42,113 @@ Previous Android-to-Windows success reports, including the Yahoo! JAPAN SMS row,
 
 Windows/peer-to-Android background reception does not prove Android outbound.
 
+The user reports that Gmail notifications have never produced a relayed code. Treat pre-`.17` Gmail notification ingestion as non-functional. Synthetic OTP tests prove extractor/queue/transport/ACK components only, not Gmail NotificationListener ingestion.
+
 Disable Phone Link and every competing synchronizer during every validation run.
 
 ## Current green Android build
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.16-standalone`
-- versionCode: `320120`
+- versionName: `3.2.1-extended.17-standalone`
+- versionCode: `320121`
+- implementation anchor: `a010d7f0fb3871252580666df3264980b32c93cb`
 - signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- implementation anchor: `f86705c513c56a9fd24e218f8513dad9cead2ed8`
 
 CI:
 
-- Android standalone CI: `29675438972` — success
-- Desktop Windows CI: `29675438978` — success
+- Android standalone CI: `29681462233` — success
+- Desktop Windows CI: `29681462236` — success
 
 Artifact:
 
-- artifact ID: `8438725636`
-- ZIP SHA-256: `dda947ceb29452edc4defc94ee3c09852a87529b2db581a0f1d304b0182564f6`
-- extracted APK SHA-256: `1bb1301e0a44a06f42cb04cbe55de03e9abc0baa6c224738d89f4686409a5def`
-- expiry: `2026-10-17T05:49:26Z`
+- artifact ID: `8440717410`
+- ZIP SHA-256: `5e545d9210a97819cfae79bde5a278e69631b395f55aa6cad0f260e4cd38134e`
+- extracted APK SHA-256: `f3bba473b78d1f44f73fe529cd6c0187881269615aeb709651a6f8cd675ffb86`
+- expiry: `2026-10-17T09:22:32Z`
 
 See `docs/LATEST_GREEN_ARTIFACTS.md`.
 
-## Priority 1 defects fixed in `.15` and `.16`
+## `.17` Gmail notification repair
 
-Two deterministic pre-ACK deletion paths were found:
+Static defects fixed:
 
-1. ordinary clipboard items expired after ten minutes without ACK;
-2. item 17 silently evicted item 1 from the 16-item queue without ACK.
+- notification-access authorization no longer masquerades as proof of a live listener binding;
+- actual listener connection state is stored separately;
+- silent notification gates now produce content-free stage counters;
+- settings, WorkManager, and disconnect callback request listener rebind;
+- listener connection scans up to 64 active notifications younger than 15 minutes;
+- settings provides manual reconnect/rescan;
+- notification extras collection now covers known fields, text arrays, MessagingStyle current/historic messages, public-version extras, nested bundles/lists/arrays, and SparseArray values to bounded depth;
+- Gmail-shaped positive and no-code negative extractor tests are present.
 
-Current `.16` behavior:
+Persisted diagnostics never contain notification text, code, account/email identifier, app/package name, relay ID, or server address.
 
-- no wall-clock expiry for accepted ordinary clipboard items;
-- bounded capacity remains 16;
-- accepted items are never evicted to admit newer items;
-- when full, the new Copy returns `EnqueueResult.QUEUE_FULL` and is not inserted;
-- content-free diagnostics record `queue_full`;
-- settings test shows localized English/Japanese queue-full feedback;
-- disconnected/no-peer/no-React retry backs off `3s -> 6s -> 12s -> 15s`;
-- new work/reconnect/recovery/ACK resets retry and runs immediately;
-- in-flight ACK waiting remains at three seconds with existing 15-second timeout.
+## Gmail stage interpretation
 
-Do not restore time-based deletion or overflow eviction.
+After installing `.17`, clear diagnostics and send a Gmail OTP whose expanded notification visibly contains the code.
 
-## Trial-and-error record
+- listener not connected or seen remains zero: listener binding/delivery failure;
+- seen increases, text characters remain zero: Gmail/Android exposed no text extras;
+- text characters increase, auth hint remains zero: Gmail preview omitted authentication wording;
+- auth hint and no-match increase: extractor defect;
+- queued increases: Gmail notification ingestion succeeded;
+- outbound debug notification appears: transport accepted the item;
+- peer ACK removes queue: full Extended P2P path succeeded.
 
-Initial `.16` commit `dd92a6e7c566f2f830201f55b4176eb8011c7412` passed all final transform assertions but Android CI `29675268087` failed at Kotlin compilation because the settings-screen test still treated the new enqueue enum as Boolean.
+Do not loosen extractor regexes until the first failed stage is known.
 
-Corrected commit `f86705c...` transforms the settings test to explicit `QUEUED / DEDUPLICATED / QUEUE_FULL` handling and adds localized queue-full strings. Corrected Android and Windows CIs are green.
+## Outbound debug notification switch
 
-This was an implementation omission, not CI infrastructure noise. Keep it in the record.
+- defaults OFF;
+- when ON, appears only after P2S publish acceptance or at least one open P2P DataChannel accepts an outbound item;
+- displays only source class and P2P/P2S mode;
+- never displays content, code, relay ID, package name, account identifier, or server address;
+- failure is caught and cannot alter transport acceptance, native relay claims, ACK ordering, retry behavior, or deletion;
+- this notification proves local transport acceptance only, never Windows application or peer ACK.
 
 ## Final Android transform order
 
-The final APK behavior is not determined by raw `ClipboardAccessibilityService.kt` alone.
-
-`prepare_relay_claim.js` runs last and applies:
+The APK behavior is not determined by raw Android source alone. `prepare_relay_claim.js` runs last and applies:
 
 1. `prepare_internal_clipboard_guard.js`
 2. `prepare_language_neutral_clipboard_copy.js`
 3. `prepare_ack_safe_queue_overflow.js`
+4. `prepare_gmail_ja_anchor_compat.js`
+5. `prepare_gmail_notification_reliability.js`
+6. `prepare_debug_notification_icon_compat.js`
 
-Do not reorder these casually. The overflow transform must run after the earlier reliability transform edits the enqueue block.
+Do not reorder these casually. CI preserves `gmail-transform.log` to diagnose final-transform failures.
 
-CI rejects:
+## Trial-and-error record
 
-- final `CopyCueClassifier` references;
-- final `looksLikeCopyConfirmation` references;
-- ordinary clipboard `TTL_MS`;
-- overflow eviction loop `while (pending.size ...)`;
-- absence of final `queue_full` handling.
+- Android CI `29681080924`: final Gmail transform stopped safely; no APK.
+- Android CI `29681226875`: preserved transform log identified exact Japanese resource-anchor mismatch; compatibility normalization added.
+- Android CI `29681300642`: transforms/bundle passed, Kotlin found nonexistent debug icon; switched to existing native drawable.
+- Android CI `29681462233`: success.
+- Windows CI `29681462236`: success.
 
-## Language-neutral Copy design
+Keep these failures in the record; they were real integration defects, not infrastructure noise.
 
-- `TYPE_VIEW_TEXT_SELECTION_CHANGED` remembers selection only;
-- selection alone never queues or sends;
+## Language-neutral Copy design — preserve
+
+- selection events remember state only;
+- selection itself never queues or sends;
 - OS `OnPrimaryClipChangedListener` is primary Copy proof;
 - `ClipboardWriteGuard` suppresses ClipCascade-owned writes;
 - ACTION_COPY and Ctrl+C use a 700 ms fallback only if clipboard serial does not advance;
-- UI labels, content descriptions, toasts, and translated completion strings do not participate in Copy correctness.
+- UI labels, descriptions, toasts, and translated completion strings do not participate in correctness.
 
 Never restore `.13` text dictionaries or add translations as a correctness mechanism.
+
+## ACK-safe ordinary queue — preserve
+
+- accepted ordinary items have no wall-clock expiry;
+- capacity is 16;
+- accepted items are never evicted to admit newer items;
+- a new item while full returns `queue_full` and is not inserted;
+- disconnected/no-peer/no-React retry backs off `3s -> 6s -> 12s -> 15s`;
+- new work/recovery/ACK resets retry and runs immediately.
 
 ## ACK path — preserve exactly
 
@@ -140,65 +164,28 @@ Old/non-Extended peer:
 
 `LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
 
-Preserve relay ID, `ackRequested`, validation-before-ACK, generation-scoped fallback timers, native relay claim, Windows-applied ACK, and ACK-based native deletion.
-
-Do not treat local transport acceptance as Extended peer application.
-
-## Background recovery retained
-
-- persistent native clipboard and OTP queues;
-- selected-text fallback when background clipboard reads are unavailable;
-- internal-write echo suppression;
-- in-process React context bootstrap;
-- service-start cooldown recovery;
-- relay claim against duplicate JS listeners;
-- content-free capture/transport/peer/ACK diagnostics.
-
-## OTP state
-
-Broad OTP extraction and deterministic synthetic test remain implemented. The synthetic test exercises extractor, queue, transport, and ACK, but does not prove third-party NotificationListener extras exposure.
-
-For real notifications record only:
-
-- `local_extractor / queued`
-- `notification_extras / empty`
-- `notification_extras / no_match`
-
-Do not store raw notification text, code, email address, app name, or package name.
+Preserve relay ID, `ackRequested`, validation-before-ACK, generation-scoped fallback timer, native relay claim, Windows-applied ACK, and ACK-based native deletion.
 
 ## Mandatory next target-device validation
 
-Install `.16 / 320120` over the prior stable-signed build without uninstalling. Confirm settings and permissions survive.
+Install `.17 / 320121` over the existing stable-signed build without uninstalling.
 
-1. Selection-only negative test in Japanese UI for 3, 15, and 60 seconds.
-2. Repeat in English UI.
-3. Repeat in a third UI language.
-4. Real Copy in each language immediately and after 3, 15, and 60 seconds.
-5. Repeat visible, backgrounded, removed from recents, locked, screen off 1 minute, 15 minutes, and 30+ minutes.
-6. Disconnect peer, Copy once, retain more than ten minutes, reconnect, and verify one application plus ACK deletion.
-7. Repeat for more than thirty minutes with screen off.
-8. Fill queue with 16 unique values while peer is disconnected.
-9. Copy item 17 and verify existing 16 remain plus diagnostic `queue_full`.
-10. Verify settings test shows localized queue-full feedback.
-11. Reconnect and verify accepted 16 drain in order, exactly once, only after ACK.
-12. Copy again after capacity returns and verify acceptance.
-13. Verify Windows-to-Android inbound write does not echo.
-14. Run synthetic OTP and one privacy-safe real notification classification.
-15. Record comparable battery use and reconnect latency.
+Gmail first:
+
+1. confirm Android notification access is authorized;
+2. confirm actual listener runtime shows connected;
+3. temporarily enable outbound debug notification;
+4. clear diagnostics;
+5. send a Gmail OTP with code visible in the expanded notification;
+6. record only content-free stage/counter changes;
+7. confirm queueing, transport debug notification, Windows application, peer ACK, and deletion as separate stages;
+8. repeat backgrounded and removed from recents;
+9. leave a Gmail OTP notification active and test manual reconnect/rescan;
+10. disable outbound debug notification and confirm it stops appearing.
+
+Then continue the ordinary Copy matrix: multilingual selection-only negatives, actual Copy at 0/3/15/60 seconds, visible/background/recents/locked/screen-off, long peer disconnect, queue-full, exactly-once, no echo, battery, and tray behavior.
 
 Use `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`.
-
-## Diagnostics
-
-- queue `0` and no capture diagnostic: capture missed;
-- `no_text_available`: confirmation but no payload;
-- `selected_text_fallback`: Accessibility selection used;
-- `queue_full`: existing accepted items preserved and new input rejected;
-- `transport_status / retrying`: transport unavailable;
-- `p2p_peer / retrying`: peer unavailable;
-- `react_context / rebind_requested`: React absent;
-- `react_event / emitted` then `peer_ack / acknowledged`: full Windows-applied ACK path;
-- `dispatcher / interrupted`: internal exception.
 
 ## Engineering procedure
 
@@ -207,13 +194,13 @@ For every new change:
 1. verify current PR head and Draft state;
 2. preserve Extended ACK;
 3. make the smallest coherent change;
-4. record hypothesis, attempts, failures, and limitations in progress plus focused handoff;
-5. update CURRENT_STATUS, NEXT_CHATGPT_HANDOFF, and relevant matrix;
-6. run Android and Windows CI on every branch commit;
+4. record hypothesis, failures, and limitations;
+5. update focused handoff, CURRENT_STATUS, canonical handoff, and matrix;
+6. run Android and Windows CI on each branch commit;
 7. verify both CIs on final branch HEAD;
-8. record artifact source SHA, run ID, artifact ID, ZIP/APK hashes, signer, and expiry;
+8. record source SHA, run IDs, artifact ID, hashes, signer, and expiry;
 9. keep PR #1 Draft.
 
 ## Do not claim
 
-CI is not HONOR device proof. Until isolated tests pass, do not claim selection-only suppression, multilingual correctness, background/screen-off delivery, long-disconnect retention, queue-full behavior, exactly-once, real third-party OTP extraction, battery efficiency, or Windows tray ghost prevention.
+CI is not HONOR device proof. Until isolated tests pass, do not claim real Gmail ingestion, listener recovery on HONOR, outbound debug ON/OFF behavior, multilingual Copy correctness, background/screen-off delivery, long-disconnect retention, queue-full behavior, exactly-once, real third-party OTP extraction, battery efficiency, or Windows tray ghost prevention.
