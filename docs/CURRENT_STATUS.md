@@ -22,16 +22,7 @@ Artifact hashes and expiry are recorded in `docs/LATEST_GREEN_ARTIFACTS.md`.
 
 Candidate `.17 / 320121` treats real Gmail notification ingestion as non-functional until target-device proof exists.
 
-It adds:
-
-- actual notification-listener binding state separate from Android authorization;
-- content-free stage counters;
-- settings and WorkManager rebind requests;
-- active-notification scan on listener connection;
-- manual reconnect/rescan;
-- deeper bounded extras collection;
-- Gmail-shaped extractor tests;
-- a default-OFF outbound transport-accepted debug notification switch.
+It adds actual notification-listener binding state, content-free stage counters, settings and WorkManager rebind, active-notification scan, manual reconnect/rescan, deeper bounded extras collection, Gmail-shaped extractor tests, and a default-OFF outbound transport-accepted debug notification switch.
 
 See `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`.
 
@@ -39,45 +30,11 @@ See `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`.
 
 The deterministic synthetic OTP test proves extractor, queue, transport, and ACK components. It does not prove that Gmail, Beeper, Perceptron, or SMS notifications reach `NotificationListenerService` with usable extras.
 
-The `.17` runtime display distinguishes:
-
-- listener not connected;
-- notification unseen;
-- notification seen but text extras empty;
-- text present but no authentication hint;
-- authentication hint present but extractor no-match;
-- queued/deduplicated;
-- transport accepted when optional outbound debug notification is enabled.
+The `.17` runtime display distinguishes listener not connected, notification unseen, text extras empty, auth context absent, extractor no-match, queued/deduplicated, and transport accepted.
 
 No real Gmail success is claimed.
 
-## ACK-safe ordinary clipboard retention
-
-Current behavior retained:
-
-- accepted ordinary clipboard items do not expire by wall-clock age;
-- capacity remains bounded at 16 items;
-- accepted items are never evicted to admit newer items;
-- while full, a new Copy is rejected with `EnqueueResult.QUEUE_FULL`;
-- diagnostics record `queue_full` without content;
-- explicit relay-disable and user-clear paths still clear pending sensitive values;
-- defined acknowledgement removes by `relayId`;
-- disconnected/no-peer/no-React retry backs off `3s -> 6s -> 12s -> 15s`;
-- new work/reconnect/recovery resets the delay and attempts immediately;
-- in-flight ACK waiting remains at three seconds with the existing 15-second timeout.
-
-## Language-neutral copy confirmation retained
-
-- selection events only remember the selected range;
-- selection itself never queues or sends;
-- OS `OnPrimaryClipChangedListener` is primary proof of a real clipboard mutation;
-- ClipCascade-owned writes are filtered by `ClipboardWriteGuard`;
-- ACTION_COPY and Ctrl+C schedule a 700 ms fallback only if clipboard serial did not advance;
-- translated labels, content descriptions, toast text, and completion wording are not used for Copy correctness.
-
 ## Delivery acknowledgement — preserve
-
-Common local path:
 
 `QUEUED -> NATIVE_IN_FLIGHT -> JS_SEND_ATTEMPT -> LOCAL_TRANSPORT_ACCEPTED`
 
@@ -85,17 +42,15 @@ Extended P2P:
 
 `LOCAL_TRANSPORT_ACCEPTED -> PEER_RECEIVED -> PEER_TEXT_APPLIED -> PEER_ACK -> NATIVE_ACK -> DELETE`
 
-Old/non-Extended peer:
-
-`LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
-
 The outbound debug notification is observational only. Its failure is caught and cannot alter transport acceptance, relay claims, ACK ordering, or queue deletion.
+
+## Retained ordinary-copy invariants
+
+Language-neutral Copy confirmation, internal-write echo suppression, no wall-clock expiry, no overflow eviction, bounded capacity 16 with explicit `queue_full`, retry backoff, and ACK-based deletion remain intact.
 
 ## Mandatory proof
 
 Disable Phone Link and every competing synchronizer. Install `.17` in place, confirm notification authorization and actual listener runtime both show connected, clear counters, then send a Gmail OTP whose expanded notification visibly includes the code. Use the content-free stage counters to locate the failure before changing extraction rules.
-
-Also validate ordinary copy, long disconnect, queue-full, exactly-once, ACK deletion, no echo, battery behavior, and Windows tray behavior through the existing matrices.
 
 ## Do not claim
 
