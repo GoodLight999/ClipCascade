@@ -71,7 +71,10 @@ jobs:
       - name: Order P2P ACK after validation
         run: node scripts/prepare_p2p_ack_validation_order.js
       - name: Claim native relay dispatch once
-        run: node scripts/prepare_relay_claim.js
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/prepare_relay_claim.js 2>&1 | tee gmail-transform.log
 
       - name: Verify transformed Extended source
         shell: bash
@@ -174,6 +177,13 @@ jobs:
           test "${generated_digest}" = "${EXTENDED_TEST_CERT_SHA256}"
           test "${signer_digest}" = "${EXTENDED_TEST_CERT_SHA256}"
 
+      - name: Upload Gmail transform diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-Gmail-transform-diagnostics
+          path: ClipCascade_Mobile/src/gmail-transform.log
+          if-no-files-found: warn
       - name: Upload signer diagnostics
         if: always()
         uses: actions/upload-artifact@v4
