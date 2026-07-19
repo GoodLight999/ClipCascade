@@ -65,4 +65,5 @@ fs.writeFileSync(servicePath, serviceSource, 'utf8');
 require('./prepare_internal_clipboard_guard.js');
 require('./prepare_language_neutral_clipboard_copy.js');
 require('./prepare_ack_safe_queue_overflow.js');
+require('./prepare_gmail_ja_anchor_compat.js');
 require('./prepare_gmail_notification_reliability.js');
