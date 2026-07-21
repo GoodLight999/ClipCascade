@@ -5,9 +5,9 @@ const gradlePath = path.resolve(__dirname, '..', 'android', 'app', 'build.gradle
 let gradle = fs.readFileSync(gradlePath, 'utf8');
 
 const previousCode = '        versionCode 320108';
-const currentCode = '        versionCode 320124';
+const currentCode = '        versionCode 320125';
 const previousName = '        versionName "3.2.1-extended.4"';
-const currentName = '        versionName "3.2.1-extended.19-alpha.2"';
+const currentName = '        versionName "3.2.1-extended.20-alpha.1"';
 
 if (!gradle.includes(previousCode) || !gradle.includes(previousName)) {
   throw new Error('Expected Android update-probe version was not found');
@@ -17,4 +17,4 @@ gradle = gradle.replace(previousCode, currentCode);
 gradle = gradle.replace(previousName, currentName);
 fs.writeFileSync(gradlePath, gradle, 'utf8');
 
-console.log('Prepared Android Extended foreground queue-drain alpha build.');
+console.log('Prepared Android Extended foreground runner lifecycle alpha build.');
