@@ -15,10 +15,10 @@ jobs:
     timeout-minutes: 35
     env:
       GH_TOKEN: ${{ github.token }}
-      ALPHA_TAG: v3.2.1-extended.18-alpha.1
-      ALPHA_TITLE: ClipCascade Extended 3.2.1-extended.18-alpha.1
-      APK_NAME: ClipCascade-Extended-3.2.1-extended.18-alpha.1.apk
-      ZIP_NAME: ClipCascade-Extended-3.2.1-extended.18-alpha.1.zip
+      ALPHA_TAG: v3.2.1-extended.18-alpha.2
+      ALPHA_TITLE: ClipCascade Extended 3.2.1-extended.18-alpha.2
+      APK_NAME: ClipCascade-Extended-3.2.1-extended.18-alpha.2.apk
+      ZIP_NAME: ClipCascade-Extended-3.2.1-extended.18-alpha.2.zip
     steps:
       - name: Checkout release source
         uses: actions/checkout@v4
@@ -77,9 +77,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.18-alpha.1" ClipCascade_Mobile/src/scripts/prepare_extended_version.js
-          grep -q "versionCode 320122" .github/workflows/android-mobile-ci.yml
-          test -s docs/RELEASE_NOTES_3.2.1_EXTENDED_18_ALPHA_1.md
+          grep -q "3.2.1-extended.18-alpha.2" ClipCascade_Mobile/src/scripts/prepare_extended_version.js
+          grep -q "versionCode 320123" .github/workflows/android-mobile-ci.yml
+          test -s docs/RELEASE_NOTES_3.2.1_EXTENDED_18_ALPHA_2.md
           cat release-assets/SHA256SUMS.txt
 
       - name: Create or refresh GitHub prerelease
@@ -95,7 +95,7 @@ jobs:
             gh release edit "${ALPHA_TAG}" \
               --repo "${GITHUB_REPOSITORY}" \
               --title "${ALPHA_TITLE}" \
-              --notes-file docs/RELEASE_NOTES_3.2.1_EXTENDED_18_ALPHA_1.md \
+              --notes-file docs/RELEASE_NOTES_3.2.1_EXTENDED_18_ALPHA_2.md \
               --prerelease
             gh release upload "${ALPHA_TAG}" \
               --repo "${GITHUB_REPOSITORY}" \
@@ -108,7 +108,7 @@ jobs:
               --repo "${GITHUB_REPOSITORY}" \
               --target "${GITHUB_SHA}" \
               --title "${ALPHA_TITLE}" \
-              --notes-file docs/RELEASE_NOTES_3.2.1_EXTENDED_18_ALPHA_1.md \
+              --notes-file docs/RELEASE_NOTES_3.2.1_EXTENDED_18_ALPHA_2.md \
               --prerelease \
               "release-assets/${APK_NAME}" \
               "release-assets/${ZIP_NAME}" \
