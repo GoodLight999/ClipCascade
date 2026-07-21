@@ -5,92 +5,97 @@ Resume work in this order:
 1. `docs/REQUIREMENTS.md`
 2. `docs/CURRENT_STATUS.md`
 3. `docs/NEXT_CHATGPT_HANDOFF.md`
-4. `docs/LATEST_SYSTEM_LOCALIZED_COPY_RECOVERY_HANDOFF.md`
+4. `docs/LATEST_FOREGROUND_RUNNER_LIFECYCLE_HANDOFF.md`
 5. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
 6. `docs/LATEST_GREEN_ARTIFACTS.md`
-7. `docs/LATEST_NOTIFICATION_LISTENER_ALPHA_HANDOFF.md`
-8. `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`
-9. `docs/TEST_MATRIX.md`
-10. older focused handoffs linked from the current documents
+7. `docs/LATEST_SYSTEM_LOCALIZED_COPY_RECOVERY_HANDOFF.md`
+8. `docs/LATEST_NOTIFICATION_LISTENER_ALPHA_HANDOFF.md`
+9. `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`
+10. `docs/TEST_MATRIX.md`
+11. older focused handoffs linked from the current documents
 
-Current phase: validate `3.2.1-extended.19-alpha.2 / 320124` on HONOR 400 Pro while preserving Extended P2P Windows-applied ACK and PR #1 Draft state.
+Current phase: validate `3.2.1-extended.20-alpha.1 / 320125` on HONOR 400 Pro while preserving Extended P2P Windows-applied ACK and PR #1 Draft state.
 
-## 2026-07-21 — target evidence corrected
+## 2026-07-21 — `.19-alpha.2` target failure
 
-The previous broad statement that synchronization recovered was wrong.
+The user tested `.19-alpha.2` and established:
 
-The user established:
+- the real NotificationListener-path self-test did not complete;
+- Android outbound still failed whenever the main app UI was not open;
+- inbound continued to work.
 
-- Windows-to-Android receive works while ClipCascade is not open;
-- Android outbound Copy works while ClipCascade is open;
-- Android outbound Copy fails while ClipCascade is not open;
-- a real Gmail login-code notification was not relayed.
+`.19-alpha.2` passed CI but failed its target goals. It is not a confirmed or partial fix.
 
-The broken area is Android background outbound capture and/or dispatch. Do not describe the full synchronization path as recovered.
+## Go fork finding
 
-## Original upstream mechanism
+`wuxinkami/ClipCascade_go_fork` owns its connection in a sticky native foreground service and binds Accessibility directly to it. It also uses a transparent overlay and `SYSTEM_ALERT_WINDOW` for clipboard reads.
 
-The original React Native Android client used normal clipboard callbacks where Android allowed them, plus an ADB-granted `READ_LOGS` monitor and a temporary focusable overlay when Android denied background clipboard access.
+Extended must preserve P2P Windows-applied ACK and the canonical no-overlay/no-ADB requirements. It therefore adopts only the service-ownership principle.
 
-Extended intentionally removed that workaround because the product requirements prohibit ADB/READ_LOGS/overlay setup.
+## Confirmed Notifee registration defect
 
-## Go fork findings
+The prior Extended code registered `notifee.registerForegroundService(...)` lazily when mounted UI/recovery code called `StartForegroundService()`.
 
-`wuxinkami/ClipCascade_go_fork` does include Android code.
+The foreground runner must be registered at JavaScript entry, outside React components. A recreated process could therefore have a native foreground-service shell without the JavaScript transport runner that drains native queues.
 
-- Accessibility detects broad Copy-related events and binds to a native foreground service.
-- The foreground service owns a native Go synchronization engine and is sticky.
-- It reads the clipboard through a transparent 1x1 overlay and therefore requests `SYSTEM_ALERT_WINDOW`.
+## `.20-alpha.1` implementation
 
-Extended does not adopt its overlay hack. It adopts the useful ownership model: the live background transport runtime drains durable native queues.
+Implementation/release SHA: `290d6690e749fe34367b2383676faf27c0a4ba76`
 
-## `.19-alpha.1`: Copy cue recovery
+Changes:
 
-Implementation `dfff235dc293d75e28ca56787d1926a9cac33192` added:
+- register the Notifee runner from `index.js` before `AppRegistry.registerComponent`;
+- one registration per process generation;
+- registration-only path does not display/restart the notification;
+- runner registered/start/heartbeat/stop diagnostics;
+- heartbeat every 15 seconds; stale after 45 seconds;
+- settings show active/no-fresh-heartbeat;
+- component/listener tests request recovery when runner is stale;
+- listener test notification lifetime extended to five minutes;
+- delayed active scans at 0.5, 2, and 5 seconds;
+- exact localized Copy candidate search expanded to parent, children, siblings, and action labels;
+- selection alone remains inert;
+- no Windows implementation change.
 
-- exact matching against Android's active-locale `android.R.string.copy` and `copyUrl` labels;
-- Accessibility click/context-click cue detection;
-- selection-only negative behavior;
-- 700 ms serial-cancelled selected-text fallback;
-- separate `copy_detection` diagnostics;
-- a DAWN-shaped extractor regression using a synthetic value;
-- CI guards against READ_LOGS and SYSTEM_ALERT_WINDOW.
+CI:
 
-## `.19-alpha.2`: foreground queue drain
+- Android `29843413287`: success
+- Windows `29843413149`: success
 
-Current implementation `ed9c009af0fcfc238cfc6264dd4c7b85a8fe82a3` additionally lets the existing Notifee foreground-service transport claim and send pending native OTP/clipboard queue items directly.
+Artifact:
 
-- tag `v3.2.1-extended.19-alpha.2`
-- versionCode `320124`
-- Android CI `29837847117`: success
-- Windows CI `29837846863`: success
-- Actions artifact `8498121042`
-- ZIP SHA-256 `8c20eadce450c57fadb9eab39e465332fe34f8f25f7e28d44a072162dc480db3`
-- APK SHA-256 `f9f7b5fe6653beb8d0b08436657ddf719fd155e3ac9b1216b0307b7ea1cf63a7`
-- signer unchanged
+- Actions artifact `8500372630`
+- ZIP SHA-256 `ba2152241fdfe8c5bb99e3087b8781faa15915a281df3e10a9e8065fad177660`
+- APK SHA-256 `1b48a7bb7e6d4ab757a3a044fda233e8363ce58d6d634b071e7f90a90ac35cbe`
+- APK size `147937563` bytes
+- signer SHA-256 `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- expiry `2026-10-19T15:19:19Z`
 
-This removes the exclusive dependency on a UI React context receiving a native event. It reuses the existing send and Extended ACK machinery.
+## Trial and error
 
-## Gmail / DAWN
-
-The DAWN-shaped synthetic extractor test passes. This means the supplied structure is parser-compatible if the full notification text reaches `OtpCodeExtractor`.
-
-Real Gmail failure is therefore suspected earlier in listener delivery, filtering, extras exposure, or OEM lifecycle. This remains an inference until counters are recorded.
+- Android `29842404023`: failed before APK; runner-start transform assumed old `NativeModules` formatting.
+- Android `29842757548`: failed before APK; resource anchors assumed the wrong existing English/Japanese recovery labels.
+- Android `29843090432`: implementation passed after both anchors were corrected.
+- Windows `29843090421`: passed.
+- final release SHA Android `29843413287` and Windows `29843413149`: passed.
+- `_probe_should_not_create.txt` was accidentally added and removed twice during connector staging. Net tree effect is zero; no force push was used.
 
 ## Preserve
 
 - no ADB, root, Shizuku, READ_LOGS, or overlay;
 - no selection-only sends;
 - internal-write suppression;
-- native persistent queues;
 - no ordinary queue TTL or accepted-item eviction;
-- capacity 16 and `queue_full`;
+- capacity 16 and explicit `queue_full`;
+- relay IDs and bounded native claims;
+- validation before ACK;
 - Windows application before peer ACK;
 - peer ACK before native deletion;
-- notification receipt guard and listener-path self-test;
+- old-peer fallback;
+- notification receipt guard;
 - debug notification default OFF and ACK isolation;
 - PR #1 open and Draft.
 
 ## Next proof
 
-Install `.19-alpha.2` in place, disable competing synchronizers, enable debug temporarily, clear diagnostics, test foreground then background Copy, and record Copy detection, capture, foreground queue claim, local transport acceptance, Windows application, peer ACK, and queue deletion as separate boundaries.
+Install `.20-alpha.1` in place. Before any test, verify the settings screen reports the foreground transport runner active. Then run component/transport, listener-path, and background Copy tests in that order while recording each boundary separately. CI is not target proof.
