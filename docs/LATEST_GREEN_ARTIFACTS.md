@@ -4,81 +4,73 @@
 
 - repository: `GoodLight999/ClipCascade`
 - branch: `stability-mobile-otp`
-- implementation anchor: `ed9c009af0fcfc238cfc6264dd4c7b85a8fe82a3`
-- alpha tag: `v3.2.1-extended.19-alpha.2`
+- implementation/release anchor: `290d6690e749fe34367b2383676faf27c0a4ba76`
+- intended alpha tag: `v3.2.1-extended.20-alpha.1`
 - PR: `#1`, open and Draft
-
-The tag resolves exactly to the implementation anchor.
 
 ## CI
 
-- Android standalone CI `29837847117` — success
-- Desktop Windows CI `29837846863` — success
+- Android standalone CI `29843413287` — success
+- Desktop Windows CI `29843413149` — success
 
 Android CI passed:
 
 - all transforms in production order;
-- version `3.2.1-extended.19-alpha.2 / 320124`;
-- Android-framework-localized Copy/copy-URL matching assertions;
-- locale-positive and approximate-label/selection-negative tests;
-- selection-alone negative tests;
-- native clipboard and OTP foreground-service claim source assertions;
-- React native `claimPendingForegroundRelay` assertion;
-- Notifee foreground queue-drain and failure-retention assertions;
-- DAWN-shaped, Gmail-shaped, Perceptron, Beeper, multilingual, and negative OTP extractor tests;
-- explicit rejection of READ_LOGS and SYSTEM_ALERT_WINDOW;
-- internal-write, queue-capacity, no-TTL, no-eviction, retry, notification receipt, debug, claim, and ACK invariants;
+- version `3.2.1-extended.20-alpha.1 / 320125`;
+- index-level runner registration before `AppRegistry.registerComponent`;
+- one runner registration per process generation;
+- heartbeat and stale-state diagnostics;
+- listener delayed rescans and five-minute synthetic notifications;
+- hierarchical exact localized Copy candidates;
+- selection-only negative behavior;
+- foreground native queue claim/drain source assertions;
+- DAWN/Gmail/Perceptron/Beeper/multilingual/negative extractor tests;
+- no READ_LOGS or SYSTEM_ALERT_WINDOW;
+- queue/claim/retry/debug/ACK invariants;
 - JavaScript bundle;
 - Kotlin/resources and unit tests;
 - APK assembly and embedded bundle;
 - deterministic signer verification;
 - artifact upload.
 
-Windows CI passed existing authenticated HTTP, Extended peer-applied ACK, validation-before-ACK, shutdown/tray, tests, and EXE packaging. No Windows implementation file changed in `.19`.
+Windows CI passed authenticated HTTP, Extended peer-applied ACK, validation-before-ACK, shutdown/tray, tests, and EXE packaging. No Windows implementation file changed.
 
 ## Android artifact
 
 - application: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.19-alpha.2-standalone`
-- versionCode: `320124`
-- Actions artifact ID: `8498121042`
-- Actions artifact ZIP SHA-256: `8c20eadce450c57fadb9eab39e465332fe34f8f25f7e28d44a072162dc480db3`
-- APK SHA-256: `f9f7b5fe6653beb8d0b08436657ddf719fd155e3ac9b1216b0307b7ea1cf63a7`
-- APK size: `147933819` bytes
-- signer diagnostics artifact ID: `8498117842`
-- signer diagnostics ZIP SHA-256: `afe0ea50871ebc21412bae2f219f009cc0bc385eec5f85584468caea2c80206a`
+- versionName: `3.2.1-extended.20-alpha.1-standalone`
+- versionCode: `320125`
+- Actions artifact ID: `8500372630`
+- Actions artifact ZIP SHA-256: `ba2152241fdfe8c5bb99e3087b8781faa15915a281df3e10a9e8065fad177660`
+- APK SHA-256: `1b48a7bb7e6d4ab757a3a044fda233e8363ce58d6d634b071e7f90a90ac35cbe`
+- APK size: `147937563` bytes
+- signer diagnostics artifact ID: `8500368947`
+- signer diagnostics ZIP SHA-256: `74aa5e5b0e966abc73e1e0d68750564e051fb0f4e9f270f84c05a0dda0c92e57`
 - signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- artifact expiry: `2026-10-19T14:10:20Z`
+- artifact expiry: `2026-10-19T15:19:19Z`
 
-The downloaded Actions ZIP digest matched GitHub's reported artifact digest. The extracted APK was independently hashed. Signer diagnostics reported the expected V2 certificate digest.
+The downloaded Actions ZIP digest matched GitHub's artifact digest. The extracted APK and signer diagnostics were independently verified.
 
 ## Local filenames
 
-- `/mnt/data/ClipCascade-Extended-3.2.1-extended.19-alpha.2-actions.zip`
-- `/mnt/data/ClipCascade-Extended-3.2.1-extended.19-alpha.2-vc320124-ed9c009.apk`
-- `/mnt/data/ClipCascade-Android-signer-diagnostics-ed9c009.zip`
+- `/mnt/data/ClipCascade-Extended-3.2.1-extended.20-alpha.1-actions.zip`
+- `/mnt/data/ClipCascade-Extended-3.2.1-extended.20-alpha.1-vc320125-290d669.apk`
+- `/mnt/data/ClipCascade-Android-signer-diagnostics-20-alpha1.zip`
 
-## Release
+## Target truth
 
-- tag: `v3.2.1-extended.19-alpha.2`
-- target: `ed9c009af0fcfc238cfc6264dd4c7b85a8fe82a3`
-- notes: `docs/RELEASE_NOTES_3.2.1_EXTENDED_19_ALPHA_2.md`
-
-## Corrected device truth
-
-The current build responds to the observation that receive works and foreground outbound works, while background outbound Copy does not. `.19-alpha.2` is an unproven recovery attempt, not a confirmed fix.
-
-A real Gmail verification notification failed. The structurally equivalent synthetic extractor test passes, which narrows—but does not prove—the likely failure toward listener delivery, filtering, extras exposure, lifecycle, or later queue drain.
+`.19-alpha.2` failed the true listener-path self-test and still could not send while the main app UI was closed. `.20-alpha.1` addresses a confirmed foreground-runner registration defect, but has no target success evidence yet.
 
 ## Not proven by CI
 
 - in-place update/settings retention;
-- foreground target regression safety;
-- system Copy toolbar Accessibility event exposure;
-- native queue capture and foreground-service drain on target;
-- background, removed-from-recents, locked, or screen-off outbound;
-- real Gmail listener delivery and extras;
+- fresh runner heartbeat on HONOR;
+- component/transport self-test on target;
+- true listener-path self-test on target;
+- background Copy event exposure, capture, and drain;
+- removed-from-recents, locked, or screen-off outbound;
+- real Gmail listener delivery/extras;
 - exactly-once target behavior;
 - battery and tray behavior.
 
