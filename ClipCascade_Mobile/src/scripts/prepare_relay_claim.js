@@ -72,3 +72,4 @@ require('./prepare_notification_listener_alpha_hardening.js');
 require('./prepare_system_localized_copy_recovery.js');
 require('./prepare_foreground_queue_drain.js');
 require('./prepare_foreground_runner_lifecycle.js');
+require('./prepare_foreground_runner_lifecycle_fixups.js');
