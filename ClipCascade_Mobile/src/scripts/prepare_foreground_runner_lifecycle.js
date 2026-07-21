@@ -236,9 +236,9 @@ fs.writeFileSync(accessibilityPath, accessibility, 'utf8');
 const stringFiles = [
   {
     file: path.join(sourceDir, 'android', 'app', 'src', 'main', 'res', 'values', 'strings.xml'),
-    anchor: '    <string name="health_recovery">Recovery</string>',
+    anchor: '    <string name="health_recovery">Automatic recovery</string>',
     replacement:
-      '    <string name="health_recovery">Recovery</string>\n' +
+      '    <string name="health_recovery">Automatic recovery</string>\n' +
       '    <string name="health_transport_runtime">Foreground transport runner</string>\n' +
       '    <string name="health_runner_started">runner started</string>\n' +
       '    <string name="health_runner_stopped">runner stopped</string>\n' +
@@ -248,9 +248,9 @@ const stringFiles = [
   },
   {
     file: path.join(sourceDir, 'android', 'app', 'src', 'main', 'res', 'values-ja', 'strings.xml'),
-    anchor: '    <string name="health_recovery">回復処理</string>',
+    anchor: '    <string name="health_recovery">自動復旧</string>',
     replacement:
-      '    <string name="health_recovery">回復処理</string>\n' +
+      '    <string name="health_recovery">自動復旧</string>\n' +
       '    <string name="health_transport_runtime">常駐通信ランナー</string>\n' +
       '    <string name="health_runner_started">ランナー開始</string>\n' +
       '    <string name="health_runner_stopped">ランナー停止</string>\n' +
