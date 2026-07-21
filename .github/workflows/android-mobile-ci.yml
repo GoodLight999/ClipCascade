@@ -80,10 +80,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.19-alpha.2" App.js
-          grep -q "versionCode 320124" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.19-alpha.2"' android/app/build.gradle
+          grep -q "3.2.1-extended.20-alpha.1" App.js
+          grep -q "versionCode 320125" android/app/build.gradle
+          grep -q 'versionName "3.2.1-extended.20-alpha.1"' android/app/build.gradle
           grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
+          grep -q "foregroundRunnerRegistered" StartForegroundService.js
+          grep -q "recordForegroundRunnerStarted" StartForegroundService.js
+          grep -q "recordForegroundRunnerHeartbeat" StartForegroundService.js
+          grep -q "StartForegroundService({registerOnly: true})" index.js
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("index.js").read_text(encoding="utf-8")
+          assert source.index("StartForegroundService({registerOnly: true})") < source.index("AppRegistry.registerComponent")
+          PY
+          grep -q "ForegroundTransportRuntimeStore" android/app/src/main/java/com/clipcascade/RelaySettingsModule.kt
+          grep -q "FRESH_HEARTBEAT_MS = 45_000L" android/app/src/main/java/com/clipcascade/ForegroundTransportRuntimeStore.kt
+          grep -q "listener_path_self_test_delayed_scan" android/app/src/main/java/com/clipcascade/RelaySettingsActivity.kt
+          grep -q "foreground_runner_active" android/app/src/main/res/values/strings.xml
+          grep -q "health_transport_runtime" android/app/src/main/res/values-ja/strings.xml
+          grep -q "addNodeCopyCueCandidates" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "action.label" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
           grep -q "notificationTimeout = 100" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
           grep -q "ClipboardCopySignalPolicy.shouldCaptureClipboardChange" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
           grep -q "ClipboardCopySignalPolicy.shouldRunActionFallback" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
@@ -133,6 +149,7 @@ jobs:
           grep -q 'path = "foreground_poll"' android/app/src/main/java/com/clipcascade/OtpRelayDispatcher.kt
           grep -q "prepare_system_localized_copy_recovery.js" scripts/prepare_relay_claim.js
           grep -q "prepare_foreground_queue_drain.js" scripts/prepare_relay_claim.js
+          grep -q "prepare_foreground_runner_lifecycle.js" scripts/prepare_relay_claim.js
           grep -q "extractsPerceptronNetworkStandaloneAlphanumericCode" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
           grep -q "extractsCodeFromGmailTitlePreviewAndExpandedBody" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
           grep -q "extractsDawnStandaloneNumericLoginCode" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
@@ -144,6 +161,7 @@ jobs:
           grep -q "NotificationDeliveryReceiptStore.claimIfNew" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
           grep -q "postListenerPath" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
           grep -q "queueSyntheticValue(applicationContext, text, value)" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
+          grep -q "5 \* 60_000L" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
           grep -q "receiptRemainsActiveThroughTtlBoundary" android/app/src/test/java/com/clipcascade/NotificationReceiptPolicyTest.kt
           grep -q "newestReceiptSetRemainsBounded" android/app/src/test/java/com/clipcascade/NotificationReceiptPolicyTest.kt
           grep -q "NotificationCodeListenerService.ensureBound" android/app/src/main/java/com/clipcascade/ScheduleService.kt
