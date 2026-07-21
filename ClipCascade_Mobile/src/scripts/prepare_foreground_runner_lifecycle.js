@@ -47,8 +47,8 @@ service = replaceRequired(
 );
 service = replaceRequired(
   service,
-  `        const { NativeBridgeModule, RelaySettingsModule } = NativeModules;\n        if (RelaySettingsModule?.resumeRelayQueues) {\n`,
-  `        const { NativeBridgeModule, RelaySettingsModule } = NativeModules;\n        if (RelaySettingsModule?.recordForegroundRunnerStarted) {\n          await RelaySettingsModule.recordForegroundRunnerStarted();\n        }\n        if (RelaySettingsModule?.resumeRelayQueues) {\n`,
+  `        if (RelaySettingsModule?.resumeRelayQueues) {\n`,
+  `        if (RelaySettingsModule?.recordForegroundRunnerStarted) {\n          await RelaySettingsModule.recordForegroundRunnerStarted();\n        }\n        if (RelaySettingsModule?.resumeRelayQueues) {\n`,
   'foreground runner started marker',
 );
 service = replaceRequired(
@@ -210,7 +210,7 @@ testManager = replaceRequired(
   testManager,
   `.setTimeoutAfter(60_000L)`,
   `.setTimeoutAfter(5 * 60_000L)`,
-  'listener self-test notification lifetime',
+  'component synthetic notification lifetime',
 );
 fs.writeFileSync(testManagerPath, testManager, 'utf8');
 
