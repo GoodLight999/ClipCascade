@@ -1,95 +1,85 @@
 # Latest Green Artifacts — 2026-07-21
 
-This file records the latest matching alpha implementation, CI, tag, and Android artifact prepared for isolated Priority 1 validation.
-
-## Source and PR
+## Source
 
 - repository: `GoodLight999/ClipCascade`
 - branch: `stability-mobile-otp`
-- implementation anchor: `87e138380a139671168effd24a64df844f1bb879`
-- alpha tag: `v3.2.1-extended.18-alpha.1`
-- PR: `#1`
-- PR state: open and Draft; keep it Draft
+- implementation anchor: `ed9c009af0fcfc238cfc6264dd4c7b85a8fe82a3`
+- alpha tag: `v3.2.1-extended.19-alpha.2`
+- PR: `#1`, open and Draft
 
 The tag resolves exactly to the implementation anchor.
 
-## Implementation CI
+## CI
 
-- Android standalone CI: `29827698937` — success
-- Desktop Windows CI: `29827698930` — success
+- Android standalone CI `29837847117` — success
+- Desktop Windows CI `29837846863` — success
 
 Android CI passed:
 
-- every source transform in production order;
-- alpha version and versionCode checks;
-- language-neutral Copy invariants;
-- no ordinary clipboard TTL or overflow eviction;
-- bounded queue and retry tests;
-- broad OTP and Gmail-shaped extractor tests;
-- own-package synthetic-marker boundary;
-- listener-path self-test source assertions;
-- persistent notification receipt source assertions;
-- receipt TTL/capacity unit tests;
-- existing listener rebind/rescan and diagnostics assertions;
-- outbound debug notification ACK-isolation assertion;
-- JavaScript bundle generation;
-- Android Kotlin/resources and unit tests;
-- APK assembly;
-- embedded bundle verification;
+- all transforms in production order;
+- version `3.2.1-extended.19-alpha.2 / 320124`;
+- Android-framework-localized Copy/copy-URL matching assertions;
+- locale-positive and approximate-label/selection-negative tests;
+- selection-alone negative tests;
+- native clipboard and OTP foreground-service claim source assertions;
+- React native `claimPendingForegroundRelay` assertion;
+- Notifee foreground queue-drain and failure-retention assertions;
+- DAWN-shaped, Gmail-shaped, Perceptron, Beeper, multilingual, and negative OTP extractor tests;
+- explicit rejection of READ_LOGS and SYSTEM_ALERT_WINDOW;
+- internal-write, queue-capacity, no-TTL, no-eviction, retry, notification receipt, debug, claim, and ACK invariants;
+- JavaScript bundle;
+- Kotlin/resources and unit tests;
+- APK assembly and embedded bundle;
 - deterministic signer verification;
 - artifact upload.
 
-Windows CI passed retained authenticated HTTP, Extended P2P peer-applied ACK, validation-before-ACK, shutdown/tray, and packaging tests. The alpha directly changes no Windows implementation file.
+Windows CI passed existing authenticated HTTP, Extended peer-applied ACK, validation-before-ACK, shutdown/tray, tests, and EXE packaging. No Windows implementation file changed in `.19`.
 
 ## Android artifact
 
 - application: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.18-alpha.1-standalone`
-- versionCode: `320122`
-- GitHub Actions artifact ID: `8494023518`
-- Actions artifact ZIP SHA-256: `ae84ba8adda4b0c33ac8dbd39f835fdf7be9142dea8788e579361f6b0917cbeb`
-- extracted APK SHA-256: `53da5cae4b5e2c7dd5cad0e6064aec47945b9d9620fbd30d9edaf391d37ac88d`
+- versionName: `3.2.1-extended.19-alpha.2-standalone`
+- versionCode: `320124`
+- Actions artifact ID: `8498121042`
+- Actions artifact ZIP SHA-256: `8c20eadce450c57fadb9eab39e465332fe34f8f25f7e28d44a072162dc480db3`
+- APK SHA-256: `f9f7b5fe6653beb8d0b08436657ddf719fd155e3ac9b1216b0307b7ea1cf63a7`
+- APK size: `147933819` bytes
+- signer diagnostics artifact ID: `8498117842`
+- signer diagnostics ZIP SHA-256: `afe0ea50871ebc21412bae2f219f009cc0bc385eec5f85584468caea2c80206a`
 - signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- Actions artifact expiry: `2026-10-19T11:50:45Z`
+- artifact expiry: `2026-10-19T14:10:20Z`
 
-The downloaded Actions artifact ZIP digest matched GitHub's reported digest exactly. The APK hash was calculated after extracting `app-debug.apk`. Signer diagnostics reported the expected V2 signer digest.
+The downloaded Actions ZIP digest matched GitHub's reported artifact digest. The extracted APK was independently hashed. Signer diagnostics reported the expected V2 certificate digest.
 
-## Local filenames used in the alpha conversation
+## Local filenames
 
-- APK: `ClipCascade-Extended-3.2.1-extended.18-alpha.1-vc320122-87e1383.apk`
-- Actions artifact ZIP: `ClipCascade-Extended-3.2.1-extended.18-alpha.1-actions.zip`
+- `/mnt/data/ClipCascade-Extended-3.2.1-extended.19-alpha.2-actions.zip`
+- `/mnt/data/ClipCascade-Extended-3.2.1-extended.19-alpha.2-vc320124-ed9c009.apk`
+- `/mnt/data/ClipCascade-Android-signer-diagnostics-ed9c009.zip`
 
-These are local conversation artifacts, not repository files.
+## Release
 
-## Alpha prerelease
+- tag: `v3.2.1-extended.19-alpha.2`
+- target: `ed9c009af0fcfc238cfc6264dd4c7b85a8fe82a3`
+- notes: `docs/RELEASE_NOTES_3.2.1_EXTENDED_19_ALPHA_2.md`
 
-- tag: `v3.2.1-extended.18-alpha.1`
-- target: `87e138380a139671168effd24a64df844f1bb879`
-- release notes: `docs/RELEASE_NOTES_3.2.1_EXTENDED_18_ALPHA_1.md`
+## Corrected device truth
 
-The release workflow is designed to wait for matching-sha push Android and Windows CI, then create APK/ZIP/SHA256SUMS assets. The connector verified the tag and target commit. It could not independently enumerate the public release asset list, so do not substitute unverified release-asset hashes for the Actions artifact and APK hashes recorded above.
+The current build responds to the observation that receive works and foreground outbound works, while background outbound Copy does not. `.19-alpha.2` is an unproven recovery attempt, not a confirmed fix.
 
-## Target-device evidence inherited from `.17`
-
-- ordinary synchronization recovered and was working;
-- Gmail was not testable because no real OTP arrived.
-
-The alpha must first prove that ordinary synchronization remains working after in-place installation.
+A real Gmail verification notification failed. The structurally equivalent synthetic extractor test passes, which narrows—but does not prove—the likely failure toward listener delivery, filtering, extras exposure, lifecycle, or later queue drain.
 
 ## Not proven by CI
 
-- in-place alpha update and settings retention;
-- no regression of recovered ordinary synchronization;
-- listener-path self-test on HONOR;
-- persistent receipt duplicate suppression on HONOR;
-- real Gmail notification delivery/extras/extraction;
-- OEM listener recovery;
-- outbound debug switch ON/OFF on target;
-- multilingual Copy behavior;
-- background/screen-off ordinary or Gmail delivery;
-- long-disconnect durability and queue-full behavior;
+- in-place update/settings retention;
+- foreground target regression safety;
+- system Copy toolbar Accessibility event exposure;
+- native queue capture and foreground-service drain on target;
+- background, removed-from-recents, locked, or screen-off outbound;
+- real Gmail listener delivery and extras;
 - exactly-once target behavior;
-- battery and Windows tray behavior.
+- battery and tray behavior.
 
-Do not mark PR #1 ready or merge it.
+Keep PR #1 Draft.
