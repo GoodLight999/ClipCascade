@@ -25,7 +25,7 @@ Alpha.20:
 
 ## Listener-path self-test recovery
 
-- the listener test notification remains active for five minutes;
+- both synthetic notifications remain active for five minutes;
 - rebind is followed by delayed active-notification scans at 0.5, 2, and 5 seconds;
 - the value is still never inserted directly by the listener-path test;
 - normal NotificationListener, extraction, persistent queue, transport, peer ACK, and deletion remain required.
@@ -46,6 +46,14 @@ Matching remains exact against Android's active-locale `copy` and `copyUrl` stri
 `wuxinkami/ClipCascade_go_fork` owns its Go connection in a sticky native foreground service and binds Accessibility directly to it. It also relies on a transparent overlay for background clipboard reads.
 
 Extended retains P2P and Windows-applied ACK, so it does not replace the transport with the fork's P2S-only Go engine. It adopts the same lifecycle requirement—background transport ownership must survive without an activity—but does not add the fork's overlay, `SYSTEM_ALERT_WINDOW`, ADB, root, or Shizuku.
+
+## Build iterations retained
+
+- first Android run stopped before APK generation because the new runner-start transform expected a pre-ACK `NativeModules` declaration shape;
+- second Android run stopped before APK generation because localized recovery labels were assumed instead of read from the existing resources;
+- both anchors were corrected without changing ACK code or user-facing existing translations;
+- the subsequent implementation run passed transforms, JavaScript bundling, Kotlin/unit tests, APK assembly, deterministic signing, and artifact upload;
+- matching Windows CI retained authenticated HTTP, P2P peer-applied ACK, validation-before-ACK, tray/shutdown, and packaging tests.
 
 ## Preserved invariants
 
