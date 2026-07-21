@@ -60,7 +60,8 @@ fs.writeFileSync(servicePath, serviceSource, 'utf8');
 
 // These must run after every transport/listener transform. First guard the final
 // Clipboard.setString call sites, then install the ACK-safe queue, notification
-// listener hardening, and finally the Android-framework-localized Copy fallback.
+// listener hardening, Android-framework-localized Copy fallback, and finally let
+// the live foreground transport drain native queues without a UI React context.
 require('./prepare_internal_clipboard_guard.js');
 require('./prepare_language_neutral_clipboard_copy.js');
 require('./prepare_ack_safe_queue_overflow.js');
@@ -69,3 +70,4 @@ require('./prepare_gmail_notification_reliability.js');
 require('./prepare_debug_notification_icon_compat.js');
 require('./prepare_notification_listener_alpha_hardening.js');
 require('./prepare_system_localized_copy_recovery.js');
+require('./prepare_foreground_queue_drain.js');
