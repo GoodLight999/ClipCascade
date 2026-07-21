@@ -80,9 +80,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.17" App.js
-          grep -q "versionCode 320121" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.17"' android/app/build.gradle
+          grep -q "3.2.1-extended.18-alpha.1" App.js
+          grep -q "versionCode 320122" android/app/build.gradle
+          grep -q 'versionName "3.2.1-extended.18-alpha.1"' android/app/build.gradle
           grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
           grep -q "notificationTimeout = 100" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
           grep -q "ClipboardCopySignalPolicy.shouldCaptureClipboardChange" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
@@ -117,11 +117,17 @@ jobs:
           grep -q "scanActiveNotifications" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
           grep -q "MAX_ACTIVE_SCAN_AGE_MS" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
           grep -q "NotificationListenerRuntimeStore" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
+          grep -q "posted.packageName == packageName &&" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
+          grep -q "isListenerPathTest" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
+          grep -q "NotificationDeliveryReceiptStore.claimIfNew" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
+          grep -q "postListenerPath" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
+          grep -q "queueSyntheticValue(applicationContext, text, value)" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
+          grep -q "receiptRemainsActiveThroughTtlBoundary" android/app/src/test/java/com/clipcascade/NotificationReceiptPolicyTest.kt
+          grep -q "newestReceiptSetRemainsBounded" android/app/src/test/java/com/clipcascade/NotificationReceiptPolicyTest.kt
           grep -q "NotificationCodeListenerService.ensureBound" android/app/src/main/java/com/clipcascade/ScheduleService.kt
           grep -q "outboundDebugNotificationEnabled" android/app/src/main/java/com/clipcascade/RelaySettingsStore.kt
           grep -q "showOutboundDebugNotification" android/app/src/main/java/com/clipcascade/NativeBridgeModule.kt
           grep -q "Debug UI must never change transport acceptance or ACK behavior" StartForegroundService.js
-          grep -q "queueSyntheticValue(applicationContext, text, value)" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
           grep -q "claimRelayDispatch" StartForegroundService.js
           grep -q "releaseRelayDispatch" android/app/src/main/java/com/clipcascade/RelaySettingsModule.kt
           grep -q "setWsIsRunning(latest.wsIsRunning)" App.js

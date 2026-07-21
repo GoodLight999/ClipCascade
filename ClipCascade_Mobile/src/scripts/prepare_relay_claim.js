@@ -52,19 +52,20 @@ serviceSource = serviceSource.replace('            const relaySource = event?.so
             }
 `);
 serviceSource = serviceSource.replace('              if (!accepted && peerAckRequested) {\n', `              if (!accepted && relayId && RelaySettingsModule?.releaseRelayDispatch) {
-                 await RelaySettingsModule.releaseRelayDispatch(relayId);
-               }
-               if (!accepted && peerAckRequested) {
+                  await RelaySettingsModule.releaseRelayDispatch(relayId);
+                }
+                if (!accepted && peerAckRequested) {
 `);
 fs.writeFileSync(servicePath, serviceSource, 'utf8');
 
 // These must run after every transport/listener transform. First guard the final
 // Clipboard.setString call sites, then replace localized UI-text heuristics with
-// language-neutral confirmation, install bounded queue-full handling, and finally
-// add notification-listener recovery plus content-free outbound debug reporting.
+// language-neutral confirmation, install bounded queue-full handling, add Gmail
+// listener recovery, and finally harden alpha listener testing and duplicate receipts.
 require('./prepare_internal_clipboard_guard.js');
 require('./prepare_language_neutral_clipboard_copy.js');
 require('./prepare_ack_safe_queue_overflow.js');
 require('./prepare_gmail_ja_anchor_compat.js');
 require('./prepare_gmail_notification_reliability.js');
 require('./prepare_debug_notification_icon_compat.js');
+require('./prepare_notification_listener_alpha_hardening.js');

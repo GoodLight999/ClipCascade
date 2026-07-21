@@ -1,0 +1,116 @@
+name: Alpha prerelease
+
+on:
+  push:
+    branches: [stability-mobile-otp]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish-alpha:
+    if: contains(github.event.head_commit.message, '[alpha-release]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ALPHA_TAG: v3.2.1-extended.18-alpha.1
+      ALPHA_TITLE: ClipCascade Extended 3.2.1-extended.18-alpha.1
+      APK_NAME: ClipCascade-Extended-3.2.1-extended.18-alpha.1.apk
+      ZIP_NAME: ClipCascade-Extended-3.2.1-extended.18-alpha.1.zip
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Wait for matching Android and Windows CI
+        id: ci
+        shell: bash
+        run: |
+          set -euo pipefail
+          android_run=""
+          windows_run=""
+          for attempt in $(seq 1 80); do
+            runs="$(gh api --paginate \
+              -H 'Accept: application/vnd.github+json' \
+              "/repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&per_page=100")"
+            failed="$(jq -r '[.workflow_runs[] | select((.name == "Android standalone CI" or .name == "Desktop Windows CI") and .event == "push" and .status == "completed" and .conclusion != "success")] | length' <<<"${runs}")"
+            if [[ "${failed}" != "0" ]]; then
+              echo "A required CI workflow failed for ${GITHUB_SHA}" >&2
+              jq -r '.workflow_runs[] | select(.name == "Android standalone CI" or .name == "Desktop Windows CI") | [.name, .event, .status, .conclusion, .id] | @tsv' <<<"${runs}" >&2
+              exit 1
+            fi
+            android_run="$(jq -r '[.workflow_runs[] | select(.name == "Android standalone CI" and .event == "push" and .status == "completed" and .conclusion == "success")][0].id // empty' <<<"${runs}")"
+            windows_run="$(jq -r '[.workflow_runs[] | select(.name == "Desktop Windows CI" and .event == "push" and .status == "completed" and .conclusion == "success")][0].id // empty' <<<"${runs}")"
+            if [[ -n "${android_run}" && -n "${windows_run}" ]]; then
+              break
+            fi
+            sleep 15
+          done
+          if [[ -z "${android_run}" || -z "${windows_run}" ]]; then
+            echo "Timed out waiting for matching Android and Windows CI" >&2
+            exit 1
+          fi
+          echo "android_run=${android_run}" >> "${GITHUB_OUTPUT}"
+          echo "windows_run=${windows_run}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download verified Android artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          gh run download "${{ steps.ci.outputs.android_run }}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --name ClipCascade-Extended-standalone \
+            --dir release-assets/downloaded
+          test -s release-assets/downloaded/app-debug.apk
+          cp release-assets/downloaded/app-debug.apk "release-assets/${APK_NAME}"
+          (
+            cd release-assets
+            zip -9 "${ZIP_NAME}" "${APK_NAME}"
+            sha256sum "${APK_NAME}" "${ZIP_NAME}" > SHA256SUMS.txt
+          )
+
+      - name: Verify release source and signer metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "3.2.1-extended.18-alpha.1" ClipCascade_Mobile/src/scripts/prepare_extended_version.js
+          grep -q "versionCode 320122" .github/workflows/android-mobile-ci.yml
+          test -s docs/RELEASE_NOTES_3.2.1_EXTENDED_18_ALPHA_1.md
+          cat release-assets/SHA256SUMS.txt
+
+      - name: Create or refresh GitHub prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "${ALPHA_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            target="$(gh api "/repos/${GITHUB_REPOSITORY}/git/ref/tags/${ALPHA_TAG}" --jq '.object.sha')"
+            if [[ "${target}" != "${GITHUB_SHA}" ]]; then
+              echo "Existing ${ALPHA_TAG} points to ${target}, not ${GITHUB_SHA}" >&2
+              exit 1
+            fi
+            gh release edit "${ALPHA_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "${ALPHA_TITLE}" \
+              --notes-file docs/RELEASE_NOTES_3.2.1_EXTENDED_18_ALPHA_1.md \
+              --prerelease
+            gh release upload "${ALPHA_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber \
+              "release-assets/${APK_NAME}" \
+              "release-assets/${ZIP_NAME}" \
+              release-assets/SHA256SUMS.txt
+          else
+            gh release create "${ALPHA_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --target "${GITHUB_SHA}" \
+              --title "${ALPHA_TITLE}" \
+              --notes-file docs/RELEASE_NOTES_3.2.1_EXTENDED_18_ALPHA_1.md \
+              --prerelease \
+              "release-assets/${APK_NAME}" \
+              "release-assets/${ZIP_NAME}" \
+              release-assets/SHA256SUMS.txt
+          fi
