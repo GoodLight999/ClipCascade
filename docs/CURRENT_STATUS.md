@@ -4,115 +4,147 @@ Branch: `stability-mobile-otp`
 Draft PR: `#1`  
 Repository: `GoodLight999/ClipCascade`
 
-## Current alpha target
+## Current candidate
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.18-alpha.1-standalone`
-- versionCode: `320122`
-- implementation anchor: `87e138380a139671168effd24a64df844f1bb879`
-- alpha tag: `v3.2.1-extended.18-alpha.1`
-- Android CI: `29827698937`, success
-- Windows CI: `29827698930`, success
-- Android Actions artifact ID: `8494023518`
-- deterministic signer unchanged
+- versionName: `3.2.1-extended.19-alpha.2-standalone`
+- versionCode: `320124`
+- implementation anchor: `ed9c009af0fcfc238cfc6264dd4c7b85a8fe82a3`
+- intended alpha tag: `v3.2.1-extended.19-alpha.2`
+- Android CI: `29837847117`, success
+- Windows CI: `29837846863`, success
+- Android Actions artifact ID: `8498121042`
+- deterministic signer: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 
 Artifact hashes and expiry are recorded in `docs/LATEST_GREEN_ARTIFACTS.md`.
 
-## Target-device evidence
+## Latest target-device truth
 
-The user reports that ordinary synchronization is working again on `.17`; it had previously been broken. This is the most important observed result and must be protected against regression.
+The latest report supersedes the earlier broad statement that ordinary synchronization had recovered:
 
-No real Gmail OTP arrived, so real Gmail extraction has not been tested. Do not interpret the absence of a failure as Gmail success.
+- Android inbound works while the app UI is not open;
+- Android outbound works while the app UI is open;
+- Android outbound fails while the app UI is not open;
+- ordinary Copy performed with the UI closed does not reach Windows;
+- a genuine Gmail DAWN notification containing `Your code is 713642` was not relayed;
+- previous apparent ordinary success was intermittent and must not be treated as stable background success.
 
-## Why `.18-alpha.1` exists
+Phone Link and all competing clipboard synchronizers must be disabled for every outbound validation.
 
-The alpha makes notification validation truthful and prevents reconnect/rescan duplicates without changing ordinary synchronization or Extended ACK semantics.
+## Why `.19-alpha.2` exists
 
-### True listener-path self-test
+The symptom does not imply that Copy detection alone is dead. Native clipboard and OTP dispatchers can queue an item but previously attempted delivery by emitting `SHARED_TEXT` through `MainApplication.currentReactContext`.
 
-The previous deterministic OTP test directly inserted the extracted value into the queue after posting its notification. It remains useful for extractor/queue/transport/ACK testing but cannot prove NotificationListener delivery.
+The Notifee foreground-service Headless React runtime can remain alive and receive inbound traffic while that UI/MainApplication React context is absent. This fits:
 
-The alpha adds a separate listener-path test that posts a marked local notification and does not directly queue the value. Success requires:
+`INBOUND WORKS + UI-OPEN OUTBOUND WORKS + UI-CLOSED OUTBOUND FAILS`
 
-`NOTIFICATION_POSTED -> LISTENER_CALLBACK -> TEXT_COLLECTED -> EXTRACTED -> OTP_QUEUE -> TRANSPORT -> WINDOWS_APPLIED -> PEER_ACK -> DELETE`
+`.19-alpha.2` lets the live foreground-service transport pull durable native queue items directly.
 
-Synthetic privileges are granted only when the notification comes from ClipCascade's own package and contains the marker.
+## Reference implementation used
 
-### Active-notification duplicate prevention
+`wuxinkami/ClipCascade_go_fork` keeps its Go synchronization engine inside a native sticky foreground service and lets Accessibility request work from that service.
 
-A successful notification/code pair receives a one-way SHA-256 receipt fingerprint before queue insertion. The fingerprint is bounded to 128 entries and 30 minutes, contains no recoverable notification text/code/package/key/account data, and is released if queue insertion throws.
+Extended adopts the transport-ownership principle only. It does not add the fork's transparent overlay, `SYSTEM_ALERT_WINDOW`, `READ_LOGS`, root, ADB, or Shizuku dependency.
 
-This prevents a still-active notification from being resent after the OTP queue's 90-second content-deduplication window when the listener reconnects or performs a manual rescan.
+## Foreground queue drain
 
-### Expanded content-free diagnostics
+### Native claim
 
-The settings screen adds:
+- verification values are offered before ordinary text;
+- `ClipboardRelayDispatcher` and `OtpRelayDispatcher` reuse existing native in-flight IDs and timestamps;
+- claim does not delete or acknowledge an item;
+- existing 15-second acknowledgement timeout releases a stuck claim for retry.
 
-- eligible notifications;
-- already-processed suppression;
-- listener-path test callbacks;
-- active-scan count and last candidate count;
-- latest callback delay;
-- existing text/auth/queued/no-match/empty/filtered counters.
+### Live transport
+
+The existing 3-second Notifee service poll calls `drainNativeRelayQueue()` and reuses final `sendClipBoard(...)` plus existing ACK helpers.
+
+P2S:
+
+`NATIVE_QUEUE -> FOREGROUND_CLAIM -> LOCAL_PUBLISH_ACCEPTED -> NATIVE_ACK -> DELETE`
+
+Extended P2P:
+
+`NATIVE_QUEUE -> FOREGROUND_CLAIM -> DATA_CHANNEL_ACCEPTED -> WINDOWS_VALIDATED -> WINDOWS_APPLIED -> PEER_ACK -> NATIVE_ACK -> DELETE`
+
+Old/non-Extended P2P:
+
+`DATA_CHANNEL_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
+
+A failed send never deletes the native item.
+
+## Copy detection retained from `.19-alpha.1`
+
+- OS clipboard mutation remains the strongest Copy proof;
+- exact Android framework-localized Copy/Copy URL click is a conservative fallback;
+- selection events only remember text;
+- selection alone cannot enter the fallback;
+- internal ClipCascade writes are filtered;
+- no hard-coded Japanese/English menu dictionary.
+
+This candidate addresses both plausible boundaries: background Copy detection and post-queue transport dispatch.
+
+## DAWN result interpretation
+
+The exact supplied DAWN body shape is covered by `extractsDawnStandaloneNumericLoginCode`, and Android unit tests pass. The text itself is extractor-compatible.
+
+The real failure can still be at:
+
+`LISTENER_BINDING -> CALLBACK -> TEXT_EXTRAS -> AUTH_CONTEXT -> EXTRACTION -> OTP_QUEUE -> FOREGROUND_CLAIM -> TRANSPORT -> WINDOWS -> ACK`
+
+Do not loosen the extractor without locating the first failed content-free counter.
+
+## Notification validation retained
+
+- deterministic component/transport test remains separate from listener validation;
+- true listener-path test cannot directly insert into the queue;
+- synthetic privilege requires ClipCascade's own package plus marker;
+- active-notification receipts use bounded one-way fingerprints;
+- no raw notification text, code, account, package, relay ID, or server URL is persisted in diagnostics.
 
 ## Outbound debug notification
 
 - defaults OFF;
-- appears after local transport acceptance only;
-- displays source class and P2P/P2S mode only;
-- never proves Windows application or peer ACK;
-- failure cannot alter relay claims, retry, ACK ordering, or queue deletion.
+- appears after local P2S publish acceptance or at least one open P2P DataChannel accepts the item;
+- displays source class and P2P/P2S only;
+- does not prove Windows application or peer ACK;
+- failure cannot alter claims, retry, ACK ordering, or deletion.
 
-## ACK path — preserve exactly
+## Preserved queue and ACK invariants
 
-Common local path:
-
-`QUEUED -> NATIVE_IN_FLIGHT -> JS_SEND_ATTEMPT -> LOCAL_TRANSPORT_ACCEPTED`
-
-Extended P2P:
-
-`LOCAL_TRANSPORT_ACCEPTED -> PEER_RECEIVED -> PEER_TEXT_APPLIED -> PEER_ACK -> NATIVE_ACK -> DELETE`
-
-Old/non-Extended peer:
-
-`LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
-
-No alpha change modifies Windows code, P2P message ACK metadata, validation-before-ACK, native relay claims, or native ACK deletion.
-
-## Ordinary synchronization invariants
-
-- selection events only remember selected text;
-- selection alone never queues or sends;
-- OS clipboard mutation is primary Copy proof;
-- ACTION_COPY/Ctrl+C fallback remains serial-cancelled and bounded;
-- internal ClipCascade writes are filtered;
-- accepted ordinary items do not expire by age;
-- accepted items are not evicted to admit newer items;
-- capacity remains 16 with explicit `queue_full` for new input;
-- disconnected retry remains capped at 15 seconds.
-
-## Alpha release state
-
-The tag `v3.2.1-extended.18-alpha.1` resolves exactly to implementation commit `87e13838...`. The release workflow is constrained to create the prerelease only after matching-sha push Android and Windows CI succeed.
-
-The connector independently verified the tag and source commit. The local APK and Actions artifact were downloaded and hashed. Direct release-asset enumeration was not available through the connector; use the release page or recorded Actions artifact if asset recovery is needed.
+- no ordinary clipboard TTL;
+- no overflow eviction of accepted items;
+- capacity 16 with explicit `queue_full` rejection;
+- disconnected retry cap 15 seconds;
+- relay IDs and native claims remain;
+- Extended peer application precedes ACK;
+- peer ACK precedes native deletion;
+- validation-before-ACK remains;
+- old-peer fallback remains five seconds.
 
 ## Mandatory proof
 
-Install over `.17`, preserve data, then test in this order:
-
-1. ordinary synchronization regression;
-2. actual listener runtime connected;
-3. deterministic component/transport test;
-4. real listener-path self-test;
-5. repeated active rescan suppresses duplicate;
-6. fresh listener-path test still succeeds;
-7. outbound debug ON and OFF;
-8. real Gmail only when a genuine notification arrives.
+1. Install alpha.2 in place without uninstalling.
+2. Confirm settings, notification access, Accessibility, and sync configuration survive.
+3. Disable Phone Link and competitors.
+4. Confirm inbound with UI closed.
+5. Enable outbound debug notification temporarily.
+6. Open once, confirm connection, then leave the UI.
+7. Copy one unique value and record:
+   - Copy detection health;
+   - clipboard capture/delivery health;
+   - `foreground_poll / claimed`;
+   - debug notification;
+   - Windows application count;
+   - peer ACK and native deletion.
+8. Repeat removed from recents and locked/screen-off where Android permits.
+9. Run component/transport and true listener-path OTP tests.
+10. Test real Gmail/DAWN only when a genuine notification arrives.
 
 ## Do not claim
 
-CI is not HONOR target-device proof. Do not claim alpha ordinary-sync regression safety, listener-path success, receipt suppression, real Gmail ingestion, OEM listener survival, background/screen-off Gmail delivery, exactly-once target behavior, battery efficiency, or tray behavior until isolated evidence exists.
+CI is not HONOR target-device proof. Do not claim background Copy, native queue insertion, foreground drain, real Gmail, listener survival, removed-from-recents/screen-off delivery, exactly-once target behavior, battery efficiency, or real tray behavior until isolated evidence exists.
 
 Canonical handoff: `docs/NEXT_CHATGPT_HANDOFF.md`. Keep PR #1 open and Draft.
