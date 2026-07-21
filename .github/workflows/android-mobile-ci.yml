@@ -80,20 +80,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.18-alpha.1" App.js
-          grep -q "versionCode 320122" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.18-alpha.1"' android/app/build.gradle
+          grep -q "3.2.1-extended.19-alpha.1" App.js
+          grep -q "versionCode 320123" android/app/build.gradle
+          grep -q 'versionName "3.2.1-extended.19-alpha.1"' android/app/build.gradle
           grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
           grep -q "notificationTimeout = 100" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
           grep -q "ClipboardCopySignalPolicy.shouldCaptureClipboardChange" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
           grep -q "ClipboardCopySignalPolicy.shouldRunActionFallback" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "SystemCopyCuePolicy.matchesAny" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "getText(android.R.string.copy)" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q 'category = "copy_detection"' android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "frameworkLabelsMatchAcrossLocales" android/app/src/test/java/com/clipcascade/SystemCopyCuePolicyTest.kt
+          grep -q "approximateOrSelectionTextNeverMatches" android/app/src/test/java/com/clipcascade/SystemCopyCuePolicyTest.kt
           grep -q "selectionAloneNeverCaptures" android/app/src/test/java/com/clipcascade/ClipboardCopySignalPolicyTest.kt
           if grep -q "CopyCueClassifier" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt; then
-            echo "Localized copy-label classifier still controls the transformed service" >&2
+            echo "Hard-coded localized copy-label classifier still controls the transformed service" >&2
             exit 1
           fi
           if grep -q "looksLikeCopyConfirmation" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt; then
-            echo "Localized copy-confirmation function still remains" >&2
+            echo "Obsolete approximate copy-confirmation function still remains" >&2
+            exit 1
+          fi
+          if grep -q "READ_LOGS" android/app/src/main/AndroidManifest.xml android/app/src/main/java/com/clipcascade/ClipboardListenerModule.kt; then
+            echo "ADB-granted READ_LOGS clipboard workaround was reintroduced" >&2
+            exit 1
+          fi
+          if grep -q "SYSTEM_ALERT_WINDOW" android/app/src/main/AndroidManifest.xml; then
+            echo "Overlay clipboard workaround was reintroduced" >&2
             exit 1
           fi
           if grep -q "TTL_MS" android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt; then
@@ -114,6 +127,7 @@ jobs:
           grep -q 'path = "react_bootstrap"' android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q "extractsPerceptronNetworkStandaloneAlphanumericCode" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
           grep -q "extractsCodeFromGmailTitlePreviewAndExpandedBody" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
+          grep -q "extractsDawnStandaloneNumericLoginCode" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
           grep -q "scanActiveNotifications" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
           grep -q "MAX_ACTIVE_SCAN_AGE_MS" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
           grep -q "NotificationListenerRuntimeStore" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
@@ -183,11 +197,11 @@ jobs:
           test "${generated_digest}" = "${EXTENDED_TEST_CERT_SHA256}"
           test "${signer_digest}" = "${EXTENDED_TEST_CERT_SHA256}"
 
-      - name: Upload Gmail transform diagnostics
+      - name: Upload transform diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ClipCascade-Gmail-transform-diagnostics
+          name: ClipCascade-Android-transform-diagnostics
           path: ClipCascade_Mobile/src/gmail-transform.log
           if-no-files-found: warn
       - name: Upload signer diagnostics

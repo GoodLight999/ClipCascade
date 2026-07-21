@@ -59,9 +59,8 @@ serviceSource = serviceSource.replace('              if (!accepted && peerAckReq
 fs.writeFileSync(servicePath, serviceSource, 'utf8');
 
 // These must run after every transport/listener transform. First guard the final
-// Clipboard.setString call sites, then replace localized UI-text heuristics with
-// language-neutral confirmation, install bounded queue-full handling, add Gmail
-// listener recovery, and finally harden alpha listener testing and duplicate receipts.
+// Clipboard.setString call sites, then install the ACK-safe queue, notification
+// listener hardening, and finally the Android-framework-localized Copy fallback.
 require('./prepare_internal_clipboard_guard.js');
 require('./prepare_language_neutral_clipboard_copy.js');
 require('./prepare_ack_safe_queue_overflow.js');
@@ -69,3 +68,4 @@ require('./prepare_gmail_ja_anchor_compat.js');
 require('./prepare_gmail_notification_reliability.js');
 require('./prepare_debug_notification_icon_compat.js');
 require('./prepare_notification_listener_alpha_hardening.js');
+require('./prepare_system_localized_copy_recovery.js');
