@@ -8,91 +8,88 @@ Repository: `GoodLight999/ClipCascade`
 
 - application: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.19-alpha.2-standalone`
-- versionCode: `320124`
-- implementation anchor: `ed9c009af0fcfc238cfc6264dd4c7b85a8fe82a3`
-- tag: `v3.2.1-extended.19-alpha.2`
-- Android CI: `29837847117`, success
-- Windows CI: `29837846863`, success
-- Android Actions artifact ID: `8498121042`
+- versionName: `3.2.1-extended.20-alpha.1-standalone`
+- versionCode: `320125`
+- implementation/release anchor: `290d6690e749fe34367b2383676faf27c0a4ba76`
+- tag intended by release workflow: `v3.2.1-extended.20-alpha.1`
+- Android CI: `29843413287`, success
+- Windows CI: `29843413149`, success
+- Android Actions artifact ID: `8500372630`
 
 Hashes and signer are recorded in `docs/LATEST_GREEN_ARTIFACTS.md`.
 
-## Corrected target-device status
+## Target-device truth
 
-- Windows-to-Android receive works while ClipCascade is not open.
-- Android outbound Copy works while ClipCascade is open.
-- Android outbound Copy fails while ClipCascade is not open.
-- A real Gmail standalone six-digit login-code notification was not relayed.
+`.19-alpha.2` was tested and failed:
 
-The live connection and inbound path are alive. Android background outbound capture and dispatch remain the broken/unproven boundaries.
+- real NotificationListener-path self-test did not complete;
+- outbound still failed whenever the main app UI was not open;
+- inbound continued to work.
 
-## Original upstream clipboard mechanism
+Treat background outbound and real Gmail as broken until `.20-alpha.1` produces contrary target evidence.
 
-Original upstream combined normal `OnPrimaryClipChangedListener` behavior with an ADB-granted `READ_LOGS` logcat monitor and a temporary focusable overlay to read clipboard contents after Android denied background access.
+## Root cause addressed in `.20`
 
-Extended does not restore that mechanism because its canonical requirements prohibit ADB/READ_LOGS/overlay setup.
+The queue-drain code from `.19-alpha.2` lived inside the Notifee foreground runner, but that runner was registered lazily from UI/recovery code. It was not guaranteed to be registered when Android recreated a process for the native foreground service.
 
-## Go fork reference
+`.20-alpha.1` registers the runner from `index.js` before `AppRegistry.registerComponent`, outside mounted React components, and guards one registration per process generation.
 
-The supplied Go fork has an Android AccessibilityService and native foreground service.
+## Foreground runner diagnostics
 
-- Accessibility asks the service to perform clipboard synchronization.
-- The service owns the sticky Go network engine.
-- Its actual background clipboard read still depends on `SYSTEM_ALERT_WINDOW` and a transparent overlay.
+`ForegroundTransportRuntimeStore` keeps content-free lifecycle timestamps:
 
-Extended borrows only the foreground-service ownership principle, not the overlay.
+- registered;
+- started;
+- heartbeat;
+- stopped.
 
-## Copy detection in `.19`
+Heartbeat interval: 15 seconds.  
+Stale threshold: 45 seconds.
 
-`SystemCopyCuePolicy` compares Accessibility click candidates only against Android's active-locale framework strings `android.R.string.copy` and `android.R.string.copyUrl`.
+Settings now reports:
 
-Properties:
+- `Foreground transport runner: active`; or
+- `Foreground transport runner: no fresh heartbeat`.
 
-- no hard-coded Japanese/English list;
-- exact normalized match only;
-- click/context-click events only;
-- selection events only remember text;
-- OS clipboard callback remains primary;
-- explicit Copy fallback waits 700 ms and cancels if the callback serial changed;
-- otherwise it queues only the recent remembered selection;
-- negative tests reject approximate labels and arbitrary text.
+A test should not be interpreted until this state is recorded.
 
-Settings exposes `Copy detection` separately from `Clipboard capture`.
+## Self-test changes
 
-## Background dispatch in `.19-alpha.2`
+- component and listener-path tests request bounded recovery if the runner is stale;
+- synthetic notifications remain active for five minutes;
+- listener-path test schedules active scans at 0.5, 2, and 5 seconds after rebind;
+- listener-path test still cannot directly insert its value into the queue.
 
-The existing Notifee foreground-service runtime now polls and drains native durable queues directly.
+## Copy detection changes
 
-- OTP queue is considered before ordinary clipboard queue.
-- Native in-flight IDs and the existing 15-second timeout remain authoritative.
-- Existing `sendClipBoard` performs normal validation/encryption/fragmentation/transport.
-- Extended P2P still waits for peer clipboard-application ACK before native deletion.
-- Failed sends leave the item queued for bounded retry.
-- Dispatch no longer depends exclusively on `MainApplication.currentReactContext` receiving a `SHARED_TEXT` event.
+The exact Android active-locale `copy` / `copyUrl` rule remains. Candidate collection now covers the clicked node, parent, immediate children/siblings, and Accessibility action labels.
 
-## Gmail status
+Selection events only remember text. Selection alone never sends.
 
-A synthetic regression with the reported DAWN structure passes `OtpCodeExtractor`. Therefore the parser supports that structure if complete text reaches it.
+## Fork relationship
 
-The real Gmail failure likely occurred in NotificationListener binding/delivery, filtering, text extras exposure, or OEM lifecycle. That is an inference until stage counters are captured.
+The Go fork owns its connection in a sticky native service and binds Accessibility directly. It also uses a transparent overlay to read clipboard data.
+
+Extended adopts the service-ownership/lifecycle principle only. It does not add overlay permission, ADB, root, READ_LOGS, or Shizuku, and it retains Extended P2P Windows-applied ACK.
 
 ## ACK path — preserve exactly
 
-`NATIVE_QUEUE -> NATIVE_IN_FLIGHT -> FOREGROUND_SERVICE_CLAIM -> sendClipBoard -> LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_VALIDATE -> WINDOWS_CLIPBOARD_APPLY -> PEER_ACK -> NATIVE_ACK -> DELETE`
+`NATIVE_QUEUE -> NATIVE_IN_FLIGHT -> FOREGROUND_RUNNER_CLAIM -> sendClipBoard -> LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_VALIDATE -> WINDOWS_APPLY -> PEER_ACK -> NATIVE_ACK -> DELETE`
 
-Old/non-Extended peers retain the documented bounded compatibility fallback.
+Old/non-Extended peers retain the bounded compatibility fallback.
 
 ## Not proven
 
 CI is not target proof. The following remain unproven:
 
-- in-place alpha.2 installation and settings retention;
-- background Copy cue exposure on HONOR and representative apps;
-- native foreground queue drain on target;
-- removed-from-recents, locked, and screen-off behavior;
-- real Gmail listener delivery/extras;
-- target exactly-once behavior;
+- in-place alpha.20 install/settings retention;
+- fresh foreground runner heartbeat on HONOR;
+- deterministic component/transport test;
+- true listener-path test;
+- background Copy cue exposure and queueing;
+- UI-closed, removed-from-recents, locked, or screen-off outbound;
+- real Gmail notification delivery/extras;
+- exactly-once target behavior;
 - battery and tray behavior.
 
 Canonical handoff: `docs/NEXT_CHATGPT_HANDOFF.md`. PR #1 remains open and Draft.
