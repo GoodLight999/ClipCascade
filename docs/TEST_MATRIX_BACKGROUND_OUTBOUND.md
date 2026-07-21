@@ -1,75 +1,125 @@
 # Android Background Outbound Validation Matrix
 
-This matrix supersedes every older checked Android outbound or real-service success item, including Phone Link-contaminated rows.
+This matrix supersedes older checked Android outbound or real-service success items contaminated by Microsoft Phone Link.
 
 Before every run:
 
-- disable Microsoft Phone Link clipboard synchronization;
-- stop every other clipboard synchronization utility;
+- disable Phone Link clipboard synchronization;
+- stop every competing clipboard synchronization utility;
 - do not use ADB, root, or Shizuku;
-- record commit SHA, versionCode, Windows peer build, mode, UI language, and screen state;
+- record implementation SHA, versionCode, Windows peer build, mode, UI language, and device state;
 - use unique synthetic values;
-- never store real authentication values or raw notification text.
+- never record real authentication values or raw notification text.
 
-## Current green build
+## Current alpha build
 
-- [x] implementation SHA `a010d7f0fb3871252580666df3264980b32c93cb`
-- [x] Android CI `29681462233`
-- [x] Windows CI `29681462236`
-- [x] artifact ID `8440717410`
-- [x] ZIP SHA-256 `5e545d9210a97819cfae79bde5a278e69631b395f55aa6cad0f260e4cd38134e`
-- [x] APK SHA-256 `f3bba473b78d1f44f73fe529cd6c0187881269615aeb709651a6f8cd675ffb86`
+- [x] implementation SHA `87e138380a139671168effd24a64df844f1bb879`
+- [x] tag `v3.2.1-extended.18-alpha.1`
+- [x] Android CI `29827698937`
+- [x] Windows CI `29827698930`
+- [x] Actions artifact ID `8494023518`
+- [x] Actions ZIP SHA-256 `ae84ba8adda4b0c33ac8dbd39f835fdf7be9142dea8788e579361f6b0917cbeb`
+- [x] APK SHA-256 `53da5cae4b5e2c7dd5cad0e6064aec47945b9d9620fbd30d9edaf391d37ac88d`
 - [x] signer `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- [x] expiry `2026-10-17T09:22:32Z`
-- [x] Android version `3.2.1-extended.17-standalone`
-- [x] versionCode `320121`
-- [x] Gmail-shaped positive and no-code negative unit tests
-- [x] listener rebind/rescan and content-free diagnostic source assertions
-- [x] outbound debug notification source/ACK-isolation assertions
+- [x] expiry `2026-10-19T11:50:45Z`
+- [x] version `3.2.1-extended.18-alpha.1-standalone`
+- [x] versionCode `320122`
+- [x] listener-path self-test source present
+- [x] component test cannot take listener path
+- [x] synthetic privilege requires own package
+- [x] persistent receipt guard present
+- [x] receipt TTL/capacity policy tests pass
 - [x] no ordinary clipboard TTL or overflow eviction
-- [x] final transformed `queue_full` handling
+- [x] final transformed `queue_full` handling present
 - [ ] in-place update succeeds
 - [ ] settings and permissions retained
 
-CI proves transformed source and build invariants, not HONOR target-device behavior.
+## Ordinary synchronization regression gate
 
-## Gmail / notification-listener stage matrix
+The user confirmed ordinary synchronization worked on `.17`. This is the first alpha gate.
 
-Before each row:
+| State | Unique Copy queued | Windows applied once | Peer ACK | Queue deleted after ACK | Status |
+|---|---:|---:|---:|---:|---|
+| UI visible immediately after alpha install | ☐ | ☐ | ☐ | ☐ | untested |
+| App backgrounded | ☐ | ☐ | ☐ | ☐ | untested |
+| Removed from recents | ☐ | ☐ | ☐ | ☐ | untested |
 
-1. confirm Android notification access is authorized;
-2. confirm actual listener runtime shows connected;
-3. enable outbound debug notification only for the diagnostic run;
-4. clear content-free diagnostics/counters;
-5. use a fresh Gmail OTP whose expanded notification visibly contains the code.
+Stop OTP testing and inspect diagnostics if the first row regresses.
 
-| State | Runtime connected | Seen +1 | Text chars > 0 | Auth hint +1 | Queued +1 | Debug notice | Windows applied once | Peer ACK deletion | Status |
+## OTP component/transport self-test
+
+This test directly queues after local extraction. It does not prove NotificationListener.
+
+- [ ] expected synthetic value generated
+- [ ] queue count increases
+- [ ] outbound transport accepts
+- [ ] Windows applies once
+- [ ] peer ACK is observed
+- [ ] queue item is removed only after ACK
+- [ ] listener-test counter does not falsely claim this test
+
+## Real notification-listener path self-test
+
+This test must not directly queue.
+
+| Boundary | Expected evidence | Status |
+|---|---|---|
+| listener runtime | connected | untested |
+| callback | listener-test count +1 and seen +1 | untested |
+| filters | eligible +1 | untested |
+| extras | text characters > 0 | untested |
+| extraction | auth context and expected value accepted | untested |
+| persistence | OTP queue +1 | untested |
+| transport | optional debug notice when ON | untested |
+| peer | Windows applied exactly once | untested |
+| ACK | queue deleted after peer ACK | untested |
+
+## Active-notification duplicate receipt
+
+Keep the successful listener-path test notification active.
+
+- [ ] invoke reconnect/rescan within 30 minutes
+- [ ] active-scan count increases
+- [ ] candidate count includes the active notification
+- [ ] `already_processed` increases
+- [ ] OTP queue does not gain another item
+- [ ] Windows clipboard is not applied again
+- [ ] peer ACK count does not falsely advance for a duplicate
+- [ ] post a fresh listener-path notification
+- [ ] fresh notification is accepted and delivered once
+
+## Real Gmail stage matrix
+
+Run only when a genuine Gmail OTP notification is available and its expanded UI visibly contains a synthetic/non-sensitive test code.
+
+| State | Connected | Seen +1 | Eligible +1 | Text > 0 | Auth hint | Queued | Windows once | ACK deletion | Status |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| Settings/UI visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| App backgrounded 30s | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| App visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | unavailable so far |
+| Backgrounded | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | Removed from recents | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Device locked | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Screen off 1 minute | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Active Gmail notification + manual reconnect/rescan | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Active notification + manual rescan | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
 Interpretation:
 
-- runtime disconnected: listener binding/recovery failure;
-- runtime connected but seen remains zero: notification delivery failure;
-- seen increases and text characters remain zero: Gmail/Android exposed no text extras;
-- text exists and auth hint remains zero: Gmail preview omitted authentication wording;
-- auth hint increases and no-match increases: extractor defect;
-- queued increases: notification ingestion succeeded;
-- debug notification appears: P2S publish or at least one open P2P DataChannel accepted the item;
-- Windows applied once plus peer ACK deletion: full Extended P2P path succeeded.
+- disconnected: binding/recovery failure;
+- connected but seen unchanged: Android/Gmail delivery failure;
+- seen but not eligible: filter/trust-boundary rejection;
+- eligible but text empty: extras exposure failure;
+- text but no auth context: Gmail preview omitted required context;
+- auth context plus no match: extractor defect;
+- queued: Gmail ingestion succeeded;
+- Windows once plus ACK deletion: full Extended path succeeded.
 
-The debug notification proves transport acceptance only. It must contain no code, clipboard text, package name, relay ID, account identifier, or server address.
+## Outbound debug notification
 
-After the diagnostic rows:
-
-- [ ] turn outbound debug notification OFF
-- [ ] send another accepted outbound item
-- [ ] confirm no debug notification appears
+- [ ] default state is OFF after in-place update
+- [ ] enable ON
+- [ ] accepted ordinary Copy produces one temporary content-free notification
+- [ ] accepted listener-path OTP produces one temporary content-free notification
+- [ ] notification contains source class and P2P/P2S only
+- [ ] disable OFF
+- [ ] next accepted item produces no debug notification
+- [ ] debug notification failure/denial does not alter queue or ACK
 
 ## Selection-only negative matrix
 
@@ -80,11 +130,8 @@ After the diagnostic rows:
 | Third language / Chrome | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | Japanese / Firefox-family | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | Third language / notes/editor | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| ClipCascade backgrounded | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
 ## Ordinary-copy state matrix
-
-Test immediate Copy and Copy after 3, 15, and 60 seconds after selection.
 
 | State | Immediate | 3s | 15s | 60s | Applied once | ACK deletion | Status |
 |---|---:|---:|---:|---:|---:|---:|---|
@@ -95,8 +142,6 @@ Test immediate Copy and Copy after 3, 15, and 60 seconds after selection.
 | Screen off 1 minute | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | Screen off 15 minutes | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 | Screen off 30+ minutes | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Peer disconnected/restored | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| React/service generation recreated | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
 ## Long-disconnect durability
 
@@ -108,45 +153,25 @@ Test immediate Copy and Copy after 3, 15, and 60 seconds after selection.
 
 ## Bounded queue-full matrix
 
-Keep the peer disconnected and use 17 unique values.
-
-- [ ] items 1–16 are accepted as distinct pending relays
-- [ ] item 17 is not inserted
-- [ ] item 1 remains present and unchanged
-- [ ] no accepted item is deleted before ACK
-- [ ] latest content-free diagnostic is `queue_full`
-- [ ] settings test displays localized queue-full feedback
+- [ ] items 1–16 accepted while peer disconnected
+- [ ] item 17 rejected
+- [ ] item 1 remains
+- [ ] no accepted item deleted before ACK
+- [ ] diagnostic `queue_full`
 - [ ] reconnect drains accepted items in order
-- [ ] each accepted item is applied once
-- [ ] each accepted item is removed only after ACK
-- [ ] a new Copy is accepted after capacity returns
+- [ ] each accepted item applied once and removed after ACK
+- [ ] new Copy accepted after capacity returns
 
 ## Exactly-once and echo prevention
 
-- [ ] one native item per actual Copy
+- [ ] one native item per real Copy
 - [ ] selection alone creates zero items
 - [ ] one JS listener obtains relay claim
 - [ ] exactly one Windows application
-- [ ] queue deletion only after defined ACK
+- [ ] deletion only after defined ACK
 - [ ] inbound ClipCascade writes create no outbound item
-- [ ] failed transport releases claim and later retry succeeds
-
-## Other notification-code paths
-
-- [ ] synthetic OTP extractor -> queue -> transport -> ACK succeeds
-- [ ] Beeper real notification classified without content storage
-- [ ] Perceptron real notification classified without content storage
-- [ ] real SMS classified without content storage
-
-## Battery/usability observation
-
-- [ ] comparable idle interval recorded
-- [ ] foreground/background active time recorded
-- [ ] battery percentage recorded
-- [ ] reconnect latency with 15-second cap acceptable
-- [ ] listener rebind/rescan controls are understandable
-- [ ] outbound debug switch defaults OFF and is easy to disable
+- [ ] failed transport releases claim and retry succeeds
 
 ## Do not claim
 
-Do not mark target-device behavior passed from CI. Real Gmail ingestion, listener recovery, debug ON/OFF behavior, multilingual selection suppression, background/screen-off delivery, long-disconnect retention, queue-full preservation, exactly-once, other real notification extraction, battery behavior, and Windows tray behavior remain unproven until isolated target-device evidence exists.
+CI proves transformed source/build invariants only. Alpha ordinary-sync safety, listener self-test, receipt suppression, Gmail, background/screen-off delivery, long-disconnect durability, queue-full behavior, exactly-once, battery, and tray behavior remain unproven until isolated target evidence exists.

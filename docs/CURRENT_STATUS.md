@@ -4,53 +4,67 @@ Branch: `stability-mobile-otp`
 Draft PR: `#1`  
 Repository: `GoodLight999/ClipCascade`
 
-## Current Android target
+## Current alpha target
 
 - app: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.17-standalone`
-- versionCode: `320121`
-- implementation anchor: `a010d7f0fb3871252580666df3264980b32c93cb`
-- Android CI: `29681462233`, success
-- Windows CI: `29681462236`, success
-- Android artifact ID: `8440717410`
+- versionName: `3.2.1-extended.18-alpha.1-standalone`
+- versionCode: `320122`
+- implementation anchor: `87e138380a139671168effd24a64df844f1bb879`
+- alpha tag: `v3.2.1-extended.18-alpha.1`
+- Android CI: `29827698937`, success
+- Windows CI: `29827698930`, success
+- Android Actions artifact ID: `8494023518`
 - deterministic signer unchanged
 
 Artifact hashes and expiry are recorded in `docs/LATEST_GREEN_ARTIFACTS.md`.
 
-## Current focus
+## Target-device evidence
 
-The immediate focus is isolated HONOR target-device proof of real Gmail notification ingestion. The user reports that Gmail has never produced a relayed code, so pre-`.17` Gmail behavior is treated as non-functional.
+The user reports that ordinary synchronization is working again on `.17`; it had previously been broken. This is the most important observed result and must be protected against regression.
 
-`.17` adds actual listener binding state, automatic/manual rebind, active-notification rescan, deeper bounded extras collection, content-free stage counters, Gmail-shaped tests, and a default-OFF outbound transport-accepted debug notification.
+No real Gmail OTP arrived, so real Gmail extraction has not been tested. Do not interpret the absence of a failure as Gmail success.
 
-See `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`.
+## Why `.18-alpha.1` exists
 
-## Gmail diagnostic stages
+The alpha makes notification validation truthful and prevents reconnect/rescan duplicates without changing ordinary synchronization or Extended ACK semantics.
 
-The settings screen now distinguishes:
+### True listener-path self-test
 
-- Android authorization granted but listener not connected;
-- listener connected but notification unseen;
-- notification seen but text extras empty;
-- text available but no authentication hint;
-- authentication hint available but extractor no-match;
-- queued or deduplicated;
-- outbound transport accepted when the optional debug notification is enabled;
-- peer ACK and native deletion through existing diagnostics/queue state.
+The previous deterministic OTP test directly inserted the extracted value into the queue after posting its notification. It remains useful for extractor/queue/transport/ACK testing but cannot prove NotificationListener delivery.
 
-No raw notification text, code, account identifier, app/package name, relay ID, or server address is stored in these diagnostics.
+The alpha adds a separate listener-path test that posts a marked local notification and does not directly queue the value. Success requires:
 
-No real Gmail success is claimed until target-device evidence exists.
+`NOTIFICATION_POSTED -> LISTENER_CALLBACK -> TEXT_COLLECTED -> EXTRACTED -> OTP_QUEUE -> TRANSPORT -> WINDOWS_APPLIED -> PEER_ACK -> DELETE`
+
+Synthetic privileges are granted only when the notification comes from ClipCascade's own package and contains the marker.
+
+### Active-notification duplicate prevention
+
+A successful notification/code pair receives a one-way SHA-256 receipt fingerprint before queue insertion. The fingerprint is bounded to 128 entries and 30 minutes, contains no recoverable notification text/code/package/key/account data, and is released if queue insertion throws.
+
+This prevents a still-active notification from being resent after the OTP queue's 90-second content-deduplication window when the listener reconnects or performs a manual rescan.
+
+### Expanded content-free diagnostics
+
+The settings screen adds:
+
+- eligible notifications;
+- already-processed suppression;
+- listener-path test callbacks;
+- active-scan count and last candidate count;
+- latest callback delay;
+- existing text/auth/queued/no-match/empty/filtered counters.
 
 ## Outbound debug notification
 
-- settings switch defaults OFF;
-- when ON, notification appears after P2S publish acceptance or at least one open P2P DataChannel accepts the item;
-- notification shows only source class and P2P/P2S mode;
-- debug notification failure is caught and cannot affect transport acceptance, relay claims, ACK ordering, retries, or deletion.
+- defaults OFF;
+- appears after local transport acceptance only;
+- displays source class and P2P/P2S mode only;
+- never proves Windows application or peer ACK;
+- failure cannot alter relay claims, retry, ACK ordering, or queue deletion.
 
-## Delivery acknowledgement — preserve
+## ACK path — preserve exactly
 
 Common local path:
 
@@ -64,35 +78,41 @@ Old/non-Extended peer:
 
 `LOCAL_TRANSPORT_ACCEPTED -> 5 SECOND COMPATIBILITY FALLBACK -> NATIVE_ACK -> DELETE`
 
-Do not treat the outbound debug notification as peer application or ACK. It proves transport acceptance only.
+No alpha change modifies Windows code, P2P message ACK metadata, validation-before-ACK, native relay claims, or native ACK deletion.
 
-## Retained ordinary-copy invariants
+## Ordinary synchronization invariants
 
-- language-neutral OS clipboard-change confirmation;
-- selection alone never sends;
-- internal-write echo suppression;
-- accepted ordinary items do not expire by wall-clock age;
-- accepted items are not evicted on overflow;
-- bounded capacity 16 with explicit `queue_full` for new input;
-- disconnected retry backoff capped at 15 seconds;
-- Extended queue deletion remains ACK-based.
+- selection events only remember selected text;
+- selection alone never queues or sends;
+- OS clipboard mutation is primary Copy proof;
+- ACTION_COPY/Ctrl+C fallback remains serial-cancelled and bounded;
+- internal ClipCascade writes are filtered;
+- accepted ordinary items do not expire by age;
+- accepted items are not evicted to admit newer items;
+- capacity remains 16 with explicit `queue_full` for new input;
+- disconnected retry remains capped at 15 seconds.
 
-## Trial and error retained
+## Alpha release state
 
-- CI `29681080924`: final Gmail transform stopped safely; no APK produced.
-- CI `29681226875`: diagnostic artifact identified exact Japanese string-anchor mismatch; compatibility normalization added.
-- CI `29681300642`: all transforms passed, Kotlin compilation found nonexistent debug-notification drawable; changed to existing native resource.
-- corrected CI `29681462233`: Android fully green.
-- corrected CI `29681462236`: Windows fully green.
+The tag `v3.2.1-extended.18-alpha.1` resolves exactly to implementation commit `87e13838...`. The release workflow is constrained to create the prerelease only after matching-sha push Android and Windows CI succeed.
+
+The connector independently verified the tag and source commit. The local APK and Actions artifact were downloaded and hashed. Direct release-asset enumeration was not available through the connector; use the release page or recorded Actions artifact if asset recovery is needed.
 
 ## Mandatory proof
 
-Install `.17` in place without uninstalling. Confirm notification access and actual listener connection both show active. Enable debug notification temporarily, clear counters, and send a Gmail OTP whose expanded notification visibly includes the code. Use the stage counters to locate the first failed boundary rather than loosening the extractor blindly.
+Install over `.17`, preserve data, then test in this order:
 
-Repeat backgrounded, removed from recents, locked/screen-off where feasible, and with a pre-existing Gmail notification followed by manual reconnect/rescan.
+1. ordinary synchronization regression;
+2. actual listener runtime connected;
+3. deterministic component/transport test;
+4. real listener-path self-test;
+5. repeated active rescan suppresses duplicate;
+6. fresh listener-path test still succeeds;
+7. outbound debug ON and OFF;
+8. real Gmail only when a genuine notification arrives.
 
 ## Do not claim
 
-CI is not HONOR target-device proof. Do not claim real Gmail ingestion, background Gmail operation, outbound debug ON/OFF behavior, multilingual Copy correctness, ordinary background/screen-off delivery, exactly-once, battery efficiency, or Windows tray behavior until isolated evidence exists.
+CI is not HONOR target-device proof. Do not claim alpha ordinary-sync regression safety, listener-path success, receipt suppression, real Gmail ingestion, OEM listener survival, background/screen-off Gmail delivery, exactly-once target behavior, battery efficiency, or tray behavior until isolated evidence exists.
 
-Canonical handoff: `docs/NEXT_CHATGPT_HANDOFF.md`. Keep PR #1 Draft.
+Canonical handoff: `docs/NEXT_CHATGPT_HANDOFF.md`. Keep PR #1 open and Draft.
