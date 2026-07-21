@@ -80,9 +80,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.18-alpha.1" App.js
-          grep -q "versionCode 320122" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.18-alpha.1"' android/app/build.gradle
+          grep -q "3.2.1-extended.18-alpha.2" App.js
+          grep -q "versionCode 320123" android/app/build.gradle
+          grep -q 'versionName "3.2.1-extended.18-alpha.2"' android/app/build.gradle
           grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
           grep -q "notificationTimeout = 100" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
           grep -q "ClipboardCopySignalPolicy.shouldCaptureClipboardChange" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
@@ -112,6 +112,14 @@ jobs:
           grep -q "requestReactContextBootstrap" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q "createReactContextInBackground" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
           grep -q 'path = "react_bootstrap"' android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
+          grep -q "claimForForegroundService" android/app/src/main/java/com/clipcascade/ClipboardRelayDispatcher.kt
+          grep -q "claimForForegroundService" android/app/src/main/java/com/clipcascade/OtpRelayDispatcher.kt
+          grep -q "claimPendingForegroundRelay" android/app/src/main/java/com/clipcascade/RelaySettingsModule.kt
+          grep -q "drainNativeRelayQueue" StartForegroundService.js
+          grep -q "Native foreground relay drain failed" StartForegroundService.js
+          grep -q 'path = "foreground_poll"' android/app/src/main/java/com/clipcascade/OtpRelayDispatcher.kt
+          grep -q "prepare_foreground_queue_drain.js" scripts/prepare_relay_claim.js
+          grep -q "extractsDawnLoginCode" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
           grep -q "extractsPerceptronNetworkStandaloneAlphanumericCode" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
           grep -q "extractsCodeFromGmailTitlePreviewAndExpandedBody" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
           grep -q "scanActiveNotifications" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
