@@ -7,18 +7,20 @@ Disable Phone Link and every competing clipboard synchronizer before every row. 
 - [x] version `3.2.1-extended.22-alpha.1-standalone`
 - [x] versionCode `320127`
 - [x] intended tag `v3.2.1-extended.22-alpha.1`
-- [x] staging SHA `f8ec5245f9bd2eeaac6400a4f0f57d85ad6d429e`
-- [x] staging Android CI `29915789910`, success
-- [x] staging main and helper APKs compile and share the expected signer
-- [ ] exact final `stability-mobile-otp` implementation SHA recorded
-- [ ] exact final Android CI green
-- [ ] exact final Windows CI green
-- [ ] final artifact ID, ZIP digest, both APK hashes/sizes, signer, and expiry recorded
+- [x] exact final implementation SHA `29febc3e7a83575564145d470c4143b5b92e42f4`
+- [x] exact final Android CI `29917141620`, success
+- [x] exact final Windows CI `29917141540`, success
+- [x] artifact ID `8528455362`
+- [x] artifact ZIP SHA-256 `61cba5012ebc412d0075c165b29fb6a5d4ded79f1ad8a28a993218c722717539`
+- [x] main APK SHA-256 `ac6fe987eb3e4a469abcdc53bc552313f752c8780a27498a8abf7aa89c8a681a`
+- [x] main APK size `147968683` bytes
+- [x] helper APK SHA-256 `61e9183d4eb93fedb80e1ea0b624663516f61fc2a2e5752df985aee9066b6e2b`
+- [x] helper APK size `831357` bytes
+- [x] both signers `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- [x] artifact expiry `2026-10-20T11:48:52Z`
 - [ ] in-place main-APK installation succeeds
 - [ ] existing settings and permissions retained
 - [ ] helper APK installs separately
-
-Staging artifacts are not final release artifacts.
 
 ## Known target baseline
 
@@ -172,7 +174,7 @@ The expected path when selection is exposed is:
 
 `selection_probe -> pre_selection_baseline -> delayed native observation -> changed fingerprint -> overlay_clipboard_manager -> queue -> claim -> Windows -> ACK/delete`
 
-A strong semantic/system Copy event may use the shorter 300 ms probe, but it is no longer required for entry.
+A strong semantic/system Copy event may use the shorter probe, but it is no longer required for entry.
 
 | App | Native bound | Selection/click probe | Old baseline | Delayed observation | Changed fingerprint | Acquisition path | Queued | Claimed | Debug | Windows once | ACK delete | Status |
 |---|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
@@ -218,7 +220,7 @@ Copying the same value already present in the clipboard may produce an unchanged
 - [ ] no persistent overlay after success
 - [ ] no persistent overlay after empty/denied/error path
 - [ ] permission revocation yields content-free failure, not crash
-- [ ] disabling reliable mode prevents overlay creation
+- [ ] disabling reliable mode prevents overlay creation while retaining direct-read control behavior
 - [ ] repeated probes do not leak WindowManager views
 
 ## Native service lifecycle expansion
