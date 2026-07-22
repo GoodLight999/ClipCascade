@@ -43,14 +43,14 @@ The user tested `.21-alpha.1` and established:
 
 Reference: `wuxinkami/ClipCascade_go_fork` at `0ff3ba4b28daccc1a51e7c09907792bc0f8e53a8`.
 
-The known-working Android path is not merely an overlay:
+The known-working path is a complete event and ownership structure:
 
 1. Accessibility starts and binds a native foreground service.
 2. The service returns `START_STICKY`.
 3. The service owns overlay creation and clipboard reading independently of the Activity.
 4. Accessibility accepts broad candidate events, including selection changes and generic clicks.
 5. Weak probes wait about 1.2 seconds before the native read.
-6. The service creates a transparent 1×1 `TYPE_APPLICATION_OVERLAY`, reads `ClipboardManager`, and removes the view.
+6. The service creates a transparent 1×1 `TYPE_APPLICATION_OVERLAY`, reads `ClipboardManager`, and removes it.
 
 `.21` copied only item 6 and still required an exact semantic/framework Copy cue before entering it. MagicOS could suppress that cue, so the overlay could compile and never execute. Calling `.21` Go-equivalent was incorrect.
 
@@ -68,8 +68,11 @@ The old listener-path self-test also posted from the same package, so it was not
 - version: `3.2.1-extended.22-alpha.1-standalone`
 - versionCode: `320127`
 - intended tag: `v3.2.1-extended.22-alpha.1`
-- Android CI `29917141620`: success
-- Windows CI `29917141540`: success
+- implementation Android CI `29917141620`: success
+- implementation Windows CI `29917141540`: success
+- first finalized handoff HEAD `a12621942d2a22b51fb94b9042509ab3845b1c3f`
+- handoff Android CI `29917915931`: success
+- handoff Windows CI `29917915917`: success
 
 ### Clipboard acquisition
 
@@ -120,25 +123,24 @@ The downloaded ZIP and both APKs were independently verified.
 
 - Android `29842404023`: old NativeModules transform anchor failed; no APK.
 - Android `29842757548`: localized resource anchor failed; no APK.
-- Android `29843090432`, Windows `29843090421`: `.20` implementation green.
-- Android `29843413287`, Windows `29843413149`: `.20` release SHA green.
 - Android `29888733469`, Windows `29888733458`: `.21` implementation green, but target later failed.
-- Android `29889193284`, Windows `29889193301`: `.21` handoff HEAD green, but target later failed.
+- Android `29889193284`, Windows `29889193301`: `.21` handoff green, but target later failed.
 - non-default-branch diagnostic workflow did not report a run and is not counted.
 - Draft PR #2 Android `29915789910`: initial `.22` validation green.
 - Draft PR #2 Android `29916941772`: latest staging HEAD green after direct-read control fixup.
 - final Android `29917141620`: success.
 - final Windows `29917141540`: success.
-- no force push, Ready conversion, merge, or auto-merge occurred.
+- handoff Android `29917915931`: success.
+- handoff Windows `29917915917`: success.
+- PR #2 process error: its commits were fast-forwarded into `stability-mobile-otp` before the PR was closed. GitHub therefore marked PR #2 as `merged=true` automatically when it was closed. No merge button/API or merge commit was used, but the required close-before-fast-forward order was violated. This state cannot be undone without forbidden history rewriting.
+- no force push, Ready conversion, auto-merge, or merge action on canonical PR #1 occurred.
 
 ## Next actions
 
-1. Fast-forward the finalized handoff documents without force.
-2. Trigger Android and Windows CI on the final documentation HEAD.
-3. Close Draft PR #2 without merge.
-4. Update PR #1 body and verify Open/Draft/unmerged state.
-5. Install both `.22` APKs.
-6. Run component/transport, external listener, and background clipboard tests in that order.
-7. Do not claim target recovery until those rows pass.
+1. Commit this PR #2 state correction and rerun Android/Windows CI on the exact final handoff HEAD.
+2. Update PR #1 body and verify Open/Draft/unmerged state.
+3. Install both `.22` APKs.
+4. Run component/transport, external listener, and background clipboard tests in that order.
+5. Do not claim target recovery until those rows pass.
 
 CI is not HONOR/MagicOS proof.
