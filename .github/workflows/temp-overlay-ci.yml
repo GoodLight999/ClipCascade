@@ -1,0 +1,86 @@
+name: Temporary overlay recovery validation
+
+on:
+  push:
+    branches: [agent/go-overlay-recovery]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: ClipCascade_Mobile/src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - run: npm ci
+      - name: Apply production transforms
+        run: |
+          set -euo pipefail
+          node scripts/prepare_extended_bundle.js
+          node scripts/prepare_extended_version.js
+          node scripts/prepare_background_recovery_version.js
+          node scripts/prepare_storage_lifecycle.js
+          node scripts/prepare_startup_service_recovery.js
+          node scripts/prepare_boot_resume_ui.js
+          node scripts/prepare_extended_status_i18n.js
+          node scripts/prepare_runtime_control_state.js
+          node scripts/prepare_idle_power.js
+          node scripts/prepare_broad_otp_extractor.js
+          node scripts/prepare_relay_transport_ack.js
+          node scripts/prepare_relay_startup_order.js
+          node scripts/prepare_service_listener_lifecycle.js
+          node scripts/prepare_p2p_peer_ack.js
+          node scripts/prepare_p2p_ack_validation_order.js
+          node scripts/prepare_relay_claim.js
+      - name: Verify overlay and retained ACK invariants
+        run: |
+          set -euo pipefail
+          grep -q 'versionCode 320126' android/app/build.gradle
+          grep -q '3.2.1-extended.21-alpha.1' App.js
+          grep -q 'SYSTEM_ALERT_WINDOW' android/app/src/main/AndroidManifest.xml
+          grep -q 'TYPE_APPLICATION_OVERLAY' android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q 'removeViewImmediate' android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q 'overlayRunsOnlyWhenEnabledAuthorizedAndStillNeeded' android/app/src/test/java/com/clipcascade/OverlayClipboardPolicyTest.kt
+          grep -q 'selectionAloneNeverCaptures' android/app/src/test/java/com/clipcascade/ClipboardCopySignalPolicyTest.kt
+          grep -q 'EnqueueResult.QUEUE_FULL' android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt
+          grep -q 'claimRelayDispatch' StartForegroundService.js
+          grep -q 'releaseRelayDispatch' android/app/src/main/java/com/clipcascade/RelaySettingsModule.kt
+          if grep -q 'TTL_MS' android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt; then exit 1; fi
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt').read_text(encoding='utf-8')
+          start = source.index('val params = WindowManager.LayoutParams(')
+          end = source.index('var added = false', start)
+          block = source[start:end]
+          assert 'FLAG_NOT_TOUCHABLE' in block
+          assert 'FLAG_NOT_TOUCH_MODAL' in block
+          assert 'FLAG_NOT_FOCUSABLE' not in block
+          PY
+      - name: Bundle JavaScript
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
+      - name: Generate stable signer
+        run: |
+          signing_dir="android/app/build/generated/signing"
+          python scripts/generate_stable_test_signing.py "${signing_dir}"
+          openssl pkcs12 -export -inkey "${signing_dir}/clipcascade-extended-test.key.pem" -in "${signing_dir}/clipcascade-extended-test.x509.pem" -name clipcascade-test -out "${signing_dir}/clipcascade-extended-test.p12" -passout pass:clipcascade-public-test
+      - name: Test and assemble
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug -PclipcascadeBuildSha="${GITHUB_SHA}" --stacktrace
