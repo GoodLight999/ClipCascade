@@ -80,9 +80,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.20-alpha.1" App.js
-          grep -q "versionCode 320125" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.20-alpha.1"' android/app/build.gradle
+          grep -q "3.2.1-extended.21-alpha.1" App.js
+          grep -q "versionCode 320126" android/app/build.gradle
+          grep -q 'versionName "3.2.1-extended.21-alpha.1"' android/app/build.gradle
           grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
           grep -q "foregroundRunnerRegistered" StartForegroundService.js
           grep -q "recordForegroundRunnerStarted" StartForegroundService.js
@@ -121,10 +121,24 @@ jobs:
             echo "ADB-granted READ_LOGS clipboard workaround was reintroduced" >&2
             exit 1
           fi
-          if grep -q "SYSTEM_ALERT_WINDOW" android/app/src/main/AndroidManifest.xml; then
-            echo "Overlay clipboard workaround was reintroduced" >&2
-            exit 1
-          fi
+          grep -q "SYSTEM_ALERT_WINDOW" android/app/src/main/AndroidManifest.xml
+          grep -q "TYPE_APPLICATION_OVERLAY" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "removeViewImmediate" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "OverlayClipboardPolicy.shouldAttempt" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
+          grep -q "overlayRunsOnlyWhenEnabledAuthorizedAndStillNeeded" android/app/src/test/java/com/clipcascade/OverlayClipboardPolicyTest.kt
+          grep -q "overlay_clipboard_enabled" android/app/src/main/java/com/clipcascade/RelaySettingsStore.kt
+          grep -q "prepare_overlay_clipboard_acquisition.js" scripts/prepare_relay_claim.js
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt").read_text(encoding="utf-8")
+          start = source.index("val params = WindowManager.LayoutParams(")
+          end = source.index("var added = false", start)
+          overlay_params = source[start:end]
+          assert "FLAG_NOT_TOUCHABLE" in overlay_params
+          assert "FLAG_NOT_TOUCH_MODAL" in overlay_params
+          assert "FLAG_NOT_FOCUSABLE" not in overlay_params
+          assert source.index("readClipboardWithOverlayFallback()") < source.index("ClipboardRelayStore.enqueue")
+          PY
           if grep -q "TTL_MS" android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt; then
             echo "Ordinary clipboard queue still expires before acknowledgement" >&2
             exit 1
