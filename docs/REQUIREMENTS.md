@@ -2,15 +2,15 @@
 
 This document is the source of truth for the `stability-mobile-otp` development branch.
 
-> Privacy note: this repository is currently **public**. GitHub cannot make one branch private inside a public repository. Do not put credentials, tokens, private server URLs, phone numbers, email contents, clipboard contents, or other secrets in this branch. Move the repository to Private or copy this branch to a Private repository if the development record itself must be non-public.
+> Privacy note: this repository is public. Never commit credentials, tokens, private server URLs, phone numbers, real email/notification text, real verification codes, clipboard contents, or other secrets.
 
 ## Product goal
 
-Make ClipCascade dependable enough for daily Android ↔ Windows clipboard use without ADB, root, or Shizuku, including screen-off delivery of verification codes from Android notifications.
+Make ClipCascade dependable enough for daily Android ↔ Windows clipboard use without ADB, root, or Shizuku, including locked/screen-off delivery of verification codes where Android exposes them through an authorized notification listener.
 
 ## Target environment
 
-- Android target device: HONOR 400 Pro, Android 16 / MagicOS
+- Android target: HONOR 400 Pro, Android 16 / MagicOS
 - Desktop target: Windows 11
 - Existing ClipCascade modes that must remain supported: P2S and P2P
 - Existing text, image, and file sharing must not regress
@@ -18,75 +18,87 @@ Make ClipCascade dependable enough for daily Android ↔ Windows clipboard use w
 ## Naming and distribution
 
 1. Do not put the user's handle or personal name in the app name, package name, artifact name, version string, UI, logs, or release title.
-2. Working app identity: `ClipCascade Extended`.
-3. Android package identity for the standalone test build: `com.clipcascade.extended`.
-4. APK must be directly installable and must contain `index.android.bundle`; Metro must not be required.
-5. Provide repeatable GitHub Actions builds and GitHub Release packaging.
+2. Main app identity: `ClipCascade Extended`.
+3. Main Android package: `com.clipcascade.extended`.
+4. Listener-test helper package: `com.clipcascade.extended.testnotifier`.
+5. The main APK must be directly installable and contain `index.android.bundle`; Metro must not be required.
+6. Alpha packages that test the real notification-listener path must distribute both the main APK and the separately installable helper APK.
+7. Main and helper APKs must use the same stable test signing certificate so the helper can be protected by a signature permission.
+8. GitHub Actions and GitHub Release packaging must be repeatable.
 
 ## Android clipboard requirements
 
-1. Ordinary Android text copy must be relayed to Windows without ADB, root, or Shizuku.
-2. The primary implementation may use a user-authorized AccessibilityService.
-3. The service must expose clear enable/disable state and a route to Android accessibility settings.
-4. Copy capture must survive temporary network disconnects by using a persistent queue.
-5. A copied item must not be removed merely because a React Native event was emitted or a local socket write succeeded.
-6. Extended P2P clients must remove an item only after a peer confirms that the Windows text clipboard was validated and applied. Older-peer compatibility may use only the documented bounded generation-scoped fallback.
-7. P2S must not be represented as peer-applied until the server/client protocol provides an application receipt.
-8. Pending queue processing must resume after process restart, boot recovery, foreground-service restart, and network recovery.
-9. Duplicate suppression must avoid repeated sends caused by multiple Accessibility events for one Copy action.
-10. Do not claim universal compatibility until tested across representative apps; Accessibility events differ by app.
-11. Image/file sharing must continue using the upstream paths unless separately redesigned and tested.
-12. Android 10+ background clipboard restrictions are architectural constraints. A background `ClipboardManager` read must not be assumed to work merely because Accessibility observed a selection or Copy cue.
-13. Merely selecting text must not send it; an explicit user Copy action or equivalent proven copy cue is required.
-14. The known-working Go Android implementation is the reference for background clipboard acquisition: it created a fully transparent 1×1 application overlay immediately before reading the clipboard and removed it immediately afterward.
-15. Extended may use that technique only as an explicit user-authorized fallback through `SYSTEM_ALERT_WINDOW` / Display over other apps.
-16. The overlay fallback must be separately enableable/disableable, default visibly declared in settings, and never hidden as an undeclared workaround.
-17. The overlay may be created only after an explicit Copy path requests capture. Selection alone, window changes, or arbitrary text must never create it.
-18. The overlay must be fully transparent, 1×1, non-touchable, intentionally capable of acquiring the active-view/focus condition, and removed immediately in `finally` after the read attempt.
-19. Overlay-free mode must remain available, but it must not be described as equally reliable on Android 10+ or HONOR/MagicOS unless target testing proves that claim.
-20. Overlay acquisition must feed the existing durable queue and must not modify transport acceptance, peer ACK, native acknowledgement, deletion, capacity, TTL, or deduplication rules.
+1. Ordinary Android text copy must be relayed to Windows without ADB, root, Shizuku, or `READ_LOGS`.
+2. Accessibility may detect user-interaction candidates, but it must not own the durable send decision.
+3. A dedicated native foreground service must own background overlay creation, `ClipboardManager` reading, clipboard-mutation proof, and durable queue insertion.
+4. The native acquisition service must be independent of the Activity, started and bound from Accessibility, and return `START_STICKY`.
+5. The implementation may accept broad candidate events matching the known-working Go reference, including selection changes, generic clicks, announcements, notification-state changes, semantic Copy actions, exact framework-localized Copy labels, and Ctrl+C.
+6. Broad candidate events are probes only. They must never be treated as proof that a Copy occurred.
+7. Selection alone must never queue or send. A selection probe must establish the old clipboard fingerprint before the delayed read, and only a changed fingerprint may become a candidate item.
+8. Only a one-way fingerprint may be persisted for mutation proof; clipboard contents must not be persisted in diagnostics.
+9. The known-working Go Android implementation is the reference for background clipboard acquisition: Accessibility binds a sticky native foreground service; weak events are delayed; the service adds a transparent 1×1 application overlay before reading the clipboard and removes it immediately afterward.
+10. `SYSTEM_ALERT_WINDOW` / Display over other apps may be used only with explicit user authorization and an explicit settings switch.
+11. The overlay must be fully transparent, 1×1, non-touchable, non-touch-modal, intentionally not `FLAG_NOT_FOCUSABLE`, and removed immediately after every read attempt, including failures.
+12. Disabling the overlay path must remain possible, but overlay-free mode must not be described as equally reliable on Android 10+ or HONOR/MagicOS unless target testing proves it.
+13. The native acquisition service must insert into the existing `ClipboardRelayStore`; it must not send directly, acknowledge delivery, or delete queue items.
+14. Copy capture must survive temporary network disconnects by using the persistent queue.
+15. A copied item must not be removed merely because a React Native event was emitted or a local transport write succeeded.
+16. Extended P2P clients must remove an item only after a peer confirms that the Windows text clipboard was validated and applied.
+17. Older-peer compatibility may use only the documented bounded generation-scoped fallback.
+18. P2S must not be represented as peer-applied until the protocol provides an application receipt.
+19. Pending queue processing must resume after process restart, boot recovery, foreground-service restart, and network recovery.
+20. Duplicate suppression must avoid repeat sends from multiple probes for one clipboard mutation.
+21. Ordinary clipboard queue capacity remains 16 with explicit `queue_full`; accepted items have no TTL and must never be evicted on overflow.
+22. Internal ClipCascade clipboard writes must update/suppress the observation baseline and must not echo outward.
+23. Image/file sharing must continue using upstream paths unless separately redesigned and tested.
+24. Universal app compatibility must not be claimed without a representative app matrix.
 
 ## Verification-code notification requirements
 
 1. ClipCascade must use Android's user-authorized notification access and process notification text locally.
-2. Only an extracted verification value may enter the relay queue. The full notification title/body must not be sent to Windows or persisted.
+2. Only an extracted verification value may enter the relay queue. Full notification title/body must not be sent to Windows or persisted.
 3. Extraction must require verification-code context and reject unrelated dates, times, prices, phone numbers, tracking/order identifiers, URLs, email addresses, and ordinary notification numbers.
-4. Extraction must support both Japanese and English verification language, full-width characters, numeric codes, compact alphanumeric codes, and commonly grouped code formats.
-5. Standard notification fields, expanded text, text lines, and MessagingStyle current/historic message bundles must be considered without persisting the combined notification text.
-6. User must be able to enable/disable verification-code relay.
-7. User must be able to restrict processing to selected notification-source apps; empty selection means all apps subject to contextual extraction.
-8. Values must use a persistent queue with expiry and duplicate suppression.
-9. Turning the feature off or changing the source-app policy must clear pending values created under the prior policy.
-10. The app must provide a synthetic end-to-end test notification containing a newly generated fake code.
-11. The true listener-path test must use the normal notification listener, extractor, persistent queue, transport, and acknowledgement path rather than inserting directly into the queue.
-12. A separate deterministic component/transport test may queue after extraction, but it must be labelled as not proving NotificationListener delivery.
-13. Test status must distinguish notification posted, value seen, eligible, text available, auth context, queued, failed extraction, deduplicated, claimed, and acknowledged where available.
-14. In Extended P2P, an acknowledged synthetic test may be described as Windows clipboard-applied. P2S must retain its documented local-transport acknowledgement limitation.
-15. Screen-off and locked-device behavior must be tested on HONOR/MagicOS.
-16. Android 15/16 OTP redaction must be treated as an unresolved platform constraint until verified. Do not claim reliable SMS/email OTP capture solely because NotificationListenerService compiles.
-17. Do not add direct SMS permission handling unless explicitly approved and designed with appropriate distribution/privacy constraints.
+4. Extraction must support Japanese and English verification language, full-width characters, numeric codes, compact alphanumeric codes, and commonly grouped code formats.
+5. Standard notification fields, expanded text, text lines, MessagingStyle current/historic bundles, and safely bounded loose text extras must be considered without persisting the combined text.
+6. The user must be able to enable/disable verification-code relay.
+7. The user must be able to restrict source apps; an empty selection means all non-self apps remain eligible subject to contextual extraction.
+8. Verification values use their separate persistent queue with expiry, duplicate suppression, and receipt protection.
+9. Turning the feature off or changing source policy must clear pending values created under the previous policy.
+10. Android 15+ OTP redaction is an architectural constraint, not an extractor defect.
+11. On Android 15+, setup must establish a user-confirmed CompanionDeviceManager association before real OTP delivery is described as configured.
+12. After association, notification access should be requested through `CompanionDeviceManager.requestNotificationAccess` when available.
+13. Companion association is not itself proof that HONOR exposes unredacted Gmail/SMS fields; target evidence remains mandatory.
+14. `NotificationListenerService` must not be unnecessarily exported.
+15. The deterministic component/transport test may queue after local extraction, but must be labelled as not proving NotificationListener delivery.
+16. The true listener-path test must use a different package from the main app and must not directly insert its value into the queue.
+17. The helper test app must be separately installable, signed with the same certificate, protected by a signature permission, and post a normal external notification containing a newly generated fake code.
+18. True listener-test success requires: external notification posted → listener seen → eligible → text available → expected value extracted → durable queue → foreground claim → Windows apply → peer ACK → native deletion.
+19. Test status must distinguish posted/launched, seen, eligible, text availability, auth context, extraction failure/redaction, queued, deduplicated, claimed, and acknowledged where available.
+20. In Extended P2P, acknowledged may be described as Windows clipboard-applied. P2S must retain its local-transport limitation.
+21. Locked and screen-off behavior must be tested on HONOR/MagicOS.
+22. Direct SMS permission handling must not be added unless explicitly approved and designed with distribution/privacy constraints.
 
 ## Reliability requirements
 
-1. Android foreground synchronization must recover after sleep, app/process termination, connectivity changes, and device restart where Android permits.
-2. Health checks must trigger an actual bounded recovery attempt and retain a user-action fallback when Android blocks a background foreground-service start.
-3. Native clipboard and verification queues must resume automatically after service recovery.
-4. P2P restart must fully tear down the previous WebRTC session before creating a replacement.
-5. Old service generations must not remove listeners belonging to a newer generation.
-6. Avoid overlapping retry loops and duplicate foreground services.
-7. Ordinary clipboard items use a bounded durable queue without TTL or accepted-item eviction. Verification values may retain their separate documented TTL.
+1. Android foreground synchronization must recover after sleep, process termination, connectivity changes, and reboot where Android permits.
+2. Health checks must trigger a bounded recovery attempt and retain a user-action fallback when Android blocks service starts.
+3. Native clipboard and verification queues must resume after service recovery.
+4. The native clipboard acquisition service and the existing Notifee transport runner must expose separate content-free lifecycle diagnostics.
+5. P2P restart must tear down the previous WebRTC session before creating a replacement.
+6. Old service generations must not remove listeners belonging to a newer generation.
+7. Avoid overlapping retry loops and duplicate foreground services.
 8. Build success is not functional completion. Real-device tests are mandatory.
-9. Every Android outbound validation run must disable Phone Link and all other competing clipboard synchronization features so delivery can be attributed to ClipCascade alone.
-10. Validation must record detection, acquisition method, queue, foreground claim, local transport acceptance/debug, Windows clipboard application, peer ACK, and native deletion as separate stages.
-11. The foreground runner must expose content-free registered/started/heartbeat/stopped diagnostics, with active/stale interpretation documented.
-12. A Go-equivalent overlay acquisition success must be recorded separately from a selected-text fallback success.
+9. Every Android outbound test must disable Phone Link and all competing clipboard synchronizers.
+10. Validation must record detection/probe, baseline/fingerprint decision, acquisition method, queue, foreground claim, local transport acceptance/debug, Windows application, peer ACK, and native deletion separately.
+11. Notification validation must separately record companion association, listener connected, seen, eligible, text length, auth context, extraction, queue, claim, Windows application, ACK, and deletion.
+12. Failed CI and failed target runs must remain documented.
 
 ## Windows requirements
 
 1. Show a visible status/control window after login, not only a tray icon.
-2. Display connection status, server, P2S/P2P mode, P2P peer/transfer state, reconnect activity, and latest operation.
+2. Display connection status, server, P2S/P2P mode, peer/transfer state, reconnect activity, and latest operation.
 3. Controls: Restart sync, Reconnect, Disconnect, Open logs, Copy diagnostics.
-4. Second app launch should focus/open the existing status window.
+4. Second launch should focus/open the existing status window.
 5. Watchdog should recover persistent unhealthy sessions, including signaling-connected but DataChannel-dead P2P states.
 6. Logs must rotate rather than truncate on each launch.
 7. Extended P2P Windows must recognize ACK control envelopes and ACK Android only after validated text clipboard application.
@@ -95,71 +107,71 @@ Make ClipCascade dependable enough for daily Android ↔ Windows clipboard use w
 
 ## Settings and localization requirements
 
-The Android app must provide an always-reachable settings screen containing:
+The Android settings screen must contain:
 
-- A guided setup checklist that opens the next missing Android setting
-- Android 13+ runtime notification permission state and request
-- AccessibilityService state and a route to accessibility settings
-- Reliable-background clipboard fallback switch
-- Display over other apps permission state and route when that fallback is enabled
-- An honest explanation that the temporary overlay is transparent, 1×1, non-touchable, created only after Copy, and immediately removed
-- An honest explanation that disabling it may reduce background clipboard reliability on Android 10+ / MagicOS
-- Notification-listener state and a route to notification access settings
-- Battery-optimization exemption state and request
-- Clear HONOR/MagicOS guidance for auto-launch, secondary launch, and background execution
-- Honest manual confirmation for manufacturer-specific switches that Android cannot reliably query through a common API
-- Clipboard relay master switch
-- Verification-code relay master switch
-- Notification-source app picker and reset-to-all action
-- Synthetic verification-code tests and live status
-- Pending queue counts without displaying contents
-- Clear-pending-data action
-- Test text relay action with target-neutral wording
-- Content-free recent health diagnostics and clear action
-- Clear explanation of what data is read, persisted, and sent
-- No obsolete ADB or `READ_LOGS` setup instructions in the distributed UI
+- guided setup checklist
+- Android 13+ notification permission
+- Accessibility state and settings route
+- reliable-background overlay switch
+- Display over other apps state and route
+- honest explanation of the transparent 1×1 temporary overlay
+- native acquisition-service state/bind diagnostics
+- CompanionDeviceManager association status and action on Android 15+
+- honest explanation that Android 15+ may redact OTP content without trusted association
+- notification-listener state and access route
+- battery-optimization state/request
+- HONOR/MagicOS auto-launch, secondary-launch, and background-execution guidance
+- clipboard and verification relay switches
+- notification-source app picker/reset
+- deterministic component/transport test
+- external-package listener-path test and helper-install requirement
+- pending queue counts without displaying values
+- clear-pending-data action
+- content-free health diagnostics and clear action
+- clear explanation of data read, persisted, and sent
+- no obsolete ADB or `READ_LOGS` instructions
 
-Localization:
+Localization requirements:
 
-1. The distributed Android UI must support Japanese and English and default from the Android system locale.
-2. Native settings, service labels/descriptions, the persistent settings entry, and the Extended React Native screens must not be left as a mixture of untranslated Japanese and English.
-3. Protocol strings and diagnostic identifiers may remain stable internal English tokens; user-visible labels must be localized.
+1. Distributed main-app UI must support Japanese and English and follow system locale.
+2. Helper-app user-visible permission/error text should be understandable on the target; English is acceptable only as a temporary alpha limitation if documented.
+3. Native settings, service labels, descriptions, and Extended screens must not be an accidental language mixture.
+4. Stable protocol and diagnostic tokens may remain English.
 
 ## Security and privacy boundaries
 
-1. Never commit credentials, keys, tokens, private server URLs, or real notification/clipboard contents.
-2. Never log full notification bodies, verification values, or clipboard text in normal logs or diagnostics.
-3. Full notification text stays transiently on device; only the extracted value may be queued.
-4. Notification titles are not needed for delivery and must not be persisted.
-5. Clipboard contents are inherently sensitive. Settings must make automatic relay and the overlay acquisition fallback explicit and disableable.
-6. Turning a relay off must stop future dispatch and clear pending sensitive values for that relay.
-7. Diagnostics may store only non-content state such as timestamp, trigger category, acquisition path, and result.
-8. Synthetic test codes may be shown in the settings screen solely for the active test; they must be clearly described as fake and must expire with the normal verification queue.
-9. Do not weaken Android security settings or silently bypass OS restrictions. `SYSTEM_ALERT_WINDOW` is allowed only through explicit user authorization and the narrowly scoped behavior defined above.
-10. The overlay must not accept touch input, display clipboard contents, persist after capture, or run for selection-only events.
+1. Never commit credentials, keys, tokens, private URLs, or real notification/clipboard contents.
+2. Never log full notification bodies, verification values, or clipboard text in normal logs/diagnostics.
+3. Full notification text remains transient on-device; only the extracted value may be queued.
+4. Only a one-way clipboard fingerprint may be persisted for mutation proof.
+5. Clipboard automatic relay and overlay acquisition must be explicit and disableable.
+6. Turning a relay off must stop future dispatch and clear its pending sensitive values.
+7. Diagnostics may store only non-content state such as timestamps, trigger category, acquisition path, fingerprint decision, and result.
+8. Fake test codes may be displayed only for the active test and expire with test state.
+9. The helper Activity must be callable only through the same-signature permission.
+10. `SYSTEM_ALERT_WINDOW` is allowed only through explicit user authorization and the narrowly scoped behavior above.
+11. The overlay must never accept touch input, display contents, or remain after capture.
+12. Do not weaken Android security settings or silently bypass OS restrictions.
 
 ## Definition of done
 
 The project is not complete until all of the following are true:
 
 - Android and Windows CI pass on the exact final SHA.
-- Standalone APK installs and launches without Metro.
-- A Japanese-locale device shows Japanese UI and an English-locale device shows English UI for the Extended paths.
-- Guided setup can reach notification permission, Accessibility, overlay permission when enabled, notification access, battery settings, and app background settings without ADB.
-- The deterministic component/transport test reaches Windows, receives peer ACK, and deletes the native item only afterward.
-- The true synthetic listener-path test is detected, extracted, queued, transported, applied, acknowledged, and deleted through the normal path.
-- Accessibility settings, overlay settings, and notification settings can be opened from the app.
-- Test relay reaches connected peers in P2S and P2P.
-- Text explicitly copied in a representative app matrix reaches Windows without ADB.
-- For the reliable-background mode, target diagnostics show the Go-equivalent `overlay_clipboard_manager` acquisition path.
-- Selection without Copy never creates an overlay, queues, or sends.
-- Android outbound works with ClipCascade backgrounded, removed from recents, locked, and screen-off while every competing clipboard synchronizer is disabled.
+- Main and helper APKs build, are independently hashed, and share the expected signer.
+- Main APK installs in place without losing settings; helper APK installs separately.
+- Main app launches without Metro.
+- Japanese and English main-app UI paths are correct.
+- Guided setup reaches notification permission, Accessibility, overlay permission, companion association, notification access, battery settings, and app background settings.
+- Deterministic component/transport test reaches Windows, receives peer ACK, and deletes only afterward.
+- External listener-path test passes the entire real listener/extractor/queue/transport/ACK path.
+- Text explicitly copied in a representative app matrix reaches Windows while the main UI is closed.
+- Target diagnostics show native service bound, delayed probe, changed fingerprint, overlay acquisition, queue, claim, Windows apply, ACK, and deletion.
+- Selection without Copy produces no queue or Windows change.
+- Background outbound works after recents removal, lock, and screen off with competing synchronizers disabled.
 - Offline queue survives disconnect and process restart.
-- P2P Extended delivery is removed only after verified Windows text clipboard application.
-- P2S acknowledgement limitations are explicitly tested/documented or an application receipt is implemented.
-- Screen-off SMS and email verification-code cases are tested on the target HONOR device.
-- Japanese and English positive/negative extraction corpora pass, including MessagingStyle layouts observed on target apps.
-- Android 16 redaction behavior is documented from actual tests.
+- P2P items are removed only after verified Windows clipboard application.
+- Android 16 companion/redaction behavior is documented from actual Gmail/DAWN/Perceptron tests.
 - Device reboot and MagicOS process-kill recovery are tested.
 - Upstream text/image/file paths pass regression tests.
-- A tagged GitHub Release contains the exact tested Android and Windows artifacts.
+- A tagged prerelease contains the exact tested main APK, helper APK, Windows artifact, and checksums.
