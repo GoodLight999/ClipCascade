@@ -78,3 +78,4 @@ require('./prepare_alpha22_accessibility_bridge.js');
 require('./prepare_alpha22_companion_and_test_launcher.js');
 require('./prepare_alpha22_external_listener.js');
 require('./prepare_alpha22_manifest_ui.js');
+require('./prepare_alpha22_clipboard_service_fixups.js');
