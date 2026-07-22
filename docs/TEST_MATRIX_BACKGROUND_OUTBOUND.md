@@ -2,222 +2,265 @@
 
 Disable Phone Link and every competing clipboard synchronizer before every row. Never record real clipboard contents, notification bodies, verification values, account identifiers, or private URLs.
 
-## Current green build
+## Current candidate
 
-- [x] implementation/release `2f08e03b325eeff18ec63b1be8cbe1b08cb4f85d`
-- [x] intended tag `v3.2.1-extended.21-alpha.1`
-- [x] version `3.2.1-extended.21-alpha.1-standalone`
-- [x] versionCode `320126`
-- [x] Android CI `29888733469`, success
-- [x] Windows CI `29888733458`, success
-- [x] artifact ID `8517492289`
-- [x] ZIP SHA-256 `9bae0a27c80ddd6b16d9e8d7df95153ad080cd4cd0b864ec5eebc5d914370c87`
-- [x] APK SHA-256 `93b85d2bd8474c874d8937e76c09ec97dde90006c4b1e8d97f448557a959c7a9`
-- [x] APK size `147945851` bytes
-- [x] signer `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- [x] artifact expiry `2026-10-20T03:33:01Z`
-- [ ] in-place installation succeeds
-- [ ] settings and permissions retained
+- [x] version `3.2.1-extended.22-alpha.1-standalone`
+- [x] versionCode `320127`
+- [x] intended tag `v3.2.1-extended.22-alpha.1`
+- [x] staging SHA `f8ec5245f9bd2eeaac6400a4f0f57d85ad6d429e`
+- [x] staging Android CI `29915789910`, success
+- [x] staging main and helper APKs compile and share the expected signer
+- [ ] exact final `stability-mobile-otp` implementation SHA recorded
+- [ ] exact final Android CI green
+- [ ] exact final Windows CI green
+- [ ] final artifact ID, ZIP digest, both APK hashes/sizes, signer, and expiry recorded
+- [ ] in-place main-APK installation succeeds
+- [ ] existing settings and permissions retained
+- [ ] helper APK installs separately
+
+Staging artifacts are not final release artifacts.
 
 ## Known target baseline
 
-- [x] Windows-to-Android receive works with app not open
-- [x] Android outbound works with app open on a prior build
-- [x] `.19-alpha.2` outbound fails with app not open
-- [x] `.19-alpha.2` true listener-path self-test fails to complete
-- [x] real Gmail/DAWN-shaped login-code notification failed to relay
-- [x] `.20-alpha.1` did not reproduce the known Go overlay acquisition path
-- [ ] `.21-alpha.1` tested on target
+- [x] Windows-to-Android receive works with the main UI closed
+- [x] Android-to-Windows worked with the main UI open on a prior build
+- [x] `.19-alpha.2` UI-closed outbound failed
+- [x] `.19-alpha.2` true listener-path test failed
+- [x] `.21-alpha.1` background outbound failed
+- [x] `.21-alpha.1` true listener-path test failed
+- [x] `.21` was CI-green but did not reproduce the full Go event/ownership structure
+- [x] target runs Android 16, where untrusted listeners may receive OTP-redacted content
+- [ ] `.22-alpha.1` tested on target
 
-## Required preflight
+## Required installation and setup
 
-Before interpreting any queue/transport test:
+1. Install the `.22` main APK over the existing signed Extended app. Do not uninstall.
+2. Install `ClipCascade-Notification-Test-Sender-22-alpha.1.apk` separately.
+3. Disable Phone Link and all competing clipboard synchronizers.
+4. Enable ClipCascade Accessibility.
+5. Enable reliable background clipboard acquisition.
+6. Allow Display over other apps.
+7. Complete the trusted CompanionDeviceManager association in Extended settings.
+8. Grant notification access through the companion flow.
+9. Set ClipCascade battery use to unrestricted and enable MagicOS auto-launch/background switches.
+10. Temporarily enable outbound debug and clear diagnostics.
 
-- [ ] install over the existing app; do not uninstall
-- [ ] reliable background clipboard fallback is ON
-- [ ] Display over other apps is allowed
-- [ ] settings reports `Foreground transport runner: active`
-- [ ] runner health shows `runner_started / notifee_foreground / ready`
-- [ ] heartbeat remains fresh for at least 60 seconds
-- [ ] outbound debug notification enabled temporarily
-- [ ] diagnostic history cleared
+Stop before interpretation if any required setup state is missing.
 
-If the runner is inactive, stop. The failure is process/Notifee lifecycle, not Copy or OTP extraction.
+## Runtime preflight
 
-If the overlay option is ON but permission is missing, stop. The known-success acquisition condition is not configured.
+- [ ] existing foreground transport runner reports active
+- [ ] runner heartbeat remains fresh for at least 60 seconds
+- [ ] native clipboard acquisition service reports started
+- [ ] Accessibility reports native service bound
+- [ ] overlay permission reports granted
+- [ ] trusted companion reports associated
+- [ ] notification listener reports connected
+- [ ] helper APK launch resolves without signature/installation error
 
-## Diagnostic boundary map
-
-Record all available boundaries after each test:
-
-1. runner active/heartbeat
-2. explicit Copy detection or listener callback
-3. clipboard acquisition path / verification extraction
-4. native queue count
-5. `foreground_poll / claimed`
-6. outbound debug notice after local transport acceptance
-7. Windows validation/application count
-8. peer ACK
-9. native queue after ACK
-
-| First missing boundary | Likely area |
+| Missing state | Interpretation |
 |---|---|
-| Runner inactive | Notifee registration/process/service lifecycle |
-| No Copy-detection record | App/OEM did not expose a usable explicit Copy event |
-| `overlay_permission_missing` | setup/permission failure |
-| `overlay_add_failed` | WindowManager/OEM overlay creation failure |
-| `overlay_clipboard_empty` or denied | overlay did not obtain clipboard access |
-| Copy cue, no acquisition record | capture scheduling failure |
-| Acquisition not queued | empty value/dedup/queue-full |
-| Queued, no foreground claim | runner poll/native module queue drain |
-| Foreground claim, no debug | `sendClipBoard`/transport acceptance |
-| Debug, no Windows apply | peer connectivity/validation/application |
-| Windows apply, no peer ACK | peer control-envelope path |
-| Peer ACK, queue remains | native acknowledgement/deletion |
+| transport runner inactive | Notifee/process/transport-runner lifecycle failure |
+| native service not started | foreground-service start/manifest failure |
+| native service not bound | Accessibility/service bind failure |
+| overlay permission missing | setup failure; background clipboard read condition absent |
+| companion missing | Android 15+ OTP trust setup incomplete |
+| listener disconnected | NotificationListener binding/access failure |
+| helper cannot launch | helper install, package, or signature-permission failure |
+
+## Boundary order
+
+### Clipboard path
+
+1. Accessibility probe
+2. pre-selection clipboard baseline where applicable
+3. delayed native observation
+4. fingerprint decision: baseline / unchanged / changed
+5. overlay acquisition path
+6. native durable queue
+7. foreground runner claim
+8. local transport acceptance/debug
+9. Windows validation/application
+10. peer ACK
+11. native deletion
+
+### Notification path
+
+1. helper notification posted
+2. listener connected
+3. seen
+4. eligible
+5. text characters available
+6. auth context / extraction
+7. durable verification queue
+8. foreground claim
+9. local transport acceptance/debug
+10. Windows validation/application
+11. peer ACK
+12. native deletion
 
 ## Deterministic component/transport test
 
-This directly queues after extraction and does not prove NotificationListener or clipboard acquisition.
+This test may queue after local extraction and does not prove NotificationListener, CompanionDeviceManager, helper delivery, or clipboard acquisition.
 
-- [ ] runner active before test
+- [ ] transport runner active
 - [ ] synthetic value queued
-- [ ] OTP is foreground-claimed before ordinary clipboard
-- [ ] debug notice after local transport acceptance
+- [ ] foreground claim
+- [ ] debug after local transport acceptance
 - [ ] Windows validates and applies once
 - [ ] peer ACK received
-- [ ] native queue deleted only after ACK
+- [ ] native item deleted only after ACK
 
 Failure interpretation:
 
-- queued + no claim: runner drain failure;
-- claim + no debug: transport failure;
-- debug + no Windows: peer path;
-- Windows + no peer ACK: Windows ACK emission;
-- peer ACK + queue remains: native ACK/deletion.
+- queue + no claim: foreground drain/module failure
+- claim + no debug: transport acceptance failure
+- debug + no Windows: peer connectivity/application failure
+- Windows + no peer ACK: Windows ACK emission failure
+- peer ACK + queue remains: native ACK/deletion failure
 
-## True NotificationListener-path test
+## External NotificationListener-path self-test
 
-The test notification remains active for five minutes and schedules delayed scans at 0.5, 2, and 5 seconds. It never directly queues.
+The main app launches the separately installed, same-signed helper APK. The helper posts a normal external notification containing a fake code. No direct queue insertion is permitted.
 
-- [ ] runner active before test
+- [ ] helper Activity launches
+- [ ] helper notification appears
 - [ ] listener connected
-- [ ] listener-test + seen + eligible increase
-- [ ] text chars > 0
-- [ ] auth hint
-- [ ] queued
+- [ ] seen count increases
+- [ ] eligible count increases
+- [ ] text characters > 0
+- [ ] expected fake value extracted
+- [ ] verification item queued
 - [ ] foreground claim
-- [ ] debug notice
+- [ ] debug after local transport acceptance
 - [ ] Windows applies once
-- [ ] peer ACK and queue deletion
-- [ ] active rescan increments already-processed without another Windows application
+- [ ] peer ACK received
+- [ ] native item deleted
+- [ ] active rescan records already processed without a second Windows application
 
 Failure interpretation:
 
-- connected + unseen: HONOR listener callback/active-scan exposure;
-- seen/eligible + text zero: notification extras unavailable;
-- text/auth + no queue: extractor/receipt boundary;
-- queued + no claim: runner drain.
+| First missing boundary | Likely area |
+|---|---|
+| helper does not launch | helper missing, wrong package, or signature permission mismatch |
+| helper launches but no notification | helper notification permission/channel failure |
+| notification visible but unseen | HONOR listener delivery/binding failure |
+| seen but ineligible | source filter/foreground/ongoing classification failure |
+| eligible but text 0/redacted | Companion association/trust or Android redaction failure |
+| text available but no extraction | extractor/context boundary |
+| extraction but no queue | receipt/dedup/storage boundary |
+| queued but no claim | transport-runner drain failure |
+| Windows applied but queue remains | ACK/native deletion failure |
 
 ## Foreground Copy regression gate
 
-Use the overlay fallback ON and authorized. Explicitly press Copy.
+Run with main UI visible before testing UI-closed behavior.
 
-| App / locale | Runner | Copy cue | Direct read | Overlay read if needed | Queued | Claimed | Debug | Windows once | ACK delete | Status |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| Chrome / system locale | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Firefox-family / system locale | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Notes/editor / system locale | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| App / locale | Native bound | Probe | Baseline | Delayed read | Fingerprint changed | Overlay read | Queued | Claimed | Windows once | ACK delete | Status |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| Chrome / system locale | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Firefox-family / system locale | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Notes/editor / system locale | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
-Stop if foreground behavior regresses.
+Stop if foreground Copy regresses.
 
-## Background explicit Copy — reliable overlay mode
+## Background explicit Copy
 
-Leave the main UI without force-stopping it. Use a new unique synthetic selection and explicitly press Copy. The expected acquisition path on Android 10+/MagicOS is `overlay_clipboard_manager` when the direct read is unavailable.
+Leave the main UI without force-stopping it. Select a unique value and explicitly Copy it.
 
-| App | Runner | Selection state | Explicit Copy cue | Overlay permission | Acquisition path | Queued | Claimed | Debug | Windows once | ACK delete | Status |
-|---|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
-| Chrome | ☐ | ☐ | ☐ | ☐ | — | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Firefox-family | ☐ | ☐ | ☐ | ☐ | — | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Notes/editor | ☐ | ☐ | ☐ | ☐ | — | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+The expected path when selection is exposed is:
 
-Success requires the actual copied value on Windows, not merely the remembered selected range. Record only the acquisition path token, never the content.
+`selection_probe -> pre_selection_baseline -> delayed native observation -> changed fingerprint -> overlay_clipboard_manager -> queue -> claim -> Windows -> ACK/delete`
 
-The exact localized Copy search includes clicked node, parent, immediate children/siblings, and Accessibility action labels. Selection alone remains insufficient.
+A strong semantic/system Copy event may use the shorter 300 ms probe, but it is no longer required for entry.
 
-## Overlay-free control
+| App | Native bound | Selection/click probe | Old baseline | Delayed observation | Changed fingerprint | Acquisition path | Queued | Claimed | Debug | Windows once | ACK delete | Status |
+|---|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---|
+| Chrome | ☐ | ☐ | ☐ | ☐ | ☐ | — | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Firefox-family | ☐ | ☐ | ☐ | ☐ | ☐ | — | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Notes/editor | ☐ | ☐ | ☐ | ☐ | ☐ | — | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
-Turn the reliable fallback OFF and repeat one background explicit Copy in each representative app.
+Success requires the actual copied value on Windows. Never record the value itself.
 
-| App | Copy cue | Selected-text fallback | Queued | Windows once | Interpretation |
-|---|---:|---:|---:|---:|---|
-| Chrome | ☐ | ☐ | ☐ | ☐ | untested |
-| Firefox-family | ☐ | ☐ | ☐ | ☐ | untested |
-| Notes/editor | ☐ | ☐ | ☐ | ☐ | untested |
+## Selection-only negative test
 
-A failure here does not invalidate the overlay mode. It demonstrates that the overlay-free fallback is not Go-equivalent on the target.
+Select text but do not press Copy. Keep overlay mode enabled.
 
-## Selection-only negative tests
+Expected behavior:
 
-Select text but do not press Copy. Keep the overlay option ON so this also proves selection alone cannot create the overlay.
+- selection probe may occur;
+- old clipboard baseline may be recorded;
+- delayed overlay read may occur;
+- fingerprint remains unchanged;
+- no native queue item;
+- no Windows change.
 
-| State | Runner | 3s | 15s | 60s | No overlay record | Queue unchanged | Windows unchanged | Status |
-|---|---:|---:|---:|---:|---:|---:|---:|---|
-| App foreground | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| App background | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Third system language | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| State | Probe | Baseline | Delayed observation | Fingerprint unchanged | Queue unchanged | Windows unchanged | Status |
+|---|---:|---:|---:|---:|---:|---:|---|
+| App foreground | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Main UI closed | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Third system language | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
-Labels/actions `Copied`, `Copy all`, `Paste`, arbitrary text, empty label, Select all, and Share must not send.
+A selection-only overlay read is permitted as a mutation probe. A selection-only queue/send is forbidden.
 
-## Overlay behavior checks
+## Same-value Copy behavior
 
-- [ ] no visible overlay or flash
+Copying the same value already present in the clipboard may produce an unchanged fingerprint and no send because no clipboard mutation is observable.
+
+- [ ] document target behavior for same-value Copy
+- [ ] do not treat same-value non-send as proof that unique-value Copy is broken
+- [ ] use a fresh unique test value for positive rows
+
+## Overlay behavior
+
+- [ ] no visible flash
 - [ ] no touch interception
 - [ ] no persistent overlay after success
-- [ ] no persistent overlay after empty/denied/add-failure path
-- [ ] permission revocation yields `overlay_permission_missing`, not a crash
-- [ ] disabling the setting prevents overlay creation
-- [ ] enabling the setting without permission does not silently claim setup complete
-- [ ] repeated Copy does not leak WindowManager views
+- [ ] no persistent overlay after empty/denied/error path
+- [ ] permission revocation yields content-free failure, not crash
+- [ ] disabling reliable mode prevents overlay creation
+- [ ] repeated probes do not leak WindowManager views
 
-## Lifecycle expansion
+## Native service lifecycle expansion
 
-Run only after simple background Copy succeeds in reliable overlay mode.
+Run only after simple UI-closed Copy succeeds.
 
-| State | Runner | Cue | Overlay acquisition | Queued | Claimed | Debug | Windows once | ACK delete | Status |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| Removed from recents | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Device locked | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Screen off 1 minute | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Screen off 15 minutes | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Screen off 30+ minutes | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| State | Native service | Bound/recovered | Probe | Changed fingerprint | Overlay read | Queued | Claimed | Windows once | ACK delete | Status |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| Removed from recents | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Device locked | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Screen off 1 minute | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Screen off 15 minutes | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Device reboot | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
-## Gmail/DAWN/Perceptron stage matrix
+## Real Gmail / DAWN / Perceptron notifications
 
-Synthetic DAWN and Perceptron layouts pass extractor unit tests. Clear notification diagnostics immediately before each new real notification.
+Run only after companion association and the external helper listener test succeed.
 
-| State | Runner | Connected | Seen | Eligible | Text >0 | Auth | Queued | Claimed | Debug | Windows | ACK delete | Status |
+| Source/state | Companion | Listener | Seen | Eligible | Text >0 | Not redacted | Extracted | Queued | Claimed | Windows | ACK delete | Status |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| App visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | failed previously; no counters |
-| App background | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Removed from recents | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
-| Active notification + rescan | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| Gmail visible | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | failed on prior build |
+| Gmail background | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
+| DAWN-shaped mail | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | failed on prior build |
+| Perceptron-shaped mail | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | failed on prior build |
+| Locked/screen off | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | untested |
 
 Never record the code or notification body.
 
 ## Queue, durability, and exactly-once
 
-- [ ] 16 items accepted while peer disconnected
+- [ ] 16 ordinary clipboard items accepted while peer disconnected
 - [ ] item 17 rejected as `queue_full`
-- [ ] accepted items remain in order
-- [ ] no accepted item expires or is evicted
-- [ ] runner drains in bounded order
-- [ ] reconnect applies each once
-- [ ] each item deleted only after peer ACK
-- [ ] failed transport retains item and retries after bounded claim timeout
-- [ ] inbound ClipCascade writes create no outbound echo
-- [ ] overlay acquisition does not bypass the queue
-- [ ] overlay acquisition does not delete after local transport acceptance
+- [ ] accepted items remain ordered
+- [ ] no accepted ordinary item expires or is evicted
+- [ ] native acquisition never bypasses `ClipboardRelayStore`
+- [ ] foreground runner drains in bounded order
+- [ ] failed transport retains item after claim timeout
+- [ ] reconnect applies each item once
+- [ ] each item deletes only after peer ACK
+- [ ] inbound ClipCascade writes update/suppress the observation baseline and do not echo
+- [ ] helper notification receipt prevents duplicate application after active rescan
 
 ## Do not claim
 
-CI proves source/build invariants only. `.21-alpha.1` overlay acquisition, runner lifecycle on HONOR, true listener delivery, background Copy, Gmail/DAWN/Perceptron, lifecycle rows, queue durability, exactly-once, battery, and tray behavior remain unproven until isolated target evidence exists.
+CI proves source/build invariants only. `.22-alpha.1` remains unproven for HONOR/MagicOS native service survival, clipboard mutation timing, background Copy, CompanionDeviceManager OTP visibility, external listener delivery, Gmail/DAWN/Perceptron, lifecycle rows, exactly-once, battery, and tray behavior until the corresponding target rows pass.
