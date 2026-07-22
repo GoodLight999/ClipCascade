@@ -4,19 +4,16 @@ Branch: `stability-mobile-otp`
 Canonical Draft PR: `#1`  
 Repository: `GoodLight999/ClipCascade`
 
-## Current target truth
+## Target truth
 
-`.21-alpha.1` is a failed HONOR/MagicOS build despite green CI.
-
-The user confirmed:
+`.21-alpha.1` failed both decisive HONOR/MagicOS checks despite green CI:
 
 - the true notification-listener-path self-test failed;
-- Android-to-Windows background clipboard sending failed;
-- `.21-alpha.1` therefore did not recover either decisive Priority 1 path.
+- Android-to-Windows background clipboard sending failed.
 
-Do not describe `.21-alpha.1` as fixed, partially fixed, or target-proven.
+Do not describe `.21` as fixed or target-proven.
 
-`.22-alpha.1` is Android/Windows CI-green but has not yet been tested on the target. Do not claim it fixes either path until the HONOR rows pass.
+`.22-alpha.1` is CI-green and artifact-verified but has not yet been tested on HONOR. Do not claim it fixes either path until the target rows pass.
 
 ## Current implementation/release candidate
 
@@ -24,8 +21,11 @@ Do not describe `.21-alpha.1` as fixed, partially fixed, or target-proven.
 - versionName: `3.2.1-extended.22-alpha.1-standalone`
 - versionCode: `320127`
 - intended tag: `v3.2.1-extended.22-alpha.1`
-- Android CI: `29917141620`, success
-- Windows CI: `29917141540`, success
+- implementation Android CI: `29917141620`, success
+- implementation Windows CI: `29917141540`, success
+- validated documentation head: `a12621942d2a22b51fb94b9042509ab3845b1c3f`
+- documentation-head Android CI: `29917915931`, success
+- documentation-head Windows CI: `29917915917`, success
 - artifact ID: `8528455362`
 - artifact ZIP SHA-256: `61cba5012ebc412d0075c165b29fb6a5d4ded79f1ad8a28a993218c722717539`
 - main APK SHA-256: `ac6fe987eb3e4a469abcdc53bc552313f752c8780a27498a8abf7aa89c8a681a`
@@ -37,6 +37,8 @@ Do not describe `.21-alpha.1` as fixed, partially fixed, or target-proven.
 - artifact expiry: `2026-10-20T11:48:52Z`
 
 The downloaded ZIP digest matched GitHub. Both APK hashes/sizes matched the packaged checksum file, and both signer records matched the stable certificate.
+
+This factual correction changes documentation only. The exact current handoff-head CI is recorded in PR #1's body after completion.
 
 ## Why `.21` failed despite the Go reference
 
@@ -63,8 +65,8 @@ Calling `.21` Go-equivalent was incorrect.
 - owns the 1×1 transparent overlay;
 - owns `ClipboardManager` reads;
 - owns clipboard fingerprint comparison;
-- inserts only confirmed mutations into the existing `ClipboardRelayStore`;
-- does not own or replace Extended transport.
+- inserts only confirmed mutations into `ClipboardRelayStore`;
+- never sends, acknowledges, or deletes directly.
 
 Accessibility submits broad probes:
 
@@ -113,8 +115,6 @@ The main APK launches the helper. Success requires Android NotificationListenerS
 
 `NATIVE_QUEUE -> NATIVE_IN_FLIGHT -> FOREGROUND_RUNNER_CLAIM -> LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_VALIDATE -> WINDOWS_APPLY -> PEER_ACK -> NATIVE_ACK -> DELETE`
 
-`.22` changes acquisition and notification trust only. It does not change this transport order.
-
 Also preserved:
 
 - ordinary clipboard queue has no TTL;
@@ -125,24 +125,11 @@ Also preserved:
 - generation-scoped old-peer compatibility fallback;
 - debug notification default OFF and outside ACK logic.
 
-## Validation evidence
+## Temporary PR #2
 
-Temporary Draft PR #2 established buildability before final integration. Final exact-SHA CI then passed on PR #1's branch.
+Temporary Draft PR #2 was used as a staging CI trigger. The validated code was integrated by no-force fast-forward. GitHub reports PR #2 as closed/merged because its exact head became an ancestor of `stability-mobile-otp`; the reported merge SHA is the PR head itself. There was no separate merge commit, merge-button action, force push, Ready conversion, or auto-merge.
 
-Final Android CI verified:
-
-- all production transforms;
-- native service ownership and bind path;
-- broad probes and fingerprint policy unit tests;
-- queue and ACK invariants;
-- CompanionDeviceManager and external helper sources;
-- JavaScript bundle;
-- Kotlin unit tests;
-- main and helper APK assembly;
-- matching signer verification;
-- artifact upload.
-
-Windows CI reverified the existing P2P peer-ACK, validation-before-ACK, shutdown/tray, tests, and EXE package.
+PR #1 remains Open, Draft, and unmerged.
 
 ## Not proven
 
@@ -156,12 +143,12 @@ CI still does not prove:
 - native acquisition service survival after UI closure;
 - background clipboard fingerprint change and queue insertion;
 - selection-only negative behavior in target apps;
-- removed-from-recents, locked, or screen-off outbound;
+- removed-from-recents, locked, screen-off, or reboot outbound;
 - exactly-once reconnect behavior;
 - queue-full and long-disconnect durability;
 - battery and Windows tray behavior.
 
 Canonical handoff: `docs/NEXT_CHATGPT_HANDOFF.md`.  
 Artifact record: `docs/LATEST_GREEN_ARTIFACTS.md`.  
-Detailed failure/redesign record: `docs/LATEST_ALPHA21_FAILURE_ALPHA22_NATIVE_RECOVERY_HANDOFF.md`.  
-PR #1 must remain Open and Draft. Temporary PR #2 must be closed without merge after the final handoff is green.
+Detailed redesign record: `docs/LATEST_ALPHA21_FAILURE_ALPHA22_NATIVE_RECOVERY_HANDOFF.md`.  
+PR #1 must remain Open and Draft.
