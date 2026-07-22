@@ -1,41 +1,23 @@
-# Latest Green Artifacts — 2026-07-21
+# Latest Green Artifacts and Pending Candidate — 2026-07-22
 
-## Source
+## Latest confirmed green artifact
+
+The latest fully recorded green artifact remains `.20-alpha.1` until `.21-alpha.1` completes exact-SHA Android and Windows CI.
+
+### Source
 
 - repository: `GoodLight999/ClipCascade`
 - branch: `stability-mobile-otp`
 - implementation/release anchor: `290d6690e749fe34367b2383676faf27c0a4ba76`
 - intended alpha tag: `v3.2.1-extended.20-alpha.1`
-- PR: `#1`, open and Draft
+- PR: `#1`, Open and Draft
 
-## CI
+### CI
 
 - Android standalone CI `29843413287` — success
 - Desktop Windows CI `29843413149` — success
 
-Android CI passed:
-
-- all transforms in production order;
-- version `3.2.1-extended.20-alpha.1 / 320125`;
-- index-level runner registration before `AppRegistry.registerComponent`;
-- one runner registration per process generation;
-- heartbeat and stale-state diagnostics;
-- listener delayed rescans and five-minute synthetic notifications;
-- hierarchical exact localized Copy candidates;
-- selection-only negative behavior;
-- foreground native queue claim/drain source assertions;
-- DAWN/Gmail/Perceptron/Beeper/multilingual/negative extractor tests;
-- no READ_LOGS or SYSTEM_ALERT_WINDOW;
-- queue/claim/retry/debug/ACK invariants;
-- JavaScript bundle;
-- Kotlin/resources and unit tests;
-- APK assembly and embedded bundle;
-- deterministic signer verification;
-- artifact upload.
-
-Windows CI passed authenticated HTTP, Extended peer-applied ACK, validation-before-ACK, shutdown/tray, tests, and EXE packaging. No Windows implementation file changed.
-
-## Android artifact
+### Android artifact
 
 - application: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
@@ -52,26 +34,42 @@ Windows CI passed authenticated HTTP, Extended peer-applied ACK, validation-befo
 
 The downloaded Actions ZIP digest matched GitHub's artifact digest. The extracted APK and signer diagnostics were independently verified.
 
-## Local filenames
+## Pending `.21-alpha.1` candidate
 
-- `/mnt/data/ClipCascade-Extended-3.2.1-extended.20-alpha.1-actions.zip`
-- `/mnt/data/ClipCascade-Extended-3.2.1-extended.20-alpha.1-vc320125-290d669.apk`
-- `/mnt/data/ClipCascade-Android-signer-diagnostics-20-alpha1.zip`
+- implementation/release candidate: `2ede4caf7b59b0cb9d56f06aa976e4d61c63be18`
+- first handoff tree advanced by fast-forward to: `75d1d5ddca6c7197a13668e0a3883034f5ea0092`
+- versionName: `3.2.1-extended.21-alpha.1-standalone`
+- versionCode: `320126`
+- intended tag: `v3.2.1-extended.21-alpha.1`
+- Android CI: pending for the exact current handoff SHA
+- Windows CI: pending for the exact current handoff SHA
+- Actions artifact: pending
+- ZIP/APK hash, size, signer diagnostics, and expiry: pending
+
+`.21-alpha.1` adds the explicit user-authorized Go-proven 1×1 transparent overlay clipboard-acquisition fallback. It preserves the existing Extended queue and Windows-applied peer ACK.
+
+Do not replace the confirmed `.20` artifact metadata above until the `.21` exact-SHA Android and Windows runs are both successful and the downloaded artifact is independently hashed.
 
 ## Target truth
 
-`.19-alpha.2` failed the true listener-path self-test and still could not send while the main app UI was closed. `.20-alpha.1` addresses a confirmed foreground-runner registration defect, but has no target success evidence yet.
+`.19-alpha.2` failed the true listener-path self-test and could not send while the main app UI was closed.
+
+`.20-alpha.1` repaired foreground-runner registration but did not reproduce the known-working Go overlay acquisition condition.
+
+`.21-alpha.1` restores that condition in source, but CI cannot prove HONOR/MagicOS success.
 
 ## Not proven by CI
 
 - in-place update/settings retention;
-- fresh runner heartbeat on HONOR;
+- overlay permission and WindowManager behavior on HONOR;
+- fresh runner heartbeat after UI closure;
 - component/transport self-test on target;
 - true listener-path self-test on target;
-- background Copy event exposure, capture, and drain;
+- background explicit Copy producing `overlay_clipboard_manager`;
+- selection-only no-overlay/no-send behavior on target apps;
 - removed-from-recents, locked, or screen-off outbound;
-- real Gmail listener delivery/extras;
+- real Gmail/DAWN/Perceptron listener delivery/extras;
 - exactly-once target behavior;
 - battery and tray behavior.
 
-Keep PR #1 Draft.
+Keep PR #1 Open and Draft.
