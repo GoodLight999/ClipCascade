@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="com.clipcascade.extended.permission.POST_TEST_NOTIFICATION" />
+
+    <application
+        android:allowBackup="false"
+        android:label="ClipCascade Notification Test Sender"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.DeviceDefault.Dialog.Alert">
+        <activity
+            android:name=".TestNotificationActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:finishOnTaskLaunch="true"
+            android:noHistory="true"
+            android:permission="com.clipcascade.extended.permission.POST_TEST_NOTIFICATION">
+            <intent-filter>
+                <action android:name="com.clipcascade.extended.action.POST_LISTENER_TEST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
