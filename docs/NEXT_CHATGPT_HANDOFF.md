@@ -35,18 +35,26 @@ This is the canonical handoff.
 10. `docs/LATEST_NOTIFICATION_LISTENER_ALPHA_HANDOFF.md`
 11. `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`
 
-## Current implementation candidate
+## Current green implementation/release candidate
 
-- implementation/release candidate SHA: `2ede4caf7b59b0cb9d56f06aa976e4d61c63be18`
+- implementation/release SHA: `2f08e03b325eeff18ec63b1be8cbe1b08cb4f85d`
 - version: `3.2.1-extended.21-alpha.1-standalone`
 - versionCode: `320126`
 - intended tag: `v3.2.1-extended.21-alpha.1`
-- Android CI: pending final-branch validation
-- Windows CI: pending final-branch validation
-- artifact metadata: pending successful final Android run
-- signer must remain: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- Android CI: `29888733469`, success
+- Windows CI: `29888733458`, success
+- Android Actions artifact ID: `8517492289`
+- Actions ZIP SHA-256: `9bae0a27c80ddd6b16d9e8d7df95153ad080cd4cd0b864ec5eebc5d914370c87`
+- APK SHA-256: `93b85d2bd8474c874d8937e76c09ec97dde90006c4b1e8d97f448557a959c7a9`
+- APK size: `147945851` bytes
+- signer diagnostics artifact ID: `8517490898`
+- signer diagnostics ZIP SHA-256: `51c29398a4bfed2699ef79268d51d73be30b762785d2257551f127c0a52f4f62`
+- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- artifact expiry: `2026-10-20T03:33:01Z`
 
-Do not publish the alpha prerelease until matching Android and Windows CI are green on the exact release SHA. Do not use `[alpha-release]` on a documentation-only handoff commit.
+The Actions ZIP digest matched GitHub's recorded digest. The extracted APK hash/size and signer diagnostics were independently verified.
+
+Do not publish the alpha prerelease until the user is ready to test it. A prerelease publication requires `[alpha-release]` and matching Android/Windows success on that exact publication SHA.
 
 ## Target evidence — do not soften
 
@@ -56,9 +64,9 @@ Do not publish the alpha prerelease until matching Android and Windows CI are gr
 - Android outbound failed whenever the main app UI was not open;
 - inbound continued to work.
 
-`.20-alpha.1` has not been proven on the HONOR target. It repaired foreground-runner registration/lifecycle, but it did not reproduce the Go implementation's overlay-based clipboard acquisition. Therefore `.20-alpha.1` never had sufficient evidence for reliable background Copy capture.
+`.20-alpha.1` repaired foreground-runner registration/lifecycle, but it did not reproduce the Go implementation's overlay-based clipboard acquisition. It therefore never had sufficient evidence for reliable background Copy capture.
 
-`.21-alpha.1` restores the known Go clipboard-acquisition condition, but it also remains unproven until the target matrix passes.
+`.21-alpha.1` restores the known Go clipboard-acquisition condition and is CI-green. It is still not HONOR/MagicOS proof.
 
 ## Complete Go-fork conclusion
 
@@ -120,6 +128,25 @@ The allowed overlay must be:
 - 1×1, alpha 0, transparent, and non-touchable;
 - removed immediately even after read failure;
 - prohibited from changing queue or ACK semantics.
+
+## CI proof obtained
+
+Android `29888733469` passed:
+
+- all production transforms in final order;
+- `.21-alpha.1 / 320126` identity;
+- early runner registration and heartbeat;
+- exact framework Copy policy and selection-only negative policy;
+- `SYSTEM_ALERT_WINDOW`, `TYPE_APPLICATION_OVERLAY`, 1×1 parameters, non-touchable/focusable flags, and immediate removal;
+- overlay gating policy unit test;
+- durable queue no-TTL/capacity/`queue_full` checks;
+- foreground claim/drain and existing ACK plumbing assertions;
+- OTP/Gmail/DAWN/Perceptron extraction tests;
+- JavaScript bundle;
+- Kotlin/resources/unit tests;
+- APK assembly, embedded bundle, stable signer, and artifact upload.
+
+Windows `29888733458` passed authenticated HTTP, P2P peer ACK, validation-before-ACK, shutdown/tray tests, and EXE packaging. No Windows implementation source was changed.
 
 ## Final Android transform order
 
@@ -201,7 +228,9 @@ Current `.21` work:
 - fully inspected Go Android service, Accessibility, manifest, boot receiver, gomobile bridge, and Go engine;
 - corrected the earlier incomplete claim that `.20` had sufficient background-capture evidence;
 - added the Go-proven overlay acquisition transform without modifying Extended transport/ACK code;
-- added a temporary branch-only Android validation workflow; remove it before advancing `stability-mobile-otp`;
-- final Android/Windows run IDs and artifact hashes must be appended after exact-SHA green validation.
+- a temporary branch-only validation workflow did not run and was removed before the final branch advance;
+- exact implementation SHA Android and Windows CI are green;
+- artifact ZIP, APK, size, signer, and expiry are recorded above;
+- the next proof is HONOR/MagicOS target testing, not further claims from CI.
 
 PR #1 must remain Draft. CI is not HONOR proof.
