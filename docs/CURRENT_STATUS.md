@@ -4,18 +4,26 @@ Branch: `stability-mobile-otp`
 Draft PR: `#1`  
 Repository: `GoodLight999/ClipCascade`
 
-## Current alpha candidate
+## Current green alpha candidate
 
 - application: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
 - versionName: `3.2.1-extended.21-alpha.1-standalone`
 - versionCode: `320126`
-- implementation/release candidate anchor: `2ede4caf7b59b0cb9d56f06aa976e4d61c63be18`
+- implementation/release SHA: `2f08e03b325eeff18ec63b1be8cbe1b08cb4f85d`
 - intended tag: `v3.2.1-extended.21-alpha.1`
-- Android CI: pending exact final-branch validation
-- Windows CI: pending exact final-branch validation
-- artifact hashes/ID: pending successful Android validation
-- signer must remain: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- Android CI: `29888733469`, success
+- Windows CI: `29888733458`, success
+- Android artifact ID: `8517492289`
+- Actions ZIP SHA-256: `9bae0a27c80ddd6b16d9e8d7df95153ad080cd4cd0b864ec5eebc5d914370c87`
+- APK SHA-256: `93b85d2bd8474c874d8937e76c09ec97dde90006c4b1e8d97f448557a959c7a9`
+- APK size: `147945851` bytes
+- signer diagnostics artifact ID: `8517490898`
+- signer diagnostics ZIP SHA-256: `51c29398a4bfed2699ef79268d51d73be30b762785d2257551f127c0a52f4f62`
+- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- artifact expiry: `2026-10-20T03:33:01Z`
+
+The downloaded Actions ZIP digest matched GitHub's artifact digest. The extracted APK size/hash and signer diagnostics were independently verified.
 
 ## Target-device truth
 
@@ -27,7 +35,7 @@ Repository: `GoodLight999/ClipCascade`
 
 `.20-alpha.1` is not target-proven. It repaired a real foreground-runner lifecycle defect but did not recreate the overlay-based clipboard acquisition used by the known-working Go implementation.
 
-`.21-alpha.1` restores that acquisition condition, but background outbound and real Gmail remain unproven until HONOR/MagicOS tests pass.
+`.21-alpha.1` restores that acquisition condition and is CI-green, but background outbound and real Gmail remain unproven until HONOR/MagicOS tests pass.
 
 ## Repository and reference relationship
 
@@ -64,6 +72,10 @@ Extended imports the successful overlay acquisition condition but does not impor
 - the view is non-touchable, intentionally focusable, and removed with `removeViewImmediate` in `finally`;
 - content-free diagnostics distinguish direct read, overlay success, permission missing, empty read, denial, and add failure;
 - overlay-free mode remains available but is not claimed to be Go-equivalent on Android 10+ or HONOR/MagicOS.
+
+Android CI verified the final production transform order, the overlay permission/1×1/focusable/non-touchable/immediate-removal structure, selection-only negative policy, queue no-TTL/capacity rules, JS bundle, Kotlin unit tests, APK assembly, embedded bundle, and stable signer.
+
+Windows CI verified authenticated HTTP behavior, P2P peer ACK, validation-before-ACK, shutdown/tray behavior, tests, and EXE packaging.
 
 ## ACK path — preserve exactly
 
