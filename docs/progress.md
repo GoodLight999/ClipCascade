@@ -15,7 +15,7 @@ Resume work in this order:
 11. `docs/TEST_MATRIX.md`
 12. older focused handoffs linked from the current documents
 
-Current phase: validate `3.2.1-extended.21-alpha.1 / 320126` on exact Android and Windows CI, then test the Go-proven overlay clipboard-acquisition path on HONOR 400 Pro while preserving Extended P2P Windows-applied ACK and PR #1 Draft state.
+Current phase: `3.2.1-extended.21-alpha.1 / 320126` is Android/Windows CI-green. Next, install it in place and test the Go-proven overlay clipboard-acquisition path on HONOR 400 Pro while preserving Extended P2P Windows-applied ACK and PR #1 Draft state.
 
 ## 2026-07-21 — `.19-alpha.2` target failure
 
@@ -91,11 +91,11 @@ Confirmed known-success structure:
 
 Conclusion: import the overlay acquisition condition, not the Go transport.
 
-## 2026-07-22 — `.21-alpha.1` implementation candidate
+## 2026-07-22 — `.21-alpha.1` implementation and green validation
 
-Implementation/release candidate SHA: `2ede4caf7b59b0cb9d56f06aa976e4d61c63be18`.
+Implementation/release SHA: `2f08e03b325eeff18ec63b1be8cbe1b08cb4f85d`.
 
-Changes staged:
+Changes:
 
 - version `3.2.1-extended.21-alpha.1-standalone`, versionCode `320126`;
 - `prepare_overlay_clipboard_acquisition.js` runs last after lifecycle fixups;
@@ -107,12 +107,31 @@ Changes staged:
 - when direct read is unavailable and permission is present, adds the Go-equivalent overlay, reads, and removes in `finally`;
 - diagnostic paths distinguish direct read, overlay read, missing permission, denial, empty read, and add failure without storing content;
 - unit policy verifies overlay runs only when enabled, authorized, and still required;
-- Android CI now requires the overlay structure and still verifies selection-only negative behavior, queue capacity/no-TTL, foreground claim, and ACK plumbing;
-- alpha release workflow and release notes updated to `.21-alpha.1`.
+- Android CI requires the overlay structure and still verifies selection-only negative behavior, queue capacity/no-TTL, foreground claim, and ACK plumbing;
+- alpha release workflow and release notes updated to `.21-alpha.1`;
+- transport/ACK implementation unchanged.
 
-Transport/ACK changes: none.
+Exact-SHA CI:
 
-## Current trial and error
+- Android `29888733469`: success;
+- Windows `29888733458`: success.
+
+Android artifact:
+
+- Actions artifact `8517492289`;
+- ZIP SHA-256 `9bae0a27c80ddd6b16d9e8d7df95153ad080cd4cd0b864ec5eebc5d914370c87`;
+- APK SHA-256 `93b85d2bd8474c874d8937e76c09ec97dde90006c4b1e8d97f448557a959c7a9`;
+- APK size `147945851` bytes;
+- signer diagnostics artifact `8517490898`;
+- signer diagnostics ZIP SHA-256 `51c29398a4bfed2699ef79268d51d73be30b762785d2257551f127c0a52f4f62`;
+- signer SHA-256 `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`;
+- expiry `2026-10-20T03:33:01Z`.
+
+The downloaded Actions ZIP digest matched GitHub's artifact digest. APK hash/size and signer diagnostics were independently verified.
+
+CI proof includes production transforms, overlay structure, selection-only negative policy, durable queue/ACK assertions, JS bundle, Kotlin/resources/unit tests, APK assembly, embedded bundle, stable signer, and artifact upload. Windows peer-ACK and validation-before-ACK tests remained green.
+
+## Trial and error
 
 Retained earlier runs:
 
@@ -123,13 +142,15 @@ Retained earlier runs:
 - final `.20` release SHA Android `29843413287` and Windows `29843413149`: passed.
 - `_probe_should_not_create.txt` was accidentally added and removed twice; net tree effect zero; no force push.
 
-Current `.21` staging:
+Current `.21` staging history:
 
 - a temporary branch-only workflow was added to try pre-final Android validation;
-- GitHub did not report a run for the newly introduced non-default-branch workflow, so it must not be counted as validation;
-- remove the temporary workflow before advancing `stability-mobile-otp`;
-- exact final Android/Windows CI and artifact metadata are still pending;
-- record every failed final run rather than deleting it.
+- GitHub did not report a run for that newly introduced non-default-branch workflow, so it was not counted as validation;
+- the temporary workflow was removed before advancing `stability-mobile-otp`;
+- a fast-forward ref update alone did not expose an Actions run;
+- a normal contents commit (`2f08e03b...`) was made to trigger exact-SHA push/PR CI;
+- both required workflows then completed successfully;
+- no force push, Ready conversion, merge, or auto-merge occurred.
 
 ## Preserve
 
@@ -150,14 +171,12 @@ Current `.21` staging:
 
 ## Next proof
 
-1. Remove the temporary branch-only workflow.
-2. Fast-forward `stability-mobile-otp` without force.
-3. Require exact-SHA Android and Windows CI success.
-4. Record failed runs, artifact ID, ZIP/APK hashes, size, signer, and expiry.
-5. Install `.21-alpha.1` in place.
-6. Enable and authorize the overlay fallback.
-7. Verify foreground runner active, then component/transport, true listener-path, and background explicit Copy in that order.
-8. Require `overlay_clipboard_manager`, Windows apply, peer ACK, and native deletion.
-9. Verify selection without Copy never creates an overlay or sends.
+1. Install `.21-alpha.1` in place without uninstalling.
+2. Enable the reliable fallback and grant Display over other apps.
+3. Verify the foreground runner is active with a fresh heartbeat.
+4. Run component/transport, true listener-path, and background explicit Copy tests in that order.
+5. Require `overlay_clipboard_manager`, native queue, foreground claim, Windows apply, peer ACK, and native deletion.
+6. Verify selection without Copy never creates an overlay or sends.
+7. Only after simple success test recents removal, lock, screen-off, long disconnect, and queue-full.
 
 CI is not target proof.
