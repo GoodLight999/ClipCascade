@@ -5,21 +5,24 @@ This is the canonical handoff.
 ## Hard constraints
 
 - repository: `GoodLight999/ClipCascade`
-- branch: `stability-mobile-otp`
-- PR: `#1`, Open and Draft
+- final branch: `stability-mobile-otp`
+- canonical PR: `#1`, Open and Draft
 - never mark Ready, merge, enable auto-merge, or force-push
+- temporary PR `#2` is validation-only and must be closed without merge
 - preserve Extended P2P Windows-applied ACK before native deletion
-- run Android and Windows CI after every final branch change
-- never claim target-device success from CI
+- run Android and Windows CI after every final-branch change
+- never claim HONOR/MagicOS success from CI
 - never commit real clipboard text, notification bodies, codes, accounts, or private URLs
 - no ADB, root, Shizuku, or `READ_LOGS`
-- the only permitted overlay path is the explicit user-authorized, fully transparent 1×1, non-touchable, immediately removed clipboard-acquisition fallback described below
+- the permitted overlay is the explicit user-authorized, transparent 1×1, non-touchable clipboard-acquisition view described below
 
-## Repository roles — do not blur them
+## Repository roles
 
 1. `Sathvik-Rao/ClipCascade` is upstream and the formal primary source.
 2. `GoodLight999/ClipCascade` is the Extended repair repository.
-3. `wuxinkami/ClipCascade_go_fork` is not upstream. It is the surviving fork of a vanished Go improvement project whose Android background outbound implementation was known to work. Treat it as a successful reference implementation, not a speculative example.
+3. `wuxinkami/ClipCascade_go_fork` is the surviving fork of a vanished Go improvement project. Its Android background outbound implementation was known to work and is the successful reference implementation, not a speculative example.
+
+Go reference revision inspected: `0ff3ba4b28daccc1a51e7c09907792bc0f8e53a8`.
 
 ## Read first
 
@@ -27,210 +30,222 @@ This is the canonical handoff.
 2. `docs/REQUIREMENTS.md`
 3. `docs/CURRENT_STATUS.md`
 4. `docs/NEXT_CHATGPT_HANDOFF.md`
-5. `docs/LATEST_GO_OVERLAY_CLIPBOARD_RECOVERY_HANDOFF.md`
-6. `docs/LATEST_FOREGROUND_RUNNER_LIFECYCLE_HANDOFF.md`
-7. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
-8. `docs/LATEST_GREEN_ARTIFACTS.md`
-9. `docs/LATEST_SYSTEM_LOCALIZED_COPY_RECOVERY_HANDOFF.md`
+5. `docs/LATEST_ALPHA21_FAILURE_ALPHA22_NATIVE_RECOVERY_HANDOFF.md`
+6. `docs/LATEST_GO_OVERLAY_CLIPBOARD_RECOVERY_HANDOFF.md`
+7. `docs/LATEST_FOREGROUND_RUNNER_LIFECYCLE_HANDOFF.md`
+8. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
+9. `docs/LATEST_GREEN_ARTIFACTS.md`
 10. `docs/LATEST_NOTIFICATION_LISTENER_ALPHA_HANDOFF.md`
 11. `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`
 
-## Current green implementation/release candidate
-
-- implementation/release SHA: `2f08e03b325eeff18ec63b1be8cbe1b08cb4f85d`
-- version: `3.2.1-extended.21-alpha.1-standalone`
-- versionCode: `320126`
-- intended tag: `v3.2.1-extended.21-alpha.1`
-- Android CI: `29888733469`, success
-- Windows CI: `29888733458`, success
-- Android Actions artifact ID: `8517492289`
-- Actions ZIP SHA-256: `9bae0a27c80ddd6b16d9e8d7df95153ad080cd4cd0b864ec5eebc5d914370c87`
-- APK SHA-256: `93b85d2bd8474c874d8937e76c09ec97dde90006c4b1e8d97f448557a959c7a9`
-- APK size: `147945851` bytes
-- signer diagnostics artifact ID: `8517490898`
-- signer diagnostics ZIP SHA-256: `51c29398a4bfed2699ef79268d51d73be30b762785d2257551f127c0a52f4f62`
-- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- artifact expiry: `2026-10-20T03:33:01Z`
-
-The Actions ZIP digest matched GitHub's recorded digest. The extracted APK hash/size and signer diagnostics were independently verified.
-
-Do not publish the alpha prerelease until the user is ready to test it. A prerelease publication requires `[alpha-release]` and matching Android/Windows success on that exact publication SHA.
-
 ## Target evidence — do not soften
 
-`.19-alpha.2` failed on HONOR:
+`.21-alpha.1` failed both decisive HONOR tests:
 
-- true NotificationListener-path self-test did not complete;
-- Android outbound failed whenever the main app UI was not open;
-- inbound continued to work.
+- the true notification-listener-path self-test failed;
+- Android-to-Windows background clipboard sending failed.
 
-`.20-alpha.1` repaired foreground-runner registration/lifecycle, but it did not reproduce the Go implementation's overlay-based clipboard acquisition. It therefore never had sufficient evidence for reliable background Copy capture.
+`.21-alpha.1` is a failed target build even though Android and Windows CI were green.
 
-`.21-alpha.1` restores the known Go clipboard-acquisition condition and is CI-green. It is still not HONOR/MagicOS proof.
+Earlier facts remain:
 
-## Complete Go-fork conclusion
+- `.19-alpha.2` also failed listener-path and UI-closed outbound;
+- Windows-to-Android receive continued to work without the main UI;
+- Android-to-Windows worked when the main UI was open on a prior build;
+- authentication, encryption, basic transport, and Windows clipboard application were therefore not globally broken.
 
-Inspected Go revision: `0ff3ba4b28daccc1a51e7c09907792bc0f8e53a8`.
+## Why `.21` failed despite using the Go link
 
-The known-working Android path:
+The known-working Go path is a complete event and ownership structure:
 
-1. Accessibility runs independently of the Activity.
-2. Accessibility starts and binds a sticky native foreground service.
-3. The foreground service owns the gomobile Go engine and connection.
-4. Copy-like Accessibility events are debounced.
-5. The service briefly adds a fully transparent 1×1 `TYPE_APPLICATION_OVERLAY` view.
-6. The overlay is non-touchable but intentionally not `FLAG_NOT_FOCUSABLE`.
-7. The service reads `ClipboardManager.primaryClip` and immediately removes the overlay.
-8. The Go engine sends via STOMP/P2S; mobile P2P is deliberately disabled.
-9. The Go implementation has no durable outbound queue and no Windows-applied peer ACK.
+1. Accessibility starts and binds a native foreground service.
+2. The service returns `START_STICKY`.
+3. The service owns overlay creation, clipboard reading, and its Go connection independently of the Activity.
+4. Accessibility accepts broad candidate events: selection change, generic clicks, notification-state changes, and announcements.
+5. Weak events wait about 1.2 seconds before requesting the native read; strong copy indications wait about 300 ms.
+6. The service creates a transparent 1×1 `TYPE_APPLICATION_OVERLAY`, reads `ClipboardManager`, and immediately removes the view.
 
-Import only the successful Android lifecycle/clipboard-acquisition structure. Never import the mobile-P2P disable or treat a WebSocket write as delivery proof.
+`.21` copied only step 6. The read still lived in Accessibility and was reached only after a semantic or exact framework-localized Copy cue. MagicOS could suppress that cue, so the overlay could compile and never execute.
 
-## `.20-alpha.1` lifecycle repair retained
+Calling `.21` Go-equivalent was incorrect.
 
-- `index.js` registers the Notifee foreground runner before `AppRegistry.registerComponent`;
-- one registration per process generation;
-- registration-only does not display/restart the notification;
-- content-free runner registered/start/heartbeat/stop timestamps;
-- heartbeat every 15 seconds, stale after 45 seconds;
-- settings expose runner active/stale;
-- tests can request bounded recovery;
-- listener-path test uses the real listener path with delayed active scans;
-- Copy detection uses semantic `ACTION_COPY` and exact Android framework-localized Copy/Copy URL labels;
-- selection alone remains inert.
+## Android 15+ notification constraint
 
-## `.21-alpha.1` clipboard acquisition
+The target runs Android 16. Android 15+ redacts detected OTP content from notifications delivered to an untrusted `NotificationListenerService`.
 
-The final transform `prepare_overlay_clipboard_acquisition.js` runs after all runner/listener transforms and:
+`.21` requested ordinary notification access but created no CompanionDeviceManager association. Extractor improvements cannot recover text already redacted by Android.
 
-- declares `SYSTEM_ALERT_WINDOW`;
-- adds a user setting, default ON, that can be disabled;
-- adds permission status and a settings shortcut in English and Japanese;
-- first attempts a normal clipboard read;
-- if the direct value is unavailable, the option is ON, and permission is granted, creates a 1×1 fully transparent `TYPE_APPLICATION_OVERLAY` view;
-- keeps `FLAG_NOT_TOUCHABLE | FLAG_NOT_TOUCH_MODAL` and intentionally omits `FLAG_NOT_FOCUSABLE`;
-- reads the actual clipboard and calls `removeViewImmediate` in `finally`;
-- records only content-free acquisition paths;
-- passes the value into the existing durable `ClipboardRelayStore`;
-- does not alter transport acceptance, peer ACK, native acknowledgement, or deletion code.
+The old same-package notification also was not a faithful external listener-path test.
 
-Selection does not call capture. The overlay can be reached only from the existing explicit Copy/OS clipboard-change capture path.
+## Current `.22-alpha.1` candidate
 
-## Overlay requirement decision
+- version: `3.2.1-extended.22-alpha.1-standalone`
+- versionCode: `320127`
+- intended tag: `v3.2.1-extended.22-alpha.1`
+- staging branch: `agent/alpha22-diagnosis`
+- validated staging SHA: `f8ec5245f9bd2eeaac6400a4f0f57d85ad6d429e`
+- temporary Draft PR: `#2`, do not merge
+- pre-final Android CI: `29915789910`, success
+- final PR #1 SHA/CI/artifacts: pending exact final-branch integration
 
-Overlay-free mode remains available, but it is not claimed to be Go-equivalent on Android 10+ or HONOR/MagicOS. If the user keeps the overlay disabled, reliable background capture cannot currently be guaranteed.
+## `.22` clipboard architecture
 
-The allowed overlay must be:
+### Native owner
 
-- explicitly authorized through Android's Display over other apps setting;
-- enabled/disabled by the user;
-- created only after an explicit Copy path requests capture;
-- 1×1, alpha 0, transparent, and non-touchable;
-- removed immediately even after read failure;
-- prohibited from changing queue or ACK semantics.
+`ClipboardAcquisitionService`:
 
-## CI proof obtained
+- is a native Android foreground service;
+- returns `START_STICKY`;
+- is started and bound by `ClipboardAccessibilityService`;
+- owns the transparent overlay;
+- owns `ClipboardManager` reads;
+- owns clipboard fingerprint comparison;
+- inserts only proven clipboard mutations into the existing durable `ClipboardRelayStore`;
+- never sends directly and never acknowledges or deletes queue items.
 
-Android `29888733469` passed:
+### Broad event entry
 
-- all production transforms in final order;
-- `.21-alpha.1 / 320126` identity;
-- early runner registration and heartbeat;
-- exact framework Copy policy and selection-only negative policy;
-- `SYSTEM_ALERT_WINDOW`, `TYPE_APPLICATION_OVERLAY`, 1×1 parameters, non-touchable/focusable flags, and immediate removal;
-- overlay gating policy unit test;
-- durable queue no-TTL/capacity/`queue_full` checks;
-- foreground claim/drain and existing ACK plumbing assertions;
-- OTP/Gmail/DAWN/Perceptron extraction tests;
+Accessibility submits probes instead of waiting exclusively for an exact Copy label:
+
+- selection change: weak probe;
+- generic click/context-click: weak probe;
+- announcement/notification-state change: weak probe;
+- semantic `ACTION_COPY` or exact active-locale Copy/Copy URL: strong probe;
+- Ctrl+C: strong probe.
+
+A selection probe records the old clipboard SHA-256 fingerprint immediately, then compares it with the delayed native overlay read. Selection without Copy therefore remains unchanged and must not queue or send.
+
+Only a one-way fingerprint is persisted. Clipboard contents do not enter diagnostics.
+
+### Overlay
+
+The native service uses:
+
+- explicit `SYSTEM_ALERT_WINDOW` authorization;
+- `TYPE_APPLICATION_OVERLAY`;
+- 1×1 size;
+- alpha 0 and transparent background;
+- `FLAG_NOT_TOUCHABLE | FLAG_NOT_TOUCH_MODAL`;
+- no `FLAG_NOT_FOCUSABLE`;
+- immediate removal after the read, including failure paths.
+
+## `.22` notification trust and self-test
+
+### Companion association
+
+On Android 15+ settings require a user-confirmed self-managed CompanionDeviceManager association before notification setup is considered complete.
+
+After association, ClipCascade requests notification access through `CompanionDeviceManager.requestNotificationAccess`.
+
+This is the platform-supported route for the Android 15 OTP-redaction exception, but it remains HONOR-target-unproven.
+
+### External listener test
+
+The true listener test now requires a second APK:
+
+- package: `com.clipcascade.extended.testnotifier`;
+- same stable public test signature as the main APK;
+- Activity protected by signature permission;
+- posts a normal external message notification containing a newly generated fake code.
+
+The main app launches the helper. The fake value must pass through Android NotificationListenerService, extraction, persistent queue, foreground claim, transport, Windows application, peer ACK, and native deletion. No direct queue insertion is allowed.
+
+The deterministic component/transport test remains separate and is explicitly not NotificationListener proof.
+
+## ACK boundary — preserve exactly
+
+`NATIVE_QUEUE -> NATIVE_IN_FLIGHT -> FOREGROUND_RUNNER_CLAIM -> LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_VALIDATE -> WINDOWS_APPLY -> PEER_ACK -> NATIVE_ACK -> DELETE`
+
+Also preserve:
+
+- ordinary queue has no TTL;
+- no accepted-item eviction;
+- capacity 16 and explicit `queue_full`;
+- internal-write echo suppression;
+- opaque relay IDs and bounded native claims;
+- validation before peer ACK;
+- generation-scoped old-peer compatibility fallback;
+- notification receipt guard;
+- debug notification default OFF and outside ACK logic.
+
+## Pre-final validation obtained
+
+Draft PR #2 staging SHA `f8ec5245...` passed Android CI `29915789910` through:
+
+- all production transforms;
+- final generated-source ownership and ACK assertions;
 - JavaScript bundle;
-- Kotlin/resources/unit tests;
-- APK assembly, embedded bundle, stable signer, and artifact upload.
+- Kotlin unit tests;
+- main APK compilation/assembly;
+- external test-sender APK compilation/assembly;
+- matching signer verification for both APKs;
+- artifact upload.
 
-Windows `29888733458` passed authenticated HTTP, P2P peer ACK, validation-before-ACK, shutdown/tray tests, and EXE packaging. No Windows implementation source was changed.
+Staging artifact metadata:
 
-## Final Android transform order
+- artifact ID: `8527934136`;
+- ZIP SHA-256: `8632fb589b7e4870eea32a8c70f94362216a5c30b49172eb8c3cc0905a596ce8`;
+- main APK SHA-256: `bf83d9c127ea714932ec429b7a662760f04e125821eb4fe01dcdc2dd0a6f6dd1`;
+- main size: `147968683` bytes;
+- helper APK SHA-256: `61e9183d4eb93fedb80e1ea0b624663516f61fc2a2e5752df985aee9066b6e2b`;
+- helper size: `831357` bytes;
+- signer SHA-256 for both: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`.
 
-`prepare_relay_claim.js` ends with:
+These are staging artifacts only. Do not distribute them as final PR #1 artifacts.
 
-1. `prepare_internal_clipboard_guard.js`
-2. `prepare_language_neutral_clipboard_copy.js`
-3. `prepare_ack_safe_queue_overflow.js`
-4. `prepare_gmail_ja_anchor_compat.js`
-5. `prepare_gmail_notification_reliability.js`
-6. `prepare_debug_notification_icon_compat.js`
-7. `prepare_notification_listener_alpha_hardening.js`
-8. `prepare_system_localized_copy_recovery.js`
-9. `prepare_foreground_queue_drain.js`
-10. `prepare_foreground_runner_lifecycle.js`
-11. `prepare_foreground_runner_lifecycle_fixups.js`
-12. `prepare_overlay_clipboard_acquisition.js`
+## Required final integration procedure
 
-Do not move the final transform earlier. It patches the final generated Accessibility/settings/manifest sources and must not be overwritten.
+1. Finish requirements, status, test matrix, release, and handoff documents on `agent/alpha22-diagnosis`.
+2. Verify PR #1 remains Open and Draft.
+3. Fast-forward `stability-mobile-otp` without force.
+4. Create a normal contents commit if a ref-only update does not trigger Actions.
+5. Require exact-SHA Android and Windows CI success.
+6. Download the final Android artifact and independently record both APK hashes, sizes, signatures, artifact ID, and expiry.
+7. Update final artifact/handoff documents.
+8. Require Android and Windows CI on that final handoff HEAD as well.
+9. Close PR #2 without merge.
+10. Update PR #1 body and verify it remains Open, Draft, and unmerged.
 
 ## Required target test order
 
-1. Install `.21-alpha.1` over the existing signed build; do not uninstall.
-2. Disable Phone Link and all competing clipboard synchronizers.
-3. Open Extended settings.
-4. Enable the reliable background clipboard fallback and grant Display over other apps.
-5. Confirm `Foreground transport runner: active` / `常駐通信ランナー: 動作中` and a fresh heartbeat for at least 60 seconds.
-6. Clear diagnostics and temporarily enable outbound debug.
-7. Run deterministic component/transport test.
-8. Require native queue, foreground claim, debug after transport acceptance, one Windows apply, peer ACK, and native deletion.
-9. Run the true NotificationListener-path test and record connected/test/seen/eligible/text/auth/queued/claim/debug/Windows/ACK/deletion.
-10. Leave the main UI without force-stop and explicitly Copy one unique value.
-11. Require Copy detection, `overlay_clipboard_manager`, queue, foreground claim, debug, one Windows apply, peer ACK, and deletion.
-12. Select text without Copy and require no overlay/capture/queue/Windows change.
-13. Disable the overlay and repeat a background Copy as an explicit control. A failure there demonstrates the non-overlay fallback is insufficient; it does not invalidate the overlay path.
-14. Only after simple success test recents removal, lock, screen-off, disconnect durability, and queue-full.
+1. Install the `.22` main APK over the existing signed build; do not uninstall.
+2. Install the external notification test-sender APK.
+3. Disable Phone Link and all competing clipboard synchronizers.
+4. Allow Display over other apps and enable ClipCascade Accessibility.
+5. Complete the trusted companion association shown in settings.
+6. Grant notification access through the companion flow.
+7. Confirm the existing transport runner is active and the native clipboard acquisition service has started/bound.
+8. Run the deterministic component/transport test and require queue -> claim -> one Windows apply -> peer ACK -> native deletion.
+9. Run the external listener-path test and require helper notification -> seen -> eligible -> text -> extraction -> queue -> claim -> Windows -> ACK/delete.
+10. Leave the main UI without force-stop, select a unique value, explicitly Copy, and require pre-selection baseline -> changed fingerprint -> overlay read -> queue -> claim -> Windows -> ACK/delete.
+11. Select text without Copy and require unchanged fingerprint, no queue, and no Windows change.
+12. Only after simple success test recents removal, lock, screen off, long disconnect, queue full, and exactly-once behavior.
 
 ## Failure map
 
-- runner inactive: Notifee/process lifecycle failure;
-- component queued, no runner claim: foreground poll/module failure;
-- runner claim, no debug: transport acceptance failure;
-- Copy cue but `overlay_permission_missing`: setup failure;
-- Copy cue and `overlay_add_failed`: WindowManager/OEM overlay failure;
-- `overlay_clipboard_empty` or denied: overlay did not obtain clipboard access on target;
-- selection remembered but no Copy cue: target app exposes no usable explicit Copy event;
-- capture queued but no claim: foreground drain failure;
-- debug but no Windows: peer transport/application failure;
-- Windows applied but queue remains: peer ACK/native deletion failure;
-- listener connected but test unseen: HONOR listener delivery/rescan failure;
-- listener text/auth but no queue: extractor/receipt boundary.
-
-## Preserve exactly
-
-- internal-write echo suppression;
-- no selection-only sends;
-- ordinary queue has no TTL and never evicts accepted items;
-- capacity 16 and `queue_full`;
-- opaque relay IDs and bounded native claims;
-- validation before ACK;
-- Windows apply before peer ACK;
-- peer ACK before native deletion;
-- old-peer generation-scoped fallback;
-- notification receipt guard;
-- debug notification default OFF and ACK isolation.
+- native acquisition service not started/bound: Accessibility/native-service lifecycle failure;
+- probe recorded but no delayed observation: native debounce/service failure;
+- `overlay_permission_missing`: setup failure;
+- overlay empty/denied: MagicOS did not grant clipboard access;
+- unchanged fingerprint after explicit Copy: app/OEM copied the same old value or event/read timing failed;
+- changed fingerprint but no queue: dedup/queue-full/storage boundary;
+- queued but no foreground claim: existing transport runner drain failure;
+- claim but no debug/local acceptance: transport failure;
+- Windows apply but queue remains: peer ACK/native deletion failure;
+- helper APK cannot launch: install/signature permission failure;
+- external notification unseen: HONOR notification-listener delivery failure;
+- seen/eligible but text empty or redacted: companion association/trust failure;
+- text available but no extraction: extractor boundary.
 
 ## Trial and error
 
-Earlier retained failures:
+Retain all earlier `.20`/`.21` CI runs and their target failures.
 
-- Android `29842404023`: transform anchor failure; no APK.
-- Android `29842757548`: localized resource anchor failure; no APK.
-- Android `29843090432` and Windows `29843090421`: `.20` implementation green.
-- Android `29843413287` and Windows `29843413149`: `.20` release SHA green.
-- `_probe_should_not_create.txt` was accidentally added/removed twice; net tree effect zero; no force push.
+Current `.22` history:
 
-Current `.21` work:
+- a non-default-branch diagnostic workflow did not report a run and is not counted;
+- temporary Draft PR #2 was created to trigger a real pull-request CI without touching PR #1;
+- Android `29915789910` passed full staging validation;
+- no force push, merge, Ready conversion, or auto-merge occurred.
 
-- fully inspected Go Android service, Accessibility, manifest, boot receiver, gomobile bridge, and Go engine;
-- corrected the earlier incomplete claim that `.20` had sufficient background-capture evidence;
-- added the Go-proven overlay acquisition transform without modifying Extended transport/ACK code;
-- a temporary branch-only validation workflow did not run and was removed before the final branch advance;
-- exact implementation SHA Android and Windows CI are green;
-- artifact ZIP, APK, size, signer, and expiry are recorded above;
-- the next proof is HONOR/MagicOS target testing, not further claims from CI.
-
-PR #1 must remain Draft. CI is not HONOR proof.
+PR #1 must remain Open and Draft. CI is not HONOR proof.
