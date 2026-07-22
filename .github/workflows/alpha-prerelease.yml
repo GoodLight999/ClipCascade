@@ -15,10 +15,11 @@ jobs:
     timeout-minutes: 35
     env:
       GH_TOKEN: ${{ github.token }}
-      ALPHA_TAG: v3.2.1-extended.21-alpha.1
-      ALPHA_TITLE: ClipCascade Extended 3.2.1-extended.21-alpha.1
-      APK_NAME: ClipCascade-Extended-3.2.1-extended.21-alpha.1.apk
-      ZIP_NAME: ClipCascade-Extended-3.2.1-extended.21-alpha.1.zip
+      ALPHA_TAG: v3.2.1-extended.22-alpha.1
+      ALPHA_TITLE: ClipCascade Extended 3.2.1-extended.22-alpha.1
+      MAIN_APK: ClipCascade-Extended-3.2.1-extended.22-alpha.1.apk
+      TEST_APK: ClipCascade-Notification-Test-Sender-22-alpha.1.apk
+      ZIP_NAME: ClipCascade-Extended-3.2.1-extended.22-alpha.1.zip
     steps:
       - name: Checkout release source
         uses: actions/checkout@v4
@@ -56,30 +57,33 @@ jobs:
           echo "android_run=${android_run}" >> "${GITHUB_OUTPUT}"
           echo "windows_run=${windows_run}" >> "${GITHUB_OUTPUT}"
 
-      - name: Download verified Android artifact
+      - name: Download verified Android artifacts
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p release-assets
+          mkdir -p release-assets/downloaded
           gh run download "${{ steps.ci.outputs.android_run }}" \
             --repo "${GITHUB_REPOSITORY}" \
             --name ClipCascade-Extended-standalone \
             --dir release-assets/downloaded
-          test -s release-assets/downloaded/app-debug.apk
-          cp release-assets/downloaded/app-debug.apk "release-assets/${APK_NAME}"
+          test -s "release-assets/downloaded/${MAIN_APK}"
+          test -s "release-assets/downloaded/${TEST_APK}"
+          cp "release-assets/downloaded/${MAIN_APK}" "release-assets/${MAIN_APK}"
+          cp "release-assets/downloaded/${TEST_APK}" "release-assets/${TEST_APK}"
           (
             cd release-assets
-            zip -9 "${ZIP_NAME}" "${APK_NAME}"
-            sha256sum "${APK_NAME}" "${ZIP_NAME}" > SHA256SUMS.txt
+            zip -9 "${ZIP_NAME}" "${MAIN_APK}" "${TEST_APK}"
+            sha256sum "${MAIN_APK}" "${TEST_APK}" "${ZIP_NAME}" > SHA256SUMS.txt
           )
 
       - name: Verify release source and signer metadata
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.21-alpha.1" ClipCascade_Mobile/src/scripts/prepare_extended_version.js
-          grep -q "versionCode 320126" .github/workflows/android-mobile-ci.yml
-          test -s docs/RELEASE_NOTES_3.2.1_EXTENDED_21_ALPHA_1.md
+          grep -q "3.2.1-extended.22-alpha.1" ClipCascade_Mobile/src/scripts/prepare_extended_version.js
+          grep -q "versionCode 320127" .github/workflows/android-mobile-ci.yml
+          grep -q "notification-test-sender" .github/workflows/android-mobile-ci.yml
+          test -s docs/RELEASE_NOTES_3.2.1_EXTENDED_22_ALPHA_1.md
           cat release-assets/SHA256SUMS.txt
 
       - name: Create or refresh GitHub prerelease
@@ -95,12 +99,13 @@ jobs:
             gh release edit "${ALPHA_TAG}" \
               --repo "${GITHUB_REPOSITORY}" \
               --title "${ALPHA_TITLE}" \
-              --notes-file docs/RELEASE_NOTES_3.2.1_EXTENDED_21_ALPHA_1.md \
+              --notes-file docs/RELEASE_NOTES_3.2.1_EXTENDED_22_ALPHA_1.md \
               --prerelease
             gh release upload "${ALPHA_TAG}" \
               --repo "${GITHUB_REPOSITORY}" \
               --clobber \
-              "release-assets/${APK_NAME}" \
+              "release-assets/${MAIN_APK}" \
+              "release-assets/${TEST_APK}" \
               "release-assets/${ZIP_NAME}" \
               release-assets/SHA256SUMS.txt
           else
@@ -108,9 +113,10 @@ jobs:
               --repo "${GITHUB_REPOSITORY}" \
               --target "${GITHUB_SHA}" \
               --title "${ALPHA_TITLE}" \
-              --notes-file docs/RELEASE_NOTES_3.2.1_EXTENDED_21_ALPHA_1.md \
+              --notes-file docs/RELEASE_NOTES_3.2.1_EXTENDED_22_ALPHA_1.md \
               --prerelease \
-              "release-assets/${APK_NAME}" \
+              "release-assets/${MAIN_APK}" \
+              "release-assets/${TEST_APK}" \
               "release-assets/${ZIP_NAME}" \
               release-assets/SHA256SUMS.txt
           fi
