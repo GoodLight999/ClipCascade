@@ -1,54 +1,74 @@
-# Latest Green Artifacts and Pending Candidate — 2026-07-22
+# Latest Green Artifacts — 2026-07-22
 
-## Latest confirmed green artifact
-
-The latest fully recorded green artifact remains `.20-alpha.1` until `.21-alpha.1` completes exact-SHA Android and Windows CI.
-
-### Source
+## Source
 
 - repository: `GoodLight999/ClipCascade`
 - branch: `stability-mobile-otp`
-- implementation/release anchor: `290d6690e749fe34367b2383676faf27c0a4ba76`
-- intended alpha tag: `v3.2.1-extended.20-alpha.1`
+- implementation/release SHA: `2f08e03b325eeff18ec63b1be8cbe1b08cb4f85d`
+- intended alpha tag: `v3.2.1-extended.21-alpha.1`
 - PR: `#1`, Open and Draft
 
-### CI
+## Exact implementation CI
 
-- Android standalone CI `29843413287` — success
-- Desktop Windows CI `29843413149` — success
+- Android standalone CI `29888733469` — success
+- Desktop Windows CI `29888733458` — success
 
-### Android artifact
+Android CI passed:
+
+- every production transform in final order;
+- version `3.2.1-extended.21-alpha.1 / 320126`;
+- index-level foreground-runner registration before `AppRegistry.registerComponent`;
+- runner heartbeat and stale-state diagnostics;
+- exact framework-localized Copy candidates and semantic Copy handling;
+- selection-only negative behavior;
+- explicit `SYSTEM_ALERT_WINDOW` declaration;
+- transparent 1×1 `TYPE_APPLICATION_OVERLAY` acquisition path;
+- non-touchable but intentionally focusable overlay flags;
+- immediate `removeViewImmediate` cleanup in `finally`;
+- overlay enable/permission gating policy and unit test;
+- ordinary queue no-TTL, capacity 16, and `queue_full` invariants;
+- foreground native queue claim/drain and existing ACK plumbing assertions;
+- DAWN/Gmail/Perceptron/Beeper/multilingual/negative extractor tests;
+- JavaScript bundle;
+- Kotlin/resources and unit tests;
+- APK assembly and embedded bundle;
+- deterministic signer verification;
+- artifact upload.
+
+Windows CI passed authenticated HTTP handling, Extended P2P peer-applied ACK, validation-before-ACK, shutdown/tray behavior, tests, and EXE packaging. No Windows implementation source changed for `.21-alpha.1`.
+
+## Android artifact
 
 - application: `ClipCascade Extended`
 - package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.20-alpha.1-standalone`
-- versionCode: `320125`
-- Actions artifact ID: `8500372630`
-- Actions artifact ZIP SHA-256: `ba2152241fdfe8c5bb99e3087b8781faa15915a281df3e10a9e8065fad177660`
-- APK SHA-256: `1b48a7bb7e6d4ab757a3a044fda233e8363ce58d6d634b071e7f90a90ac35cbe`
-- APK size: `147937563` bytes
-- signer diagnostics artifact ID: `8500368947`
-- signer diagnostics ZIP SHA-256: `74aa5e5b0e966abc73e1e0d68750564e051fb0f4e9f270f84c05a0dda0c92e57`
-- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- artifact expiry: `2026-10-19T15:19:19Z`
-
-The downloaded Actions ZIP digest matched GitHub's artifact digest. The extracted APK and signer diagnostics were independently verified.
-
-## Pending `.21-alpha.1` candidate
-
-- implementation/release candidate: `2ede4caf7b59b0cb9d56f06aa976e4d61c63be18`
-- first handoff tree advanced by fast-forward to: `75d1d5ddca6c7197a13668e0a3883034f5ea0092`
 - versionName: `3.2.1-extended.21-alpha.1-standalone`
 - versionCode: `320126`
-- intended tag: `v3.2.1-extended.21-alpha.1`
-- Android CI: pending for the exact current handoff SHA
-- Windows CI: pending for the exact current handoff SHA
-- Actions artifact: pending
-- ZIP/APK hash, size, signer diagnostics, and expiry: pending
+- Actions artifact ID: `8517492289`
+- Actions artifact ZIP SHA-256: `9bae0a27c80ddd6b16d9e8d7df95153ad080cd4cd0b864ec5eebc5d914370c87`
+- APK SHA-256: `93b85d2bd8474c874d8937e76c09ec97dde90006c4b1e8d97f448557a959c7a9`
+- APK size: `147945851` bytes
+- signer diagnostics artifact ID: `8517490898`
+- signer diagnostics ZIP SHA-256: `51c29398a4bfed2699ef79268d51d73be30b762785d2257551f127c0a52f4f62`
+- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- artifact expiry: `2026-10-20T03:33:01Z`
 
-`.21-alpha.1` adds the explicit user-authorized Go-proven 1×1 transparent overlay clipboard-acquisition fallback. It preserves the existing Extended queue and Windows-applied peer ACK.
+The downloaded Actions ZIP digest matched GitHub's artifact digest. The extracted APK hash/size and signer diagnostics were independently verified.
 
-Do not replace the confirmed `.20` artifact metadata above until the `.21` exact-SHA Android and Windows runs are both successful and the downloaded artifact is independently hashed.
+## Local filenames
+
+- `/mnt/data/ClipCascade-Extended-3.2.1-extended.21-alpha.1-actions.zip`
+- `/mnt/data/ClipCascade-Extended-3.2.1-extended.21-alpha.1-vc320126-2f08e03.apk`
+- `/mnt/data/ClipCascade-Android-signer-diagnostics-21-alpha1.zip`
+
+## Go-reference scope
+
+The known-working Go implementation used a sticky native foreground service and a temporary transparent 1×1 application overlay to obtain the actual clipboard in the background.
+
+`.21-alpha.1` imports that clipboard-acquisition condition while retaining Extended's durable queue and this acknowledgement order:
+
+`NATIVE_QUEUE -> NATIVE_IN_FLIGHT -> FOREGROUND_RUNNER_CLAIM -> LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_VALIDATE -> WINDOWS_APPLY -> PEER_ACK -> NATIVE_ACK -> DELETE`
+
+It does not import the Go mobile transport, does not disable Extended P2P, and does not treat a socket write as Windows clipboard application.
 
 ## Target truth
 
@@ -56,20 +76,23 @@ Do not replace the confirmed `.20` artifact metadata above until the `.21` exact
 
 `.20-alpha.1` repaired foreground-runner registration but did not reproduce the known-working Go overlay acquisition condition.
 
-`.21-alpha.1` restores that condition in source, but CI cannot prove HONOR/MagicOS success.
+`.21-alpha.1` restores that condition and is Android/Windows CI-green. CI still cannot prove HONOR/MagicOS success.
 
 ## Not proven by CI
 
 - in-place update/settings retention;
 - overlay permission and WindowManager behavior on HONOR;
 - fresh runner heartbeat after UI closure;
-- component/transport self-test on target;
+- deterministic component/transport self-test on target;
 - true listener-path self-test on target;
 - background explicit Copy producing `overlay_clipboard_manager`;
 - selection-only no-overlay/no-send behavior on target apps;
 - removed-from-recents, locked, or screen-off outbound;
 - real Gmail/DAWN/Perceptron listener delivery/extras;
+- queue-full and long-disconnect durability;
 - exactly-once target behavior;
 - battery and tray behavior.
+
+This documentation commit is the final handoff-head CI trigger. Record its Android and Windows run IDs in the PR handoff after both complete; do not create another documentation commit merely to self-reference those run IDs.
 
 Keep PR #1 Open and Draft.
