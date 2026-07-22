@@ -1,19 +1,27 @@
-# Alpha 22 Final Integration Trigger
+# Alpha 22 Final Integration and Handoff Trigger
 
-The validated `agent/alpha22-diagnosis` tree was fast-forwarded without force to `stability-mobile-otp` from staging code/document HEAD:
+The validated `.22-alpha.1` implementation and finalized handoff documents were fast-forwarded without force to `stability-mobile-otp`.
 
-- staging HEAD: `ba5b7c4eb9b7252f70c3fd89736c2c0ab2768fd2`
-- staging Android CI: `29916941772`, success
+## Implementation/release candidate
+
+- implementation/release SHA: `29febc3e7a83575564145d470c4143b5b92e42f4`
+- Android CI: `29917141620`, success
+- Windows CI: `29917141540`, success
+- artifact ID: `8528455362`
+- main and helper APKs independently hashed and signer-matched
+
+## Finalized handoff-document tree
+
+- document staging HEAD: `cfb3c1259da504984c0e63b9384a45de3fbadcef`
 - canonical PR: `#1`, must remain Open and Draft
-- temporary validation PR: `#2`, must be closed without merge after final verification
+- temporary validation PR: `#2`, must be closed without merge
 
-This contents commit exists to trigger exact-SHA push workflows after the fast-forward ref update. Its resulting commit SHA is the final implementation/release candidate anchor for `.22-alpha.1` unless a later implementation change is made.
+This contents commit exists to trigger Android and Windows workflows for the exact final handoff HEAD. No implementation source changed after the verified implementation/release SHA.
 
-Required before target testing:
+After both workflows succeed:
 
-- exact-SHA Android CI success;
-- exact-SHA Windows CI success;
-- final Android artifact downloaded and independently hashed;
-- main and helper APK signer equality verified;
-- final handoff documents updated and revalidated;
-- CI must not be treated as HONOR/MagicOS functional proof.
+- close PR #2 without merge;
+- update PR #1 body with the exact final handoff SHA and artifact metadata;
+- verify PR #1 remains Open, Draft, and unmerged;
+- distribute both APKs for target testing;
+- do not treat CI as HONOR/MagicOS functional proof.
