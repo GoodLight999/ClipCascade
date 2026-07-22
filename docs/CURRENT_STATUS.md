@@ -12,22 +12,31 @@ The user confirmed:
 
 - the true notification-listener-path self-test failed;
 - Android-to-Windows background clipboard sending failed;
-- therefore `.21-alpha.1` did not recover either decisive Priority 1 path.
+- `.21-alpha.1` therefore did not recover either decisive Priority 1 path.
 
 Do not describe `.21-alpha.1` as fixed, partially fixed, or target-proven.
 
-## Current development candidate
+`.22-alpha.1` is Android/Windows CI-green but has not yet been tested on the target. Do not claim it fixes either path until the HONOR rows pass.
 
+## Current implementation/release candidate
+
+- implementation/release SHA: `29febc3e7a83575564145d470c4143b5b92e42f4`
 - versionName: `3.2.1-extended.22-alpha.1-standalone`
 - versionCode: `320127`
 - intended tag: `v3.2.1-extended.22-alpha.1`
-- staging branch: `agent/alpha22-diagnosis`
-- pre-final staging SHA: `f8ec5245f9bd2eeaac6400a4f0f57d85ad6d429e`
-- temporary validation PR: `#2`, Draft, never merge
-- staging Android CI: `29915789910`, success
-- final `stability-mobile-otp` SHA/CI/artifact: pending integration
+- Android CI: `29917141620`, success
+- Windows CI: `29917141540`, success
+- artifact ID: `8528455362`
+- artifact ZIP SHA-256: `61cba5012ebc412d0075c165b29fb6a5d4ded79f1ad8a28a993218c722717539`
+- main APK SHA-256: `ac6fe987eb3e4a469abcdc53bc552313f752c8780a27498a8abf7aa89c8a681a`
+- main APK size: `147968683` bytes
+- helper APK SHA-256: `61e9183d4eb93fedb80e1ea0b624663516f61fc2a2e5752df985aee9066b6e2b`
+- helper APK size: `831357` bytes
+- signer diagnostics artifact: `8528452879`
+- signer SHA-256 for both APKs: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- artifact expiry: `2026-10-20T11:48:52Z`
 
-PR #1 has not yet received `.22` at the time of this status snapshot.
+The downloaded ZIP digest matched GitHub. Both APK hashes/sizes matched the packaged checksum file, and both signer records matched the stable certificate.
 
 ## Why `.21` failed despite the Go reference
 
@@ -37,10 +46,10 @@ The known-working Go Android implementation is not merely an overlay helper. Its
 2. The service returns `START_STICKY` and survives independently of the Activity.
 3. The service owns overlay creation and clipboard reading.
 4. Accessibility accepts broad candidate events, including selection changes and generic clicks.
-5. Weak candidates wait about 1.2 seconds, then request a native clipboard read.
-6. The service adds a transparent 1×1 application overlay, reads `ClipboardManager`, and immediately removes the overlay.
+5. Weak candidates wait about 1.2 seconds before requesting a native read.
+6. The service adds a transparent 1×1 application overlay, reads `ClipboardManager`, and immediately removes it.
 
-`.21` copied only the final overlay/read primitive. It kept the read inside Accessibility and reached it only after a semantic or exact framework-localized Copy cue. MagicOS could suppress that cue, so the overlay implementation could compile without ever executing.
+`.21` copied only the final overlay/read primitive. It kept the read inside Accessibility and reached it only after a semantic or exact framework-localized Copy cue. MagicOS could suppress that cue, so the overlay could compile without ever executing.
 
 Calling `.21` Go-equivalent was incorrect.
 
@@ -57,7 +66,7 @@ Calling `.21` Go-equivalent was incorrect.
 - inserts only confirmed mutations into the existing `ClipboardRelayStore`;
 - does not own or replace Extended transport.
 
-Accessibility now submits broad probes:
+Accessibility submits broad probes:
 
 - selection change: weak mutation probe;
 - generic click/context-click: weak mutation probe;
@@ -65,9 +74,11 @@ Accessibility now submits broad probes:
 - semantic `ACTION_COPY` or exact system-localized Copy label: strong probe;
 - Ctrl+C: strong probe.
 
-A selection probe records the old clipboard SHA-256 fingerprint immediately and compares it with the delayed native read. Selection without Copy therefore produces an unchanged fingerprint and must not queue or send.
+A selection probe records the old clipboard SHA-256 fingerprint immediately and compares it with the delayed native read. Selection without Copy therefore remains unchanged and must not queue or send.
 
-Only the fingerprint is persisted. Clipboard content is not stored in diagnostics.
+Only the one-way fingerprint is persisted. Clipboard content is not stored in diagnostics.
+
+Reliable mode uses the Go-style overlay. When reliable mode is disabled, a normal `ClipboardManager` read remains available for foreground/control behavior but is not described as reliable background acquisition.
 
 ## Android 15+ notification constraint
 
@@ -77,11 +88,11 @@ The target runs Android 16. Android 15+ redacts detected OTP contents from notif
 
 `.22` adds:
 
-- a self-managed CompanionDeviceManager association flow;
+- self-managed CompanionDeviceManager association;
 - user confirmation and display name;
 - association status in English/Japanese settings;
 - notification-access request through `CompanionDeviceManager.requestNotificationAccess`;
-- a non-exported NotificationListenerService.
+- non-exported NotificationListenerService.
 
 This is the platform-supported trust route, but HONOR behavior remains target-unproven.
 
@@ -96,7 +107,7 @@ The old same-package notification is no longer treated as the true listener-path
 - protected by a signature permission;
 - posts a normal external notification containing a newly generated fake code.
 
-The main APK launches that helper. Success requires Android NotificationListenerService delivery, text collection, extraction, durable queue insertion, transport, Windows application, peer ACK, and native deletion. The listener test performs no direct queue insertion.
+The main APK launches the helper. Success requires Android NotificationListenerService delivery, text collection, extraction, durable queue insertion, transport, Windows application, peer ACK, and native deletion. The listener test performs no direct queue insertion.
 
 ## ACK path — preserve exactly
 
@@ -114,29 +125,24 @@ Also preserved:
 - generation-scoped old-peer compatibility fallback;
 - debug notification default OFF and outside ACK logic.
 
-## Pre-final validation evidence
+## Validation evidence
 
-Draft PR #2 Android CI `29915789910` succeeded through:
+Temporary Draft PR #2 established buildability before final integration. Final exact-SHA CI then passed on PR #1's branch.
+
+Final Android CI verified:
 
 - all production transforms;
-- final generated-source invariants;
+- native service ownership and bind path;
+- broad probes and fingerprint policy unit tests;
+- queue and ACK invariants;
+- CompanionDeviceManager and external helper sources;
 - JavaScript bundle;
 - Kotlin unit tests;
-- main APK compilation and assembly;
-- external test-sender APK compilation and assembly;
-- matching stable-signer verification for both APKs;
+- main and helper APK assembly;
+- matching signer verification;
 - artifact upload.
 
-Staging artifact:
-
-- artifact ID: `8527934136`;
-- artifact ZIP SHA-256: `8632fb589b7e4870eea32a8c70f94362216a5c30b49172eb8c3cc0905a596ce8`;
-- staging main APK SHA-256: `bf83d9c127ea714932ec429b7a662760f04e125821eb4fe01dcdc2dd0a6f6dd1`;
-- staging main APK size: `147968683` bytes;
-- staging helper APK SHA-256: `61e9183d4eb93fedb80e1ea0b624663516f61fc2a2e5752df985aee9066b6e2b`;
-- staging helper APK size: `831357` bytes.
-
-These are staging artifacts, not the final PR #1 deliverables.
+Windows CI reverified the existing P2P peer-ACK, validation-before-ACK, shutdown/tray, tests, and EXE package.
 
 ## Not proven
 
@@ -156,5 +162,6 @@ CI still does not prove:
 - battery and Windows tray behavior.
 
 Canonical handoff: `docs/NEXT_CHATGPT_HANDOFF.md`.  
+Artifact record: `docs/LATEST_GREEN_ARTIFACTS.md`.  
 Detailed failure/redesign record: `docs/LATEST_ALPHA21_FAILURE_ALPHA22_NATIVE_RECOVERY_HANDOFF.md`.  
-PR #1 must remain Open and Draft. PR #2 must be closed without merge after final integration validation.
+PR #1 must remain Open and Draft. Temporary PR #2 must be closed without merge after the final handoff is green.
