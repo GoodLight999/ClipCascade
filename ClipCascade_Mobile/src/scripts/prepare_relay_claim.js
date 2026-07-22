@@ -58,11 +58,9 @@ serviceSource = serviceSource.replace('              if (!accepted && peerAckReq
 `);
 fs.writeFileSync(servicePath, serviceSource, 'utf8');
 
-// These must run after every transport/listener transform. First guard the final
-// Clipboard.setString call sites, then install the ACK-safe queue, notification
-// listener hardening, Android-framework-localized Copy fallback, native queue
-// draining, process-recreation-safe foreground runner lifecycle, and finally the
-// user-authorized Go-proven overlay clipboard acquisition path.
+// Canonical transforms. Alpha.22 runs last because it replaces the final
+// generated Accessibility and NotificationListener implementations while
+// preserving the already-installed durable queue and peer-ACK transport path.
 require('./prepare_internal_clipboard_guard.js');
 require('./prepare_language_neutral_clipboard_copy.js');
 require('./prepare_ack_safe_queue_overflow.js');
@@ -75,3 +73,8 @@ require('./prepare_foreground_queue_drain.js');
 require('./prepare_foreground_runner_lifecycle.js');
 require('./prepare_foreground_runner_lifecycle_fixups.js');
 require('./prepare_overlay_clipboard_acquisition.js');
+require('./prepare_alpha22_clipboard_service.js');
+require('./prepare_alpha22_accessibility_bridge.js');
+require('./prepare_alpha22_companion_and_test_launcher.js');
+require('./prepare_alpha22_external_listener.js');
+require('./prepare_alpha22_manifest_ui.js');
