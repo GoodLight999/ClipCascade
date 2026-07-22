@@ -61,7 +61,8 @@ fs.writeFileSync(servicePath, serviceSource, 'utf8');
 // These must run after every transport/listener transform. First guard the final
 // Clipboard.setString call sites, then install the ACK-safe queue, notification
 // listener hardening, Android-framework-localized Copy fallback, native queue
-// draining, and finally the process-recreation-safe foreground runner lifecycle.
+// draining, process-recreation-safe foreground runner lifecycle, and finally the
+// user-authorized Go-proven overlay clipboard acquisition path.
 require('./prepare_internal_clipboard_guard.js');
 require('./prepare_language_neutral_clipboard_copy.js');
 require('./prepare_ack_safe_queue_overflow.js');
@@ -73,3 +74,4 @@ require('./prepare_system_localized_copy_recovery.js');
 require('./prepare_foreground_queue_drain.js');
 require('./prepare_foreground_runner_lifecycle.js');
 require('./prepare_foreground_runner_lifecycle_fixups.js');
+require('./prepare_overlay_clipboard_acquisition.js');
