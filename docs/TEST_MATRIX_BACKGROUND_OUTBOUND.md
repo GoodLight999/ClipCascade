@@ -2,19 +2,20 @@
 
 Disable Phone Link and every competing clipboard synchronizer before every row. Never record real clipboard contents, notification bodies, verification values, account identifiers, or private URLs.
 
-## Current build candidate
+## Current green build
 
-- [x] implementation/release candidate `2ede4caf7b59b0cb9d56f06aa976e4d61c63be18`
+- [x] implementation/release `2f08e03b325eeff18ec63b1be8cbe1b08cb4f85d`
 - [x] intended tag `v3.2.1-extended.21-alpha.1`
 - [x] version `3.2.1-extended.21-alpha.1-standalone`
 - [x] versionCode `320126`
-- [ ] exact final Android CI green
-- [ ] exact final Windows CI green
-- [ ] artifact ID recorded
-- [ ] ZIP SHA-256 recorded
-- [ ] APK SHA-256 recorded
-- [ ] APK size recorded
-- [ ] signer equals `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- [x] Android CI `29888733469`, success
+- [x] Windows CI `29888733458`, success
+- [x] artifact ID `8517492289`
+- [x] ZIP SHA-256 `9bae0a27c80ddd6b16d9e8d7df95153ad080cd4cd0b864ec5eebc5d914370c87`
+- [x] APK SHA-256 `93b85d2bd8474c874d8937e76c09ec97dde90006c4b1e8d97f448557a959c7a9`
+- [x] APK size `147945851` bytes
+- [x] signer `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- [x] artifact expiry `2026-10-20T03:33:01Z`
 - [ ] in-place installation succeeds
 - [ ] settings and permissions retained
 
