@@ -4,95 +4,97 @@
 
 - repository: `GoodLight999/ClipCascade`
 - branch: `stability-mobile-otp`
-- implementation/release SHA: `2f08e03b325eeff18ec63b1be8cbe1b08cb4f85d`
-- intended alpha tag: `v3.2.1-extended.21-alpha.1`
+- implementation/release SHA: `29febc3e7a83575564145d470c4143b5b92e42f4`
+- intended alpha tag: `v3.2.1-extended.22-alpha.1`
 - PR: `#1`, Open and Draft
 
 ## Exact implementation CI
 
-- Android standalone CI `29888733469` — success
-- Desktop Windows CI `29888733458` — success
+- Android standalone CI `29917141620` — success
+- Desktop Windows CI `29917141540` — success
 
 Android CI passed:
 
-- every production transform in final order;
-- version `3.2.1-extended.21-alpha.1 / 320126`;
-- index-level foreground-runner registration before `AppRegistry.registerComponent`;
-- runner heartbeat and stale-state diagnostics;
-- exact framework-localized Copy candidates and semantic Copy handling;
-- selection-only negative behavior;
-- explicit `SYSTEM_ALERT_WINDOW` declaration;
-- transparent 1×1 `TYPE_APPLICATION_OVERLAY` acquisition path;
-- non-touchable but intentionally focusable overlay flags;
-- immediate `removeViewImmediate` cleanup in `finally`;
-- overlay enable/permission gating policy and unit test;
+- all production transforms in final order;
+- version `3.2.1-extended.22-alpha.1 / 320127`;
+- early Notifee transport-runner registration and heartbeat;
+- native `ClipboardAcquisitionService` ownership;
+- `START_STICKY` and Accessibility bind path;
+- broad selection/click/announcement/notification probes;
+- pre-selection clipboard fingerprint baseline and mutation policy tests;
+- transparent 1×1 `TYPE_APPLICATION_OVERLAY` read path;
+- no direct Accessibility queue insertion;
 - ordinary queue no-TTL, capacity 16, and `queue_full` invariants;
-- foreground native queue claim/drain and existing ACK plumbing assertions;
-- DAWN/Gmail/Perceptron/Beeper/multilingual/negative extractor tests;
+- foreground native queue claim/drain and existing ACK assertions;
+- Android 15+ CompanionDeviceManager setup sources;
+- non-exported NotificationListenerService;
+- external same-signed notification-test helper module;
 - JavaScript bundle;
 - Kotlin/resources and unit tests;
-- APK assembly and embedded bundle;
-- deterministic signer verification;
+- main APK and helper APK assembly;
+- embedded main-app bundle;
+- matching deterministic signer verification for both APKs;
 - artifact upload.
 
-Windows CI passed authenticated HTTP handling, Extended P2P peer-applied ACK, validation-before-ACK, shutdown/tray behavior, tests, and EXE packaging. No Windows implementation source changed for `.21-alpha.1`.
+Windows CI passed authenticated HTTP handling, Extended P2P peer-applied ACK, validation-before-ACK, shutdown/tray behavior, tests, and EXE packaging. No Windows implementation source changed for `.22-alpha.1`.
 
 ## Android artifact
 
 - application: `ClipCascade Extended`
-- package: `com.clipcascade.extended`
-- versionName: `3.2.1-extended.21-alpha.1-standalone`
-- versionCode: `320126`
-- Actions artifact ID: `8517492289`
-- Actions artifact ZIP SHA-256: `9bae0a27c80ddd6b16d9e8d7df95153ad080cd4cd0b864ec5eebc5d914370c87`
-- APK SHA-256: `93b85d2bd8474c874d8937e76c09ec97dde90006c4b1e8d97f448557a959c7a9`
-- APK size: `147945851` bytes
-- signer diagnostics artifact ID: `8517490898`
-- signer diagnostics ZIP SHA-256: `51c29398a4bfed2699ef79268d51d73be30b762785d2257551f127c0a52f4f62`
-- signer SHA-256: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
-- artifact expiry: `2026-10-20T03:33:01Z`
+- main package: `com.clipcascade.extended`
+- helper package: `com.clipcascade.extended.testnotifier`
+- versionName: `3.2.1-extended.22-alpha.1-standalone`
+- versionCode: `320127`
+- Actions artifact ID: `8528455362`
+- Actions artifact ZIP SHA-256: `61cba5012ebc412d0075c165b29fb6a5d4ded79f1ad8a28a993218c722717539`
+- main APK SHA-256: `ac6fe987eb3e4a469abcdc53bc552313f752c8780a27498a8abf7aa89c8a681a`
+- main APK size: `147968683` bytes
+- helper APK SHA-256: `61e9183d4eb93fedb80e1ea0b624663516f61fc2a2e5752df985aee9066b6e2b`
+- helper APK size: `831357` bytes
+- signer diagnostics artifact ID: `8528452879`
+- signer diagnostics ZIP SHA-256: `b60b8d425ef486a87a7905de06b429415f50bb9e874b96ec29e73f840b6bc114`
+- signer SHA-256 for both APKs: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
+- artifact expiry: `2026-10-20T11:48:52Z`
 
-The downloaded Actions ZIP digest matched GitHub's artifact digest. The extracted APK hash/size and signer diagnostics were independently verified.
+The downloaded Actions ZIP digest matched GitHub's recorded digest. Both APK hashes and sizes matched the packaged `SHA256SUMS.txt`. Signer diagnostics contained the expected SHA-256 certificate digest twice, once for each APK.
 
 ## Local filenames
 
-- `/mnt/data/ClipCascade-Extended-3.2.1-extended.21-alpha.1-actions.zip`
-- `/mnt/data/ClipCascade-Extended-3.2.1-extended.21-alpha.1-vc320126-2f08e03.apk`
-- `/mnt/data/ClipCascade-Android-signer-diagnostics-21-alpha1.zip`
-
-## Go-reference scope
-
-The known-working Go implementation used a sticky native foreground service and a temporary transparent 1×1 application overlay to obtain the actual clipboard in the background.
-
-`.21-alpha.1` imports that clipboard-acquisition condition while retaining Extended's durable queue and this acknowledgement order:
-
-`NATIVE_QUEUE -> NATIVE_IN_FLIGHT -> FOREGROUND_RUNNER_CLAIM -> LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_VALIDATE -> WINDOWS_APPLY -> PEER_ACK -> NATIVE_ACK -> DELETE`
-
-It does not import the Go mobile transport, does not disable Extended P2P, and does not treat a socket write as Windows clipboard application.
+- `/mnt/data/ClipCascade-Extended-3.2.1-extended.22-alpha.1-actions.zip`
+- `/mnt/data/ClipCascade-Extended-3.2.1-extended.22-alpha.1.apk`
+- `/mnt/data/ClipCascade-Notification-Test-Sender-22-alpha.1.apk`
+- `/mnt/data/ClipCascade-Android-signer-diagnostics-22-alpha1.zip`
 
 ## Target truth
 
-`.19-alpha.2` failed the true listener-path self-test and could not send while the main app UI was closed.
+`.21-alpha.1` was Android/Windows CI-green but failed both decisive target tests:
 
-`.20-alpha.1` repaired foreground-runner registration but did not reproduce the known-working Go overlay acquisition condition.
+- background Android-to-Windows clipboard sending failed;
+- true notification-listener-path self-test failed.
 
-`.21-alpha.1` restores that condition and is Android/Windows CI-green. CI still cannot prove HONOR/MagicOS success.
+`.22-alpha.1` corrects the incomplete Go-reference integration by moving acquisition into a bound sticky native service and accepting broad probes with clipboard-fingerprint mutation proof. It also addresses Android 15+ OTP redaction through CompanionDeviceManager association and replaces the same-package listener test with a separately installed external helper APK.
+
+These changes are CI-green but are not yet HONOR/MagicOS proof.
+
+## ACK boundary retained
+
+`NATIVE_QUEUE -> NATIVE_IN_FLIGHT -> FOREGROUND_RUNNER_CLAIM -> LOCAL_TRANSPORT_ACCEPTED -> WINDOWS_VALIDATE -> WINDOWS_APPLY -> PEER_ACK -> NATIVE_ACK -> DELETE`
+
+The native acquisition service inserts into the existing durable queue and does not directly send, ACK, or delete.
 
 ## Not proven by CI
 
-- in-place update/settings retention;
-- overlay permission and WindowManager behavior on HONOR;
-- fresh runner heartbeat after UI closure;
-- deterministic component/transport self-test on target;
-- true listener-path self-test on target;
-- background explicit Copy producing `overlay_clipboard_manager`;
-- selection-only no-overlay/no-send behavior on target apps;
+- in-place main-APK update and settings retention;
+- helper APK installation/launch on HONOR;
+- native acquisition service survival after UI closure;
+- target clipboard fingerprint timing and overlay access;
+- selection-only no-queue behavior in representative apps;
+- CompanionDeviceManager association flow on MagicOS;
+- unredacted external helper notification fields;
+- real Gmail/DAWN/Perceptron delivery/extras;
 - removed-from-recents, locked, or screen-off outbound;
-- real Gmail/DAWN/Perceptron listener delivery/extras;
 - queue-full and long-disconnect durability;
 - exactly-once target behavior;
 - battery and tray behavior.
 
-This documentation commit is the final handoff-head CI trigger. Record its Android and Windows run IDs in the PR handoff after both complete; do not create another documentation commit merely to self-reference those run IDs.
-
-Keep PR #1 Open and Draft.
+Keep PR #1 Open and Draft. CI is not target proof.
