@@ -8,13 +8,12 @@ This is the canonical handoff.
 - final branch: `stability-mobile-otp`
 - canonical PR: `#1`, Open and Draft
 - never mark Ready, merge, enable auto-merge, or force-push
-- temporary PR `#2` is validation-only and must be closed without merge after final handoff verification
 - preserve Extended P2P Windows-applied ACK before native deletion
 - run Android and Windows CI after every final-branch change
 - never claim HONOR/MagicOS success from CI
 - never commit real clipboard text, notification bodies, codes, accounts, or private URLs
 - no ADB, root, Shizuku, or `READ_LOGS`
-- the permitted overlay is the explicit user-authorized, transparent 1×1, non-touchable acquisition view described below
+- the permitted overlay is the explicit user-authorized, transparent 1×1, non-touchable clipboard-acquisition view described below
 
 ## Repository roles
 
@@ -31,10 +30,10 @@ Go reference revision inspected: `0ff3ba4b28daccc1a51e7c09907792bc0f8e53a8`.
 3. `docs/CURRENT_STATUS.md`
 4. `docs/NEXT_CHATGPT_HANDOFF.md`
 5. `docs/LATEST_ALPHA21_FAILURE_ALPHA22_NATIVE_RECOVERY_HANDOFF.md`
-6. `docs/LATEST_GO_OVERLAY_CLIPBOARD_RECOVERY_HANDOFF.md`
-7. `docs/LATEST_FOREGROUND_RUNNER_LIFECYCLE_HANDOFF.md`
-8. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
-9. `docs/LATEST_GREEN_ARTIFACTS.md`
+6. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
+7. `docs/LATEST_GREEN_ARTIFACTS.md`
+8. `docs/LATEST_GO_OVERLAY_CLIPBOARD_RECOVERY_HANDOFF.md`
+9. `docs/LATEST_FOREGROUND_RUNNER_LIFECYCLE_HANDOFF.md`
 10. `docs/LATEST_NOTIFICATION_LISTENER_ALPHA_HANDOFF.md`
 11. `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`
 
@@ -54,7 +53,7 @@ Earlier facts remain:
 - Android-to-Windows worked when the main UI was open on a prior build;
 - authentication, encryption, basic transport, and Windows clipboard application were not globally broken.
 
-`.22-alpha.1` is CI-green but has not yet been tested on HONOR. Do not claim either decisive path is fixed until target rows pass.
+`.22-alpha.1` is CI-green and artifact-verified but has not yet been tested on HONOR. Do not claim either decisive path is fixed until the target rows pass.
 
 ## Current implementation/release candidate
 
@@ -75,7 +74,9 @@ Earlier facts remain:
 - signer SHA-256 for both: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 - artifact expiry: `2026-10-20T11:48:52Z`
 
-The downloaded ZIP digest matched GitHub. Both APK hashes and sizes matched the packaged checksum file. The signer diagnostic listed the expected certificate twice, once for each APK.
+The downloaded ZIP digest matched GitHub. Both APK hashes and sizes matched the packaged checksum file. Signer diagnostics listed the expected certificate twice, once for each APK.
+
+A finalized documentation head `a12621942d2a22b51fb94b9042509ab3845b1c3f` also passed Android `29917915931` and Windows `29917915917`. This factual PR #2 correction changes documentation only; the exact current handoff-head CI is recorded in PR #1's body after it completes.
 
 ## Why `.21` failed despite using the Go link
 
@@ -117,11 +118,11 @@ Accessibility submits probes instead of waiting exclusively for an exact Copy la
 - semantic `ACTION_COPY` or exact active-locale Copy/Copy URL: strong probe;
 - Ctrl+C: strong probe.
 
-A selection probe records the old clipboard SHA-256 fingerprint immediately, then compares it with the delayed native read. Selection without Copy therefore remains unchanged and must not queue or send.
+A selection probe records the old clipboard SHA-256 fingerprint immediately, then compares it with the delayed native overlay read. Selection without Copy therefore remains unchanged and must not queue or send.
 
 Only a one-way fingerprint is persisted. Clipboard content does not enter diagnostics.
 
-Reliable mode uses the Go-style overlay. When the overlay option is disabled, the native owner retains a normal `ClipboardManager` read for foreground/control behavior, without claiming reliable background access.
+Reliable mode uses the Go-style overlay. When reliable mode is disabled, the native owner retains a normal `ClipboardManager` read for foreground/control behavior, without claiming reliable background access.
 
 ### Overlay
 
@@ -181,28 +182,11 @@ Also preserve:
 - notification receipt guard;
 - debug notification default OFF and outside ACK logic.
 
-## Validation obtained
+## Temporary PR #2 record
 
-Temporary Draft PR #2 was used only to validate the architecture before touching PR #1. Its latest staging HEAD passed the full Android workflow.
+Temporary Draft PR #2 was used only to trigger staging Android CI. The validated tree was integrated through a no-force fast-forward. GitHub reports PR #2 as `closed` and `merged` because its exact head commit became an ancestor of `stability-mobile-otp`; its `merge_commit_sha` is the PR head itself. There was no separate merge commit, merge-button action, Ready conversion, auto-merge, or force push.
 
-Final exact-SHA validation on `stability-mobile-otp` then passed:
-
-- Android `29917141620`;
-- Windows `29917141540`.
-
-Android verified production transforms, native ownership/bind structure, broad-probe and fingerprint policy, queue/ACK invariants, CompanionDeviceManager and helper sources, JS bundle, Kotlin tests, both APKs, both signatures, and artifact upload.
-
-Windows reverified P2P peer ACK, validation-before-ACK, shutdown/tray behavior, tests, and EXE packaging.
-
-## Required final handoff procedure
-
-1. Update current status, artifact, progress, test matrix, and this handoff on `agent/alpha22-final-handoff`.
-2. Fast-forward `stability-mobile-otp` without force.
-3. Create one normal contents commit if the ref update alone does not trigger workflows.
-4. Require Android and Windows CI on the final documentation HEAD.
-5. Close temporary PR #2 without merge.
-6. Update PR #1 body.
-7. Verify PR #1 remains Open, Draft, and unmerged.
+Canonical PR #1 remains Open, Draft, and unmerged.
 
 ## Required target test order
 
@@ -215,9 +199,9 @@ Windows reverified P2P peer ACK, validation-before-ACK, shutdown/tray behavior, 
 7. Confirm the existing transport runner is active and the native clipboard acquisition service has started/bound.
 8. Run the deterministic component/transport test and require queue -> claim -> one Windows apply -> peer ACK -> native deletion.
 9. Run the external listener-path test and require helper notification -> seen -> eligible -> text -> extraction -> queue -> claim -> Windows -> ACK/delete.
-10. Leave the main UI without force-stop, select a unique value, explicitly Copy, and require pre-selection baseline -> changed fingerprint -> overlay read -> queue -> claim -> Windows -> ACK/delete.
+10. Leave the main UI without force-stop, select a fresh unique value, explicitly Copy, and require pre-selection baseline -> changed fingerprint -> overlay read -> queue -> claim -> Windows -> ACK/delete.
 11. Select text without Copy and require unchanged fingerprint, no queue, and no Windows change.
-12. Only after simple success test recents removal, lock, screen off, long disconnect, queue full, and exactly-once behavior.
+12. Only after simple success test recents removal, lock, screen off, reboot, long disconnect, queue full, and exactly-once behavior.
 
 ## Failure map
 
@@ -239,14 +223,19 @@ Windows reverified P2P peer ACK, validation-before-ACK, shutdown/tray behavior, 
 
 Retain all earlier `.20`/`.21` CI runs and target failures.
 
-Current `.22` history:
+`.22` history:
 
 - non-default-branch diagnostic workflow did not report a run and is not counted;
-- Draft PR #2 was created to run a real Android pull-request workflow without touching PR #1;
 - staging Android `29915789910` succeeded;
-- later staging Android `29916941772` succeeded after final direct-read control fixup;
-- exact final Android `29917141620` succeeded;
-- exact final Windows `29917141540` succeeded;
-- no force push, merge, Ready conversion, or auto-merge occurred.
+- later staging Android `29916941772` succeeded after the final direct-read control fixup;
+- exact implementation Android `29917141620` succeeded;
+- exact implementation Windows `29917141540` succeeded;
+- documentation head `a1262194...` passed Android `29917915931` and Windows `29917915917`;
+- final artifact ZIP and both APKs were independently verified;
+- no force push, Ready conversion, auto-merge, or separate merge commit occurred.
 
-PR #1 must remain Open and Draft. CI is not HONOR proof.
+## Current status
+
+`.22-alpha.1` is exact-SHA CI-green and independently hashed, but not HONOR/MagicOS target-proven. Do not claim either background Copy or Gmail/DAWN/Perceptron delivery is fixed until the corresponding target rows pass.
+
+PR #1 must remain Open and Draft.
