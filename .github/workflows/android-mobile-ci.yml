@@ -1,28 +1,19 @@
-name: Android standalone CI
+name: Android alpha22 generated-source diagnostic
 
 on:
   push:
-    branches: [stability-mobile-otp]
-  pull_request:
-    paths:
-      - "ClipCascade_Mobile/src/**"
-      - ".github/workflows/android-mobile-ci.yml"
-  workflow_dispatch:
+    branches: [agent/alpha22-diagnosis]
 
 permissions:
   contents: read
 
 jobs:
-  build-standalone:
+  capture-generated-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      CLIPCASCADE_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      EXTENDED_TEST_CERT_SHA256: b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: ClipCascade_Mobile/src
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,242 +23,37 @@ jobs:
           node-version: "20"
           cache: npm
           cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
       - name: Install JavaScript dependencies
         run: npm ci
-      - name: Prepare Extended interface
-        run: node scripts/prepare_extended_bundle.js
-      - name: Prepare Extended version identity
-        run: node scripts/prepare_extended_version.js
-      - name: Prepare Android package version
-        run: node scripts/prepare_background_recovery_version.js
-      - name: Protect shared AsyncStorage lifecycle
-        run: node scripts/prepare_storage_lifecycle.js
-      - name: Prepare startup service recovery and target-neutral wording
-        run: node scripts/prepare_startup_service_recovery.js
-      - name: Prepare canonical boot-resume control
-        run: node scripts/prepare_boot_resume_ui.js
-      - name: Localize displayed status
-        run: node scripts/prepare_extended_status_i18n.js
-      - name: Synchronize runtime control state
-        run: node scripts/prepare_runtime_control_state.js
-      - name: Reduce idle wakeups and restore clipboard reliability
-        run: node scripts/prepare_idle_power.js
-      - name: Prepare broad OTP extraction
-        run: node scripts/prepare_broad_otp_extractor.js
-      - name: Prepare relay transport acknowledgement
-        run: node scripts/prepare_relay_transport_ack.js
-      - name: Order relay startup after listeners
-        run: node scripts/prepare_relay_startup_order.js
-      - name: Isolate service listener lifecycle
-        run: node scripts/prepare_service_listener_lifecycle.js
-      - name: Prepare P2P peer acknowledgement
-        run: node scripts/prepare_p2p_peer_ack.js
-      - name: Order P2P ACK after validation
-        run: node scripts/prepare_p2p_ack_validation_order.js
-      - name: Claim native relay dispatch once
-        shell: bash
-        run: |
-          set -o pipefail
-          node scripts/prepare_relay_claim.js 2>&1 | tee gmail-transform.log
-
-      - name: Verify transformed Extended source
+      - name: Run production transforms in canonical order
         shell: bash
         run: |
           set -euo pipefail
-          grep -q "3.2.1-extended.21-alpha.1" App.js
-          grep -q "versionCode 320126" android/app/build.gradle
-          grep -q 'versionName "3.2.1-extended.21-alpha.1"' android/app/build.gradle
-          grep -q "SERVICE_FLAG_POLL_MS = 3000" StartForegroundService.js
-          grep -q "foregroundRunnerRegistered" StartForegroundService.js
-          grep -q "recordForegroundRunnerStarted" StartForegroundService.js
-          grep -q "recordForegroundRunnerHeartbeat" StartForegroundService.js
-          grep -q "StartForegroundService({registerOnly: true})" index.js
-          python - <<'PY'
-          from pathlib import Path
-          source = Path("index.js").read_text(encoding="utf-8")
-          assert source.index("StartForegroundService({registerOnly: true})") < source.index("AppRegistry.registerComponent")
-          PY
-          grep -q "ForegroundTransportRuntimeStore" android/app/src/main/java/com/clipcascade/RelaySettingsModule.kt
-          grep -q "FRESH_HEARTBEAT_MS = 45_000L" android/app/src/main/java/com/clipcascade/ForegroundTransportRuntimeStore.kt
-          grep -q "listener_path_self_test_delayed_scan" android/app/src/main/java/com/clipcascade/RelaySettingsActivity.kt
-          grep -q "foreground_runner_active" android/app/src/main/res/values/strings.xml
-          grep -q "health_transport_runtime" android/app/src/main/res/values-ja/strings.xml
-          grep -q "addNodeCopyCueCandidates" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "action.label" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "notificationTimeout = 100" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "ClipboardCopySignalPolicy.shouldCaptureClipboardChange" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "ClipboardCopySignalPolicy.shouldRunActionFallback" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "SystemCopyCuePolicy.matchesAny" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "getText(android.R.string.copy)" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q 'category = "copy_detection"' android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "frameworkLabelsMatchAcrossLocales" android/app/src/test/java/com/clipcascade/SystemCopyCuePolicyTest.kt
-          grep -q "approximateOrSelectionTextNeverMatches" android/app/src/test/java/com/clipcascade/SystemCopyCuePolicyTest.kt
-          grep -q "selectionAloneNeverCaptures" android/app/src/test/java/com/clipcascade/ClipboardCopySignalPolicyTest.kt
-          if grep -q "CopyCueClassifier" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt; then
-            echo "Hard-coded localized copy-label classifier still controls the transformed service" >&2
-            exit 1
-          fi
-          if grep -q "looksLikeCopyConfirmation" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt; then
-            echo "Obsolete approximate copy-confirmation function still remains" >&2
-            exit 1
-          fi
-          if grep -q "READ_LOGS" android/app/src/main/AndroidManifest.xml android/app/src/main/java/com/clipcascade/ClipboardListenerModule.kt; then
-            echo "ADB-granted READ_LOGS clipboard workaround was reintroduced" >&2
-            exit 1
-          fi
-          grep -q "SYSTEM_ALERT_WINDOW" android/app/src/main/AndroidManifest.xml
-          grep -q "TYPE_APPLICATION_OVERLAY" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "removeViewImmediate" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "OverlayClipboardPolicy.shouldAttempt" android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "overlayRunsOnlyWhenEnabledAuthorizedAndStillNeeded" android/app/src/test/java/com/clipcascade/OverlayClipboardPolicyTest.kt
-          grep -q "overlay_clipboard_enabled" android/app/src/main/java/com/clipcascade/RelaySettingsStore.kt
-          grep -q "prepare_overlay_clipboard_acquisition.js" scripts/prepare_relay_claim.js
-          python - <<'PY'
-          from pathlib import Path
-          source = Path("android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt").read_text(encoding="utf-8")
-          start = source.index("val params = WindowManager.LayoutParams(")
-          end = source.index("var added = false", start)
-          overlay_params = source[start:end]
-          assert "FLAG_NOT_TOUCHABLE" in overlay_params
-          assert "FLAG_NOT_TOUCH_MODAL" in overlay_params
-          assert "FLAG_NOT_FOCUSABLE" not in overlay_params
-          assert source.index("readClipboardWithOverlayFallback()") < source.index("ClipboardRelayStore.enqueue")
-          PY
-          if grep -q "TTL_MS" android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt; then
-            echo "Ordinary clipboard queue still expires before acknowledgement" >&2
-            exit 1
-          fi
-          if grep -q "while (pending.size" android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt; then
-            echo "Ordinary clipboard queue still evicts unacknowledged items on overflow" >&2
-            exit 1
-          fi
-          grep -q "EnqueueResult.QUEUE_FULL" android/app/src/main/java/com/clipcascade/ClipboardRelayStore.kt
-          grep -q 'EnqueueResult.QUEUE_FULL -> "queue_full"' android/app/src/main/java/com/clipcascade/ClipboardAccessibilityService.kt
-          grep -q "boundedQueueAcceptsOnlyBelowCapacity" android/app/src/test/java/com/clipcascade/ClipboardRelayQueuePolicyTest.kt
-          grep -q "MAX_IDLE_DELAY_MS = 15_000L" android/app/src/main/java/com/clipcascade/ClipboardRelayRetryPolicy.kt
-          grep -q "idleRetryBacksOffWithoutExceedingCap" android/app/src/test/java/com/clipcascade/ClipboardRelayRetryPolicyTest.kt
-          grep -q "requestReactContextBootstrap" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
-          grep -q "createReactContextInBackground" android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
-          grep -q 'path = "react_bootstrap"' android/app/src/main/java/com/clipcascade/RecoveryCoordinator.kt
-          grep -q "claimForForegroundService" android/app/src/main/java/com/clipcascade/ClipboardRelayDispatcher.kt
-          grep -q "claimForForegroundService" android/app/src/main/java/com/clipcascade/OtpRelayDispatcher.kt
-          grep -q "claimPendingForegroundRelay" android/app/src/main/java/com/clipcascade/RelaySettingsModule.kt
-          grep -q "drainNativeRelayQueue" StartForegroundService.js
-          grep -q "Native foreground relay drain failed" StartForegroundService.js
-          grep -q 'path = "foreground_poll"' android/app/src/main/java/com/clipcascade/OtpRelayDispatcher.kt
-          grep -q "prepare_system_localized_copy_recovery.js" scripts/prepare_relay_claim.js
-          grep -q "prepare_foreground_queue_drain.js" scripts/prepare_relay_claim.js
-          grep -q "prepare_foreground_runner_lifecycle.js" scripts/prepare_relay_claim.js
-          grep -q "extractsPerceptronNetworkStandaloneAlphanumericCode" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
-          grep -q "extractsCodeFromGmailTitlePreviewAndExpandedBody" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
-          grep -q "extractsDawnStandaloneNumericLoginCode" android/app/src/test/java/com/clipcascade/OtpCodeExtractorTest.kt
-          grep -q "scanActiveNotifications" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
-          grep -q "MAX_ACTIVE_SCAN_AGE_MS" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
-          grep -q "NotificationListenerRuntimeStore" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
-          grep -q "posted.packageName == packageName &&" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
-          grep -q "isListenerPathTest" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
-          grep -q "NotificationDeliveryReceiptStore.claimIfNew" android/app/src/main/java/com/clipcascade/NotificationCodeListenerService.kt
-          grep -q "postListenerPath" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
-          grep -q "queueSyntheticValue(applicationContext, text, value)" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
-          grep -q "5 \* 60_000L" android/app/src/main/java/com/clipcascade/OtpTestNotificationManager.kt
-          grep -q "receiptRemainsActiveThroughTtlBoundary" android/app/src/test/java/com/clipcascade/NotificationReceiptPolicyTest.kt
-          grep -q "newestReceiptSetRemainsBounded" android/app/src/test/java/com/clipcascade/NotificationReceiptPolicyTest.kt
-          grep -q "NotificationCodeListenerService.ensureBound" android/app/src/main/java/com/clipcascade/ScheduleService.kt
-          grep -q "outboundDebugNotificationEnabled" android/app/src/main/java/com/clipcascade/RelaySettingsStore.kt
-          grep -q "showOutboundDebugNotification" android/app/src/main/java/com/clipcascade/NativeBridgeModule.kt
-          grep -q "Debug UI must never change transport acceptance or ACK behavior" StartForegroundService.js
-          grep -q "claimRelayDispatch" StartForegroundService.js
-          grep -q "releaseRelayDispatch" android/app/src/main/java/com/clipcascade/RelaySettingsModule.kt
-          grep -q "setWsIsRunning(latest.wsIsRunning)" App.js
-          grep -q "persistedRelaunchOnBoot" App.js
-          if grep -Fq "db?.close()" android/app/src/main/java/com/clipcascade/AsyncStorageBridge.kt; then
-            echo "AsyncStorage bridge still closes the shared database" >&2
-            exit 1
-          fi
-          if grep -q "Foreground service stopped running" App.js; then
-            echo "Obsolete terminal foreground-service warning remains" >&2
-            exit 1
-          fi
-
-      - name: Bundle JavaScript into Android assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p android/app/src/main/assets
-          npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
-          test -s android/app/src/main/assets/index.android.bundle
-
-      - name: Generate stable public test signing identity
-        shell: bash
-        run: |
-          set -euo pipefail
-          signing_dir="android/app/build/generated/signing"
-          python scripts/generate_stable_test_signing.py "${signing_dir}"
-          openssl pkcs12 -export -inkey "${signing_dir}/clipcascade-extended-test.key.pem" -in "${signing_dir}/clipcascade-extended-test.x509.pem" -name clipcascade-test -out "${signing_dir}/clipcascade-extended-test.p12" -passout pass:clipcascade-public-test
-          test -s "${signing_dir}/clipcascade-extended-test.p12"
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x android/gradlew
-
-      - name: Test and assemble standalone APK
-        shell: bash
-        run: |
-          set -o pipefail
-          cd android
-          ./gradlew :app:testDebugUnitTest :app:assembleDebug -PclipcascadeBuildSha="${CLIPCASCADE_SOURCE_SHA}" --stacktrace 2>&1 | tee ../android-build.log
-
-      - name: Verify embedded bundle and stable signer
-        shell: bash
-        run: |
-          set -euo pipefail
-          apk="android/app/build/outputs/apk/debug/app-debug.apk"
-          cert="android/app/build/generated/signing/clipcascade-extended-test.x509.pem"
-          log="android-signer.log"
-          unzip -l "${apk}" | grep -q "assets/index.android.bundle"
-          apksigner="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          "${apksigner}" verify --print-certs "${apk}" | tee "${log}"
-          generated_digest="$(openssl x509 -in "${cert}" -outform DER | sha256sum | awk '{print $1}')"
-          signer_digest="$(awk -F': ' '/certificate SHA-256 digest/ {print $NF; exit}' "${log}" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
-          test "${generated_digest}" = "${EXTENDED_TEST_CERT_SHA256}"
-          test "${signer_digest}" = "${EXTENDED_TEST_CERT_SHA256}"
-
-      - name: Upload transform diagnostics
-        if: always()
+          node scripts/prepare_extended_bundle.js
+          node scripts/prepare_extended_version.js
+          node scripts/prepare_background_recovery_version.js
+          node scripts/prepare_storage_lifecycle.js
+          node scripts/prepare_startup_service_recovery.js
+          node scripts/prepare_boot_resume_ui.js
+          node scripts/prepare_extended_status_i18n.js
+          node scripts/prepare_runtime_control_state.js
+          node scripts/prepare_idle_power.js
+          node scripts/prepare_broad_otp_extractor.js
+          node scripts/prepare_relay_transport_ack.js
+          node scripts/prepare_relay_startup_order.js
+          node scripts/prepare_service_listener_lifecycle.js
+          node scripts/prepare_p2p_peer_ack.js
+          node scripts/prepare_p2p_ack_validation_order.js
+          node scripts/prepare_relay_claim.js
+      - name: Upload final generated Android sources
         uses: actions/upload-artifact@v4
         with:
-          name: ClipCascade-Android-transform-diagnostics
-          path: ClipCascade_Mobile/src/gmail-transform.log
-          if-no-files-found: warn
-      - name: Upload signer diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClipCascade-Android-signer-diagnostics
-          path: ClipCascade_Mobile/src/android-signer.log
-          if-no-files-found: warn
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClipCascade-Android-build-log
-          path: ClipCascade_Mobile/src/android-build.log
-          if-no-files-found: warn
-      - name: Upload unit-test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClipCascade-Android-unit-tests
-          path: ClipCascade_Mobile/src/android/app/build/reports/tests/testDebugUnitTest
-          if-no-files-found: warn
-      - name: Upload standalone APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClipCascade-Extended-standalone
-          path: ClipCascade_Mobile/src/android/app/build/outputs/apk/debug/app-debug.apk
+          name: alpha22-final-generated-source
+          path: |
+            ClipCascade_Mobile/src/android/app/src/main/AndroidManifest.xml
+            ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade
+            ClipCascade_Mobile/src/android/app/src/main/res/values/strings.xml
+            ClipCascade_Mobile/src/android/app/src/main/res/values-ja/strings.xml
+            ClipCascade_Mobile/src/StartForegroundService.js
+            ClipCascade_Mobile/src/index.js
           if-no-files-found: error
