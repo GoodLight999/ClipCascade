@@ -7,8 +7,7 @@ This is the canonical handoff.
 - repository: `GoodLight999/ClipCascade`
 - final branch: `stability-mobile-otp`
 - canonical PR: `#1`, Open and Draft
-- never mark Ready, merge, enable auto-merge, or force-push
-- temporary PR `#2` is validation-only and must be closed without merge after final handoff verification
+- never mark PR #1 Ready, merge it, enable auto-merge, or force-push
 - preserve Extended P2P Windows-applied ACK before native deletion
 - run Android and Windows CI after every final-branch change
 - never claim HONOR/MagicOS success from CI
@@ -31,10 +30,10 @@ Go reference revision inspected: `0ff3ba4b28daccc1a51e7c09907792bc0f8e53a8`.
 3. `docs/CURRENT_STATUS.md`
 4. `docs/NEXT_CHATGPT_HANDOFF.md`
 5. `docs/LATEST_ALPHA21_FAILURE_ALPHA22_NATIVE_RECOVERY_HANDOFF.md`
-6. `docs/LATEST_GO_OVERLAY_CLIPBOARD_RECOVERY_HANDOFF.md`
-7. `docs/LATEST_FOREGROUND_RUNNER_LIFECYCLE_HANDOFF.md`
-8. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
-9. `docs/LATEST_GREEN_ARTIFACTS.md`
+6. `docs/LATEST_GREEN_ARTIFACTS.md`
+7. `docs/TEST_MATRIX_BACKGROUND_OUTBOUND.md`
+8. `docs/LATEST_GO_OVERLAY_CLIPBOARD_RECOVERY_HANDOFF.md`
+9. `docs/LATEST_FOREGROUND_RUNNER_LIFECYCLE_HANDOFF.md`
 10. `docs/LATEST_NOTIFICATION_LISTENER_ALPHA_HANDOFF.md`
 11. `docs/LATEST_GMAIL_NOTIFICATION_RELIABILITY_HANDOFF.md`
 
@@ -62,8 +61,11 @@ Earlier facts remain:
 - version: `3.2.1-extended.22-alpha.1-standalone`
 - versionCode: `320127`
 - intended tag: `v3.2.1-extended.22-alpha.1`
-- Android CI: `29917141620`, success
-- Windows CI: `29917141540`, success
+- implementation Android CI: `29917141620`, success
+- implementation Windows CI: `29917141540`, success
+- first finalized handoff HEAD: `a12621942d2a22b51fb94b9042509ab3845b1c3f`
+- handoff Android CI: `29917915931`, success
+- handoff Windows CI: `29917915917`, success
 - Actions artifact ID: `8528455362`
 - Actions ZIP SHA-256: `61cba5012ebc412d0075c165b29fb6a5d4ded79f1ad8a28a993218c722717539`
 - main APK SHA-256: `ac6fe987eb3e4a469abcdc53bc552313f752c8780a27498a8abf7aa89c8a681a`
@@ -71,13 +73,12 @@ Earlier facts remain:
 - helper APK SHA-256: `61e9183d4eb93fedb80e1ea0b624663516f61fc2a2e5752df985aee9066b6e2b`
 - helper APK size: `831357` bytes
 - signer diagnostics artifact ID: `8528452879`
-- signer diagnostics ZIP SHA-256: `b60b8d425ef486a87a7905de06b429415f50bb9e874b96ec29e73f840b6bc114`
 - signer SHA-256 for both: `b2fd5bc5d218c18e515d46a3c431bcadc1e68d847e2dd81374785d463b2bb9b0`
 - artifact expiry: `2026-10-20T11:48:52Z`
 
-The downloaded ZIP digest matched GitHub. Both APK hashes and sizes matched the packaged checksum file. The signer diagnostic listed the expected certificate twice, once for each APK.
+The downloaded ZIP digest matched GitHub. Both APK hashes and sizes matched the packaged checksum file. Both signer records matched the stable certificate.
 
-## Why `.21` failed despite using the Go link
+## Why `.21` failed despite using the Go reference
 
 The known-working Go path is a complete event and ownership structure:
 
@@ -94,20 +95,13 @@ Calling `.21` Go-equivalent was incorrect.
 
 ## `.22` clipboard architecture
 
-### Native owner
-
 `ClipboardAcquisitionService`:
 
 - is a native Android foreground service;
 - returns `START_STICKY`;
 - is started and bound by `ClipboardAccessibilityService`;
-- owns the transparent overlay;
-- owns `ClipboardManager` reads;
-- owns clipboard fingerprint comparison;
-- inserts only proven clipboard mutations into the existing durable `ClipboardRelayStore`;
+- owns the transparent overlay, `ClipboardManager` reads, fingerprint comparison, and durable queue insertion;
 - never sends directly and never acknowledges or deletes queue items.
-
-### Broad event entry
 
 Accessibility submits probes instead of waiting exclusively for an exact Copy label:
 
@@ -119,51 +113,27 @@ Accessibility submits probes instead of waiting exclusively for an exact Copy la
 
 A selection probe records the old clipboard SHA-256 fingerprint immediately, then compares it with the delayed native read. Selection without Copy therefore remains unchanged and must not queue or send.
 
-Only a one-way fingerprint is persisted. Clipboard content does not enter diagnostics.
+Reliable mode uses the Go-style overlay. Overlay-disabled mode retains a direct `ClipboardManager` read for foreground/control behavior without claiming reliable background access.
 
-Reliable mode uses the Go-style overlay. When the overlay option is disabled, the native owner retains a normal `ClipboardManager` read for foreground/control behavior, without claiming reliable background access.
+The overlay is explicitly authorized, 1×1, alpha 0, transparent, non-touchable, non-touch-modal, intentionally focusable, and removed after every read attempt.
 
-### Overlay
-
-The native service uses:
-
-- explicit `SYSTEM_ALERT_WINDOW` authorization;
-- `TYPE_APPLICATION_OVERLAY`;
-- 1×1 size;
-- alpha 0 and transparent background;
-- `FLAG_NOT_TOUCHABLE | FLAG_NOT_TOUCH_MODAL`;
-- no `FLAG_NOT_FOCUSABLE`;
-- removal after every read attempt, including failures.
-
-## Android 15+ notification constraint
+## Android 15+ notification constraint and `.22` response
 
 The target runs Android 16. Android 15+ redacts detected OTP content from notifications delivered to an untrusted `NotificationListenerService`.
 
-`.21` requested ordinary notification access but created no CompanionDeviceManager association. Extractor improvements cannot recover text already redacted by Android.
+`.21` requested ordinary notification access but created no CompanionDeviceManager association. Extractor changes cannot recover text already redacted by Android.
 
-## `.22` notification trust and true listener test
+`.22` requires a user-confirmed self-managed CompanionDeviceManager association on Android 15+, then requests notification access through `CompanionDeviceManager.requestNotificationAccess`.
 
-### Companion association
-
-On Android 15+ settings require a user-confirmed self-managed CompanionDeviceManager association before notification setup is considered complete.
-
-After association, ClipCascade requests notification access through `CompanionDeviceManager.requestNotificationAccess`.
-
-This is the platform-supported trust route, but it remains HONOR-target-unproven.
-
-### External listener test
-
-The true listener test requires the second APK:
+The true listener test now requires a second APK:
 
 - filename: `ClipCascade-Notification-Test-Sender-22-alpha.1.apk`;
 - package: `com.clipcascade.extended.testnotifier`;
-- same stable public test signature as the main APK;
+- same stable test signature as the main APK;
 - Activity protected by signature permission;
-- posts a normal external message notification containing a newly generated fake code.
+- posts a normal external notification containing a generated fake code.
 
-The main app launches the helper. The fake value must pass through Android NotificationListenerService, text collection, extraction, persistent queue, foreground claim, transport, Windows application, peer ACK, and native deletion. No direct queue insertion is allowed.
-
-The deterministic component/transport test remains separate and is explicitly not NotificationListener proof.
+The value must pass through NotificationListenerService, extraction, persistent queue, foreground claim, Windows application, peer ACK, and native deletion. No direct queue insertion is allowed.
 
 ## ACK boundary — preserve exactly
 
@@ -177,32 +147,17 @@ Also preserve:
 - internal-write echo suppression;
 - opaque relay IDs and bounded native claims;
 - validation before peer ACK;
-- generation-scoped old-peer compatibility fallback;
+- generation-scoped old-peer fallback;
 - notification receipt guard;
 - debug notification default OFF and outside ACK logic.
 
-## Validation obtained
+## PR #2 process error — retain permanently
 
-Temporary Draft PR #2 was used only to validate the architecture before touching PR #1. Its latest staging HEAD passed the full Android workflow.
+Temporary Draft PR #2 was intended to be closed without merge after validation. Its commits were instead fast-forwarded into `stability-mobile-otp` before the PR was closed. GitHub therefore classified PR #2 as `merged=true` automatically when it was closed.
 
-Final exact-SHA validation on `stability-mobile-otp` then passed:
+No merge button, merge API, merge commit, force push, or auto-merge was used. However, the required close-before-fast-forward order was violated. GitHub's merged classification cannot be undone without forbidden history rewriting. Do not conceal or reinterpret this record.
 
-- Android `29917141620`;
-- Windows `29917141540`.
-
-Android verified production transforms, native ownership/bind structure, broad-probe and fingerprint policy, queue/ACK invariants, CompanionDeviceManager and helper sources, JS bundle, Kotlin tests, both APKs, both signatures, and artifact upload.
-
-Windows reverified P2P peer ACK, validation-before-ACK, shutdown/tray behavior, tests, and EXE packaging.
-
-## Required final handoff procedure
-
-1. Update current status, artifact, progress, test matrix, and this handoff on `agent/alpha22-final-handoff`.
-2. Fast-forward `stability-mobile-otp` without force.
-3. Create one normal contents commit if the ref update alone does not trigger workflows.
-4. Require Android and Windows CI on the final documentation HEAD.
-5. Close temporary PR #2 without merge.
-6. Update PR #1 body.
-7. Verify PR #1 remains Open, Draft, and unmerged.
+This process error did not alter PR #1's Draft state and did not change the implementation tree beyond the already-reviewed fast-forward.
 
 ## Required target test order
 
@@ -212,41 +167,30 @@ Windows reverified P2P peer ACK, validation-before-ACK, shutdown/tray behavior, 
 4. Allow Display over other apps and enable ClipCascade Accessibility.
 5. Complete the trusted companion association shown in settings.
 6. Grant notification access through the companion flow.
-7. Confirm the existing transport runner is active and the native clipboard acquisition service has started/bound.
-8. Run the deterministic component/transport test and require queue -> claim -> one Windows apply -> peer ACK -> native deletion.
-9. Run the external listener-path test and require helper notification -> seen -> eligible -> text -> extraction -> queue -> claim -> Windows -> ACK/delete.
-10. Leave the main UI without force-stop, select a unique value, explicitly Copy, and require pre-selection baseline -> changed fingerprint -> overlay read -> queue -> claim -> Windows -> ACK/delete.
+7. Confirm the transport runner is active and the native acquisition service has started/bound.
+8. Run the deterministic component/transport test and require queue -> claim -> Windows apply -> peer ACK -> native deletion.
+9. Run the external listener test and require helper notification -> seen -> eligible -> text -> extraction -> queue -> claim -> Windows -> ACK/delete.
+10. Leave the main UI without force-stop, select a unique value, explicitly Copy, and require baseline -> changed fingerprint -> overlay read -> queue -> claim -> Windows -> ACK/delete.
 11. Select text without Copy and require unchanged fingerprint, no queue, and no Windows change.
 12. Only after simple success test recents removal, lock, screen off, long disconnect, queue full, and exactly-once behavior.
 
 ## Failure map
 
 - native service not started/bound: Accessibility/native-service lifecycle failure;
-- probe recorded but no delayed observation: debounce/service failure;
-- `overlay_permission_missing`: setup failure;
-- overlay empty/denied: MagicOS did not grant clipboard access;
-- unchanged fingerprint after unique explicit Copy: event/read timing or acquisition failure;
+- probe but no delayed observation: debounce/service failure;
+- overlay permission missing: setup failure;
+- overlay empty/denied: MagicOS clipboard-access failure;
+- unchanged fingerprint after unique Copy: event/read timing or acquisition failure;
 - changed fingerprint but no queue: dedup/queue-full/storage boundary;
-- queued but no foreground claim: transport-runner drain failure;
-- claim but no local acceptance/debug: transport failure;
+- queued but no claim: transport-runner drain failure;
 - Windows apply but queue remains: peer ACK/native deletion failure;
 - helper cannot launch: install/package/signature-permission failure;
 - external notification unseen: HONOR listener delivery failure;
 - seen/eligible but text empty/redacted: companion association/trust failure;
 - text available but no extraction: extractor boundary.
 
-## Trial and error
+## Finalization status
 
-Retain all earlier `.20`/`.21` CI runs and target failures.
+The implementation and first handoff HEAD are green. This correction documents PR #2's actual GitHub state. After it is fast-forwarded to the final branch, run Android and Windows CI once more, update PR #1 body, and verify PR #1 remains Open, Draft, and unmerged.
 
-Current `.22` history:
-
-- non-default-branch diagnostic workflow did not report a run and is not counted;
-- Draft PR #2 was created to run a real Android pull-request workflow without touching PR #1;
-- staging Android `29915789910` succeeded;
-- later staging Android `29916941772` succeeded after final direct-read control fixup;
-- exact final Android `29917141620` succeeded;
-- exact final Windows `29917141540` succeeded;
-- no force push, merge, Ready conversion, or auto-merge occurred.
-
-PR #1 must remain Open and Draft. CI is not HONOR proof.
+CI is not HONOR proof.
