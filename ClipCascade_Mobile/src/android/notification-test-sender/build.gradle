@@ -1,0 +1,43 @@
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+
+android {
+    namespace "com.clipcascade.testnotifier"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    signingConfigs {
+        extendedTest {
+            storeFile file("${rootProject.projectDir}/app/build/generated/signing/clipcascade-extended-test.p12")
+            storePassword "clipcascade-public-test"
+            keyAlias "clipcascade-test"
+            keyPassword "clipcascade-public-test"
+            storeType "PKCS12"
+        }
+    }
+
+    defaultConfig {
+        applicationId "com.clipcascade.extended.testnotifier"
+        minSdkVersion 26
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0-alpha22"
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.extendedTest
+        }
+        release {
+            signingConfig signingConfigs.extendedTest
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
