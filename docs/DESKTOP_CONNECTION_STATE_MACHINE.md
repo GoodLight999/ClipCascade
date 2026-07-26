@@ -2,30 +2,48 @@
 
 Last updated: 2026-07-26 (Asia/Tokyo)
 
-Status: implementation contract; product code not yet migrated
+Status: **implemented for P2S STOMP transport and GUI/CLI status controls; P2P migration and live network-loss smoke testing remain**
 
 ## Purpose
 
-Replace the current collection of transport booleans, fixed sleeps, recursive reconnect calls, and tray-owned assumptions with one authoritative state model shared by the WebSocket implementation and every desktop UI.
+Replace transport booleans, callback sleeps, recursive reconnect calls, and tray-owned assumptions with one authoritative connection model shared by the P2S transport and desktop user interfaces.
 
-This specification applies first to the P2S STOMP client. P2P integration must consume the same public snapshot contract rather than adding a separate UI state vocabulary.
+No server protocol was changed.
 
-## Non-goals for the first change
+## Implemented source layout
 
-- No server protocol changes.
-- No durable clipboard queue yet.
-- No redesign of authentication screens.
-- No Android changes.
-- No broad visual redesign.
-- No attempt to infer delivery acknowledgement semantics that the server does not expose.
+```text
+ClipCascade_Desktop/src/connection/
+    __init__.py
+    state.py
+    errors.py
+    retry.py
+    controller.py
+    tray_view.py
+
+ClipCascade_Desktop/src/stomp_ws/
+    client.py
+    stomp_manager.py
+
+ClipCascade_Desktop/src/gui/tray.py
+ClipCascade_Desktop/src/cli/tray.py
+
+ClipCascade_Desktop/tests/
+    test_connection_controller.py
+    test_retry_policy.py
+    test_stomp_client.py
+    test_stomp_manager.py
+    test_tray_view.py
+```
 
 ## Ownership rule
 
-The transport layer owns connection truth.
+For P2S, `ConnectionController` owns connection truth.
 
-The tray, CLI, login flow, and future status window may request actions and subscribe to snapshots, but must not maintain an independent `is_connected` value.
-
-A state transition is valid only when it passes through the state-machine API. Direct mutation from callbacks or UI code is prohibited.
+- `STOMPManager` translates WebSocket/STOMP outcomes into stable controller events.
+- GUI and CLI derive labels and primary actions from immutable snapshots.
+- User interfaces do not decide whether P2S is connected by mutating a local boolean.
+- P2P still uses the legacy boolean fallback and must be migrated separately.
 
 ## States
 
@@ -41,66 +59,35 @@ FATAL_ERROR
 
 ### `DISCONNECTED`
 
-No active transport and no scheduled automatic retry.
-
-Entered after:
-
-- application initialization;
-- an explicit user disconnect;
-- completion of shutdown;
-- cancellation of a pending reconnect.
-
-Permitted actions:
-
-- connect;
-- quit;
-- log off.
+No active transport and no scheduled retry. An explicit connect may begin.
 
 ### `CONNECTING`
 
-Exactly one connection attempt is active.
-
-Entered after:
-
-- user connect from `DISCONNECTED`;
-- manual reconnect;
-- reconnect timer expiry.
-
-A second concurrent connection attempt must not be started.
+Exactly one WebSocket/STOMP connection attempt is active.
 
 ### `CONNECTED`
 
-The transport handshake completed and the receive subscription was established.
+The WebSocket opened, the STOMP `CONNECTED` frame was processed, and the receive subscription callback completed successfully.
 
-Entering this state records `last_connected_at`, clears `next_retry_at`, and makes the retry attempt visible as zero after the connection has remained stable for the configured reset interval.
+This is stricter than the upstream implementation, which could return after the underlying WebSocket opened but before STOMP readiness.
 
 ### `RECONNECT_WAIT`
 
-No active connection attempt is running. One cancellable retry is scheduled.
-
-The snapshot must expose:
-
-- current attempt number;
-- next retry timestamp;
-- last recoverable error.
-
-Manual reconnect cancels the timer and moves immediately to `CONNECTING`.
+No active connection attempt is running. Exactly one cancellable retry timer is scheduled. The snapshot exposes the attempt number and next retry time.
 
 ### `AUTH_REQUIRED`
 
-The transport cannot recover without credentials or a new authenticated session.
+The current authenticated session cannot recover automatically. Automatic retry is disabled. The current tray/CLI displays that login is required and directs the user to log off and sign in again.
 
-Automatic retries are disabled. The UI must expose a log-in action rather than displaying an endless reconnect loop.
+A direct in-process login-screen reopening flow remains deferred.
 
 ### `STOPPING`
 
-Shutdown or explicit disconnect is in progress. New transport callbacks may be recorded for diagnostics but must not schedule reconnects.
+Explicit disconnect or shutdown is releasing the client and clipboard monitor. Retry callbacks cannot restart the transport.
 
 ### `FATAL_ERROR`
 
-A non-recoverable local configuration or implementation error prevents further connection attempts.
-
-Automatic retries are disabled. A manual retry is permitted only after the caller explicitly clears or replaces the faulty configuration.
+A non-recoverable local error prevents automatic connection attempts. An explicit retry can clear the state and start a new attempt.
 
 ## Events
 
@@ -119,55 +106,51 @@ STOP_COMPLETED
 CONFIGURATION_REPLACED
 ```
 
-Transport adapters translate library callbacks and exceptions into these stable events. UI code does not translate raw socket exceptions.
+Unexpected transitions are rejected and emitted as structured diagnostics instead of silently mutating state.
 
-## Required transitions
+## Required transition summary
 
-| Current state | Event | Next state | Required effect |
-|---|---|---|---|
-| `DISCONNECTED` | `CONNECT_REQUESTED` | `CONNECTING` | Start one attempt |
-| `CONNECTING` | `CONNECT_SUCCEEDED` | `CONNECTED` | Record connection time and clear error |
-| `CONNECTING` | `CONNECT_FAILED_RECOVERABLE` | `RECONNECT_WAIT` | Record error and schedule bounded retry |
-| `CONNECTING` | `CONNECT_FAILED_AUTH` | `AUTH_REQUIRED` | Record actionable auth error; no retry |
-| `CONNECTING` | `CONNECT_FAILED_FATAL` | `FATAL_ERROR` | Record fatal error; no retry |
-| `CONNECTED` | `TRANSPORT_CLOSED_RECOVERABLE` | `RECONNECT_WAIT` | Record close reason and schedule retry |
-| `CONNECTED` | `TRANSPORT_CLOSED_AUTH` | `AUTH_REQUIRED` | Stop retrying and request login |
-| `RECONNECT_WAIT` | `RETRY_TIMER_EXPIRED` | `CONNECTING` | Clear timer and start one attempt |
-| `RECONNECT_WAIT` | `MANUAL_RECONNECT_REQUESTED` | `CONNECTING` | Cancel timer and start one attempt |
-| Any except `STOPPING` | `DISCONNECT_REQUESTED` | `STOPPING` | Cancel timer and stop transport |
-| `STOPPING` | `STOP_COMPLETED` | `DISCONNECTED` | Clear active transport and retry metadata |
-| `AUTH_REQUIRED` | `CONFIGURATION_REPLACED` | `DISCONNECTED` | Permit a fresh explicit connect |
-| `FATAL_ERROR` | `CONFIGURATION_REPLACED` | `DISCONNECTED` | Permit a fresh explicit connect |
+| Current state | Event | Next state |
+|---|---|---|
+| `DISCONNECTED` | `CONNECT_REQUESTED` | `CONNECTING` |
+| `CONNECTING` | `CONNECT_SUCCEEDED` | `CONNECTED` |
+| `CONNECTING` | recoverable failure | `RECONNECT_WAIT` outside login phase |
+| `CONNECTING` | auth failure | `AUTH_REQUIRED` |
+| `CONNECTING` | fatal failure | `FATAL_ERROR` |
+| `CONNECTED` | recoverable close | `RECONNECT_WAIT` |
+| `CONNECTED` | auth close | `AUTH_REQUIRED` |
+| `RECONNECT_WAIT` | timer expiry | `CONNECTING` |
+| `RECONNECT_WAIT` | manual reconnect | `CONNECTING` |
+| active state | explicit disconnect | `STOPPING` |
+| `STOPPING` | stop completed | `DISCONNECTED` |
+| auth/fatal state | configuration replaced | `DISCONNECTED` |
 
-Unexpected events must not silently mutate state. They are rejected and emitted as a structured diagnostic event.
+During the login phase, an initial recoverable connection failure is deliberately returned synchronously to the login flow instead of creating a hidden background retry loop.
 
 ## Retry policy
 
-The first implementation uses capped exponential backoff with jitter:
+The implemented policy uses capped exponential backoff with jitter:
 
 ```text
 base delay: 1 second
 cap: 30 seconds
-attempt exponent: 0, 1, 2, 3, ...
-raw delay: min(cap, base * 2^attempt)
+attempts: 1, 2, 3, ...
+raw delay: min(30, 1 * 2^(attempt - 1))
 jittered delay: uniformly selected from [0.5 * raw, raw]
 ```
 
 Properties:
 
 - one scheduled timer maximum;
-- one active connection attempt maximum;
-- all waits cancellable;
-- explicit disconnect disables retries;
-- authentication and fatal errors disable retries;
-- attempt counter resets only after 60 continuous seconds in `CONNECTED`;
-- test code injects the clock, random source, and scheduler.
-
-The exact delay selected for each retry is recorded without clipboard content.
+- one active attempt maximum;
+- timer waits are cancellable;
+- explicit disconnect invalidates stale callbacks using a generation token;
+- authentication and fatal errors do not retry;
+- retry count resets only after 60 continuous seconds connected;
+- tests inject clock, random source, and scheduler;
+- socket callbacks never call `time.sleep()`.
 
 ## Public snapshot
-
-The state machine exposes an immutable snapshot suitable for GUI and CLI rendering:
 
 ```python
 ConnectionSnapshot(
@@ -185,11 +168,9 @@ ConnectionSnapshot(
 )
 ```
 
-Timestamps use a monotonic clock for scheduling and wall-clock timestamps only for user display or exported diagnostics. The implementation must not compare wall-clock timestamps to schedule retries.
+Monotonic timestamps are used for scheduling. Snapshot and diagnostics fields never contain clipboard payloads.
 
-## Error model
-
-Transport-specific exceptions are normalized into stable error categories:
+## Normalized errors
 
 ```text
 NETWORK_UNREACHABLE
@@ -205,109 +186,111 @@ TRANSPORT_CLOSED
 UNKNOWN_TRANSPORT_ERROR
 ```
 
-Each normalized error includes:
+`ConnectionError` is classified before generic `OSError`, because Python's `ConnectionError` subclasses `OSError`. This avoids misclassifying a completed-but-closed handshake as generic network unreachability.
 
-- stable code;
-- concise user-facing message;
-- recoverable flag;
-- original exception class for diagnostics;
-- no clipboard payload.
+## STOMP handshake truth
 
-Raw exception text may be written to the local technical log, but exported diagnostics must redact credentials, cookies, URLs containing secrets, and clipboard data.
+`stomp_ws/client.py` now separates:
 
-## Send and receive observations
+1. WebSocket open;
+2. STOMP `CONNECT` transmission;
+3. STOMP `CONNECTED` receipt;
+4. subscription callback completion.
 
-The first state-machine change records transport observations but does not pretend they are server-level delivery acknowledgements.
+`connect()` returns successfully only after all four stages complete. It unblocks and raises on:
 
-- `last_send_at`: updated after the client library accepts a frame for transmission without raising.
-- `last_receive_at`: updated after a valid subscribed frame reaches the client.
-- send failure while connected records an error observation; whether it forces a state transition depends on the transport status.
-- no outbound item may be deleted from a future durable queue solely because `last_send_at` changed.
+- WebSocket open timeout;
+- STOMP handshake timeout;
+- STOMP `ERROR` frame;
+- socket error before readiness;
+- close before `CONNECTED`;
+- subscription callback failure.
 
-## UI contract
+Explicit disconnect suppresses the remote-close callback so an intentional stop cannot schedule a reconnect.
 
-The desktop tray and future status panel render snapshots only.
+## P2S manager integration
 
-Minimum labels:
+`STOMPManager` now:
 
-- `Connected`
-- `Connecting…`
-- `Reconnecting in N s — attempt M`
-- `Disconnected`
-- `Login required`
-- `Stopping…`
-- `Error — action required`
+- owns one `ConnectionController`;
+- creates a fresh STOMP client per connection attempt;
+- removes fixed-delay callback sleeps and recursive reconnect calls;
+- schedules retries through the controller;
+- starts clipboard monitoring once across reconnects;
+- records last accepted send and last valid receive times;
+- returns snapshot-derived status text through `get_stats()`;
+- exposes `get_connection_snapshot()` to GUI and CLI;
+- emits lost/restored notifications on runtime transitions;
+- cleans already-disconnected resources without emitting an invalid state transition.
 
-Minimum actions:
+`last_send_at` means the local client accepted the STOMP frame without raising. It is not treated as server-level delivery acknowledgement.
 
-- Connect when `DISCONNECTED`.
-- Reconnect now when `RECONNECT_WAIT`.
-- Disconnect when `CONNECTING`, `CONNECTED`, or `RECONNECT_WAIT`.
-- Log in when `AUTH_REQUIRED`.
-- Open logs and diagnostics for any error-bearing state.
+## GUI and CLI contract
 
-The tray icon must not start as connected. Its first rendered value comes from the initial `DISCONNECTED` snapshot.
+`connection/tray_view.py` maps P2S snapshots to one primary action:
 
-## Threading contract
+| State | Primary control |
+|---|---|
+| `DISCONNECTED` | Connect |
+| `CONNECTING` | Cancel connection |
+| `CONNECTED` | Disconnect |
+| `RECONNECT_WAIT` | Reconnect now |
+| `AUTH_REQUIRED` | Disabled login-required explanation |
+| `STOPPING` | Disabled stopping indicator |
+| `FATAL_ERROR` | Retry connection |
 
-- State mutation is serialized through one lock or one event-loop owner.
-- Observer callbacks receive snapshots after mutation, outside the mutation lock.
-- Socket callbacks do not sleep.
-- Retry waits run through an injected scheduler, not `time.sleep()` inside `_on_close()`.
-- Observer failure is isolated and logged; it does not corrupt transport state.
-- shutdown cancels timers before closing the socket.
+GUI and CLI use the same pure mapping. If an interface does not expose snapshots, the mapper deliberately falls back to the previous `is_connected` behavior for P2P compatibility.
 
-## Proposed source layout
+## Automated verification
 
-```text
-ClipCascade_Desktop/src/connection/
-    __init__.py
-    state.py
-    errors.py
-    retry.py
-    controller.py
+The unit suite currently covers:
 
-ClipCascade_Desktop/tests/
-    test_connection_state.py
-    test_retry_policy.py
-    test_connection_controller.py
-```
+- initial disconnected state;
+- duplicate attempt suppression;
+- recoverable retry scheduling;
+- manual retry and cancellation;
+- stale timer rejection;
+- authentication and fatal stops;
+- stable-period retry reset;
+- observer and scheduler failures;
+- send/receive observations;
+- STOMP success, timeout, ERROR, early close, socket error, callback failure, and explicit disconnect;
+- P2S manager connection, runtime close, manual and automatic recovery, auth stop, send/receive observations, and disconnect cancellation;
+- disconnected cleanup and exception classification;
+- every GUI/CLI primary-action mapping and P2P fallback.
 
-The first commit should contain the pure model, error types, retry calculator, and tests only. The second commit may adapt `STOMPManager`. The third may migrate tray rendering. This separation is mandatory to keep regressions attributable.
+The suite runs on both `ubuntu-latest` and `windows-latest`. The complete Windows executable and Linux package also build in the same workflow.
 
-## Required tests before transport integration
+## Acceptance progress
 
-1. Initial snapshot is `DISCONNECTED`, never `CONNECTED`.
-2. Duplicate connect requests create one attempt.
-3. Recoverable failure schedules exactly one retry.
-4. Retry timer expiry starts exactly one attempt.
-5. Manual reconnect cancels the pending timer.
-6. Explicit disconnect cancels retry and prevents close callbacks from rescheduling.
-7. Auth failure enters `AUTH_REQUIRED` with no timer.
-8. Fatal failure enters `FATAL_ERROR` with no timer.
-9. Stable connection resets the retry attempt only after 60 seconds.
-10. Backoff never exceeds 30 seconds and remains inside the jitter interval.
-11. Stale timer callbacks are ignored by generation token.
-12. Observer exception does not alter state.
-13. Shutdown reaches `DISCONNECTED` and leaves no timer or active attempt.
-14. Snapshot timestamps and error fields update deterministically under an injected clock.
-15. No test fixture or diagnostic snapshot contains clipboard content.
-
-## Acceptance gate for replacing existing reconnect logic
-
-The existing `STOMPManager` fixed-delay reconnect code may be removed only when:
-
-- the pure state-machine tests pass on Windows and Linux CI;
-- a fake transport integration test proves reconnect, cancellation, auth stop, and shutdown;
-- `get_stats()` or its replacement returns a snapshot-derived status;
-- the tray no longer owns an independent connection boolean;
-- the Windows executable and Linux package still build;
-- manual smoke testing confirms connect, disconnect, forced network loss, automatic recovery, and quit.
+| Gate | Status |
+|---|---|
+| Pure model tests pass on Windows and Linux | Complete |
+| Fake transport reconnect/cancellation/auth/shutdown tests | Complete |
+| Actual STOMP readiness precedes connected state | Complete |
+| Snapshot-derived `get_stats()` | Complete |
+| P2S GUI/CLI actions derived from snapshots | Complete |
+| Windows executable builds | Complete |
+| Linux package builds | Complete |
+| Real server login/connect smoke test | Not yet performed |
+| Forced network-loss and automatic-recovery smoke test | Not yet performed |
+| P2P migration to same controller | Not yet implemented |
+| Persistent full status window | Not yet implemented |
+| Diagnostics export | Not yet implemented |
 
 ## Deferred decisions
 
-- Application-level delivery acknowledgement and durable queue deletion.
-- P2P-specific peer-count and signaling detail fields.
-- Full diagnostics bundle schema.
-- Persistent status-window visual design.
-- Whether the CLI should use event subscription or low-frequency snapshot polling.
+- application-level acknowledgement and durable queue deletion;
+- P2P peer/signaling state integration;
+- reconnect-capable in-process reauthentication UI;
+- full diagnostics bundle schema;
+- persistent status-window layout;
+- event-driven CLI redraw instead of one-second status polling.
+
+## Exact next desktop actions
+
+1. Perform a real Windows P2S smoke test against the unchanged public server.
+2. Force DNS/network loss, verify countdown, manual reconnect, automatic recovery, and quit.
+3. Record logs and observed snapshots without clipboard contents.
+4. Add a diagnostics/status window backed by the existing snapshot rather than another state store.
+5. Characterize P2P signaling callbacks, then migrate P2P through a separate tested adapter.
