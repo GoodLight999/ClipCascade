@@ -38,29 +38,27 @@ class OrdinaryClipboardBackend(
 
     override fun start(
         triggerSink: (AcquisitionTrigger) -> Unit,
-    ): BackendStartResult {
-        synchronized(lock) {
-            if (running) {
-                return BackendStartResult(BackendStartCode.ALREADY_RUNNING)
-            }
-            this.triggerSink = triggerSink
+    ): BackendStartResult = synchronized(lock) {
+        if (running) {
+            return@synchronized BackendStartResult(
+                BackendStartCode.ALREADY_RUNNING,
+            )
         }
 
-        return try {
+        this.triggerSink = triggerSink
+        try {
+            // Registration is serialized with start/stop. The Android registrar
+            // operation is bounded and does not perform clipboard reads.
             registrar.register(listener)
-            synchronized(lock) {
-                running = true
-                startCount += 1
-                lastStartedAtMonotonicMs = clock.nowMs()
-                lastErrorCode = null
-            }
+            running = true
+            startCount += 1
+            lastStartedAtMonotonicMs = clock.nowMs()
+            lastErrorCode = null
             BackendStartResult(BackendStartCode.STARTED)
         } catch (_: Exception) {
-            synchronized(lock) {
-                this.triggerSink = null
-                running = false
-                lastErrorCode = BackendReasonCode.BACKEND_START_FAILED
-            }
+            this.triggerSink = null
+            running = false
+            lastErrorCode = BackendReasonCode.BACKEND_START_FAILED
             BackendStartResult(
                 BackendStartCode.FAILED,
                 BackendReasonCode.BACKEND_START_FAILED,
@@ -68,30 +66,26 @@ class OrdinaryClipboardBackend(
         }
     }
 
-    override fun stop(): BackendStopResult {
-        synchronized(lock) {
-            if (!running) {
-                triggerSink = null
-                return BackendStopResult(BackendStopCode.ALREADY_STOPPED)
-            }
-            // Mark stopped before unregistering so an in-flight callback cannot
-            // emit after shutdown has begun.
-            running = false
+    override fun stop(): BackendStopResult = synchronized(lock) {
+        if (!running) {
             triggerSink = null
+            return@synchronized BackendStopResult(
+                BackendStopCode.ALREADY_STOPPED,
+            )
         }
 
-        return try {
+        // Mark stopped before unregistering so a re-entrant callback cannot
+        // emit after shutdown has begun.
+        running = false
+        triggerSink = null
+        try {
             registrar.unregister(listener)
-            synchronized(lock) {
-                lastStoppedAtMonotonicMs = clock.nowMs()
-                lastErrorCode = null
-            }
+            lastStoppedAtMonotonicMs = clock.nowMs()
+            lastErrorCode = null
             BackendStopResult(BackendStopCode.STOPPED)
         } catch (_: Exception) {
-            synchronized(lock) {
-                lastStoppedAtMonotonicMs = clock.nowMs()
-                lastErrorCode = BackendReasonCode.BACKEND_STOP_FAILED
-            }
+            lastStoppedAtMonotonicMs = clock.nowMs()
+            lastErrorCode = BackendReasonCode.BACKEND_STOP_FAILED
             BackendStopResult(
                 BackendStopCode.FAILED,
                 BackendReasonCode.BACKEND_STOP_FAILED,
