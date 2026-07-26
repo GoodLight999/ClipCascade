@@ -5,7 +5,14 @@ Last updated: 2026-07-27 (Asia/Tokyo)
 ## Read this first
 
 This is the canonical continuation document for `GoodLight999/Trial-and-Error-ClipCascade`.
-A new thread must read this file and `docs/EXPERIMENT_LOG.md` before inspecting or changing code.
+A new thread must read, in order:
+
+1. `docs/HANDOFF.md`
+2. `docs/EXPERIMENT_LOG.md`
+3. `docs/EXPERIMENT_LOG_2026-07-27_SHIZUKU.md`
+4. `docs/EXPERIMENT_LOG_2026-07-27_SHIZUKU_BUILD.md`
+5. `docs/EXPERIMENT_LOG_2026-07-27_DESKTOP_RECOVERY.md`
+6. Draft PR `#4`
 
 ## Canonical repository state
 
@@ -15,29 +22,29 @@ A new thread must read this file and `docs/EXPERIMENT_LOG.md` before inspecting 
 - Mirror branch: `main`
 - Active development branch: `stability-recovery`
 - Active draft PR: `#4`
-- Latest green Android product head: `613006702d22444449ce69500934c08e8a953ce0`
-- Latest green Android workflow: `30209366320`
-- Latest green desktop product head: `4174f87e5c4c4d5ffaf6ed07b1862fcfb77623d6`
-- Latest green desktop workflow: `30210415035`
+- Latest green product-code head: `6dc93e08b10db5f3f138cce6b6d867548f9f89c4`
+- Latest green Android workflow: `30211592338`
+- Latest green desktop workflow on the same product head: `30211592333`
 
 The repository reset is already complete. **Do not reset, reconstruct, re-baseline, or start another clean-rebuild project.**
 
 ## Permanent operating rules
 
 1. **No wheel reinvention.** Inspect upstream and the named references before designing an equivalent mechanism.
-2. **Never return to completed setup work.** Check this handoff and the experiment log first.
-3. Keep `main` aligned with upstream. Product work belongs on a focused development branch.
-4. Extend existing runtime paths instead of creating parallel transports, state owners, or speculative frameworks.
-5. Do not stack unverified fixes. Build and test each focused unit before expanding it.
+2. **Never return to completed setup work.** Read this handoff and the logs before starting.
+3. Keep `main` aligned with upstream. Product work belongs on `stability-recovery` or a later focused branch created from its accepted state.
+4. Extend existing runtime paths instead of creating parallel transports, duplicate state owners, or speculative frameworks.
+5. Do not stack unverified fixes. Build and test each focused unit before expansion.
 6. Compilation and unit tests are not runtime proof. Android and desktop reliability require real-device/runtime evidence.
-7. Record every meaningful hypothesis, source, implementation, failure, result, artifact, and decision in `docs/EXPERIMENT_LOG.md`.
-8. Update this handoff whenever completed work, known failures, artifacts, or exact next actions change.
+7. Record every meaningful source, hypothesis, implementation, failure, correction, result, artifact, and decision.
+8. Update this handoff whenever completed work, artifacts, known failures, or exact next actions change.
 9. Preserve the Sathvik-Rao server protocol and public-server compatibility.
 10. Do not require root.
 11. Do not inspect archived patchwork except for narrowly named, evidence-driven recovery.
-12. Do not restore the failed Android diagnostics/acquisition scaffolding from archived PR #3.
+12. Never restore failed Android diagnostics/acquisition scaffolding from archived PR `#3`.
 13. APK, EXE, and Linux artifact generation are product requirements, not CI decoration.
-14. Never label an artifact as runtime-proven merely because CI is green.
+14. Never call an artifact runtime-proven merely because CI is green.
+15. Do not introduce a named backend, model, or status unless a real runtime path uses it.
 
 ## Product requirements that must not be forgotten
 
@@ -46,10 +53,10 @@ The repository reset is already complete. **Do not reset, reconstruct, re-baseli
 - Make Android-to-server clipboard sharing reliable while ClipCascade is in the background.
 - Ordinary listener, Accessibility, Shizuku, guided ADB, or a safe combination may be used; root must not be required.
 - Reduce unnecessary wakeups, polling, overlays, and battery drain without sacrificing reliability.
-- Provide a setup guide usable by a non-technical user.
+- Provide setup usable by a non-technical user.
 - Shizuku setup must be automated or semi-automated and explain restart recovery.
-- Provide an automatic diagnostic flow that can be run by opening the app and tapping through clear steps.
-- Do not interfere with drawers, Amazon/browser search fields, text selection, or ordinary touch/focus behavior.
+- Provide an automatic diagnostic flow that can be run by opening the app and tapping clear steps.
+- Do not interfere with launcher drawers, Amazon/browser search fields, text selection, or ordinary touch/focus behavior.
 - Prevent duplicate sends and distinguish capture, local transport acceptance, server delivery, and remote application.
 
 ### Windows and Linux
@@ -69,19 +76,19 @@ The repository reset is already complete. **Do not reset, reconstruct, re-baseli
 
 Inspect these before implementing the corresponding feature:
 
-1. Upstream source: `https://github.com/Sathvik-Rao/ClipCascade`
-2. Removed Go/Android history: `https://github.com/wuxinkami/ClipCascade_go_fork`
-3. OctoClip Shizuku documentation: `https://docs.octoclip.app/features/source/background-monitoring/android/shizuku`
-4. OctoClip Accessibility documentation: `https://docs.octoclip.app/features/source/background-monitoring/android/accessibility`
+1. `https://github.com/Sathvik-Rao/ClipCascade`
+2. `https://github.com/wuxinkami/ClipCascade_go_fork`
+3. `https://docs.octoclip.app/features/source/background-monitoring/android/shizuku`
+4. `https://docs.octoclip.app/features/source/background-monitoring/android/accessibility`
 5. Official Android clipboard, Accessibility, foreground-service, and background-start documentation.
-6. Official Shizuku source, API guide, demo, and user setup documentation before Shizuku implementation.
+6. Official Shizuku API source, README, demo, UserService, AIDL, lifecycle, and setup documentation.
 
 ## Archived development lines
 
 - Prior patchwork PR `#1`: closed and unmerged; never use as a baseline.
-- Failed clean-rebuild PR `#3`: closed and unmerged; never restore it wholesale.
+- Failed clean-rebuild PR `#3`: closed and unmerged; never restore wholesale.
 
-A narrow recovery exception was applied to independently reviewable Windows code from product-code commit `a94b830fb954d09fc742b39833cebd5915988566`. Only the connection controller, retry policy, STOMP readiness, tray projection, and tests were selectively recovered after comparison with upstream. The old Android diagnostics and speculative acquisition framework remain excluded.
+A narrow recovery exception was used for independently reviewable Windows code from product-code commit `a94b830fb954d09fc742b39833cebd5915988566`. Only connection state, retry, STOMP readiness, tray projection, and tests were recovered after comparison with upstream. Archived Android diagnostics and speculative acquisition abstractions remain excluded.
 
 ## Existing upstream Android path being extended
 
@@ -96,69 +103,92 @@ Upstream already contains:
 - share-sheet/PROCESS_TEXT fallback;
 - boot receiver, battery guidance, and ADB guidance.
 
-The recovery branch extends this path. It does not create a second Android transport.
-
-## Android reference archaeology
-
-The deleted Android implementation in `wuxinkami/ClipCascade_go_fork` had a foreground service, Accessibility trigger, invisible overlay clipboard read, debounce, self-loop suppression, and permission guidance.
-
-Its Accessibility service also reacted to generic clicks and text-selection changes. That broad policy was intentionally rejected because it could create false triggers, unnecessary wakeups, and the reported Amazon/search-field interference.
+The active branch extends this path. It does not create a second Android transport.
 
 ## Android milestone A11Y-001
 
-Implemented and Android-build verified:
+Implemented and build-verified:
 
-- process-wide visibility of whether the existing React Native clipboard runtime is active;
-- conservative `ClipCascadeAccessibilityService`;
-- triggers limited to high-confidence copy actions, copy-labelled clicks, and copied-confirmation notifications/announcements;
+- conservative Accessibility copy trigger;
+- high-confidence copy actions, labels, and copied confirmations only;
 - no generic-click or generic-selection trigger;
 - no Accessibility window-content retrieval;
-- own-package events ignored;
+- own-package and inactive-runtime events ignored;
 - debounce and clipboard-write settling delay;
-- no trigger while the existing foreground runtime is inactive;
-- no trigger while overlay permission is absent;
-- reuse of existing `ClipboardFloatingActivity` and JavaScript send/dedup path;
-- safer overlay intent flags with `CLEAR_TASK` removed;
+- reuse of the existing React Native event, send, dedup, and overlay paths;
+- `CLEAR_TASK` removed from the overlay path;
 - fail-closed overlay behavior when permission or React Native runtime is unavailable;
-- native `BackgroundSetupActivity` showing Accessibility, overlay, READ_LOGS, battery exemption, and foreground-runtime state;
-- system-settings buttons, ADB fallback command copy, refresh, and return-to-app controls;
-- launcher long-press setup shortcut;
+- native setup/status activity and launcher long-press shortcut;
 - platform theme colors instead of the failed custom diagnostic panel;
-- Metro-free `standalone` build using release runtime semantics and debug signing;
-- CI checks for app tests, APK build, JS bundle presence, ZIP integrity, artifact upload, and SHA-256.
+- Metro-free `standalone` build with release runtime semantics and debug signing.
 
-Build verification does **not** prove real-device background capture or UI safety.
+The deleted Go/Android reference used broad generic-click and text-selection triggers. Those triggers were intentionally rejected because they could recreate the reported Amazon/search-field interference and unnecessary wakeups.
+
+## Android milestone SHIZUKU-001
+
+Implemented and build-verified:
+
+- official Shizuku API/provider `13.1.5`;
+- official UserService and AIDL pattern;
+- application-level Shizuku binder, permission, binder-death, UserService binding, UID, and error status;
+- shell-side read-only clipboard UserService;
+- adaptive reflection over Android `IClipboard.getPrimaryClip` signatures;
+- `com.android.shell` identity supplied to the clipboard service;
+- one shared `BackgroundClipboardCapture` decision point;
+- Accessibility and READ_LOGS triggers try Shizuku first;
+- successful Shizuku text reads return to the existing React Native `onClipboardChange -> sendClipBoard` path;
+- Shizuku absence, stop, denial, binding state, error, or non-text clip falls back to the existing overlay path;
+- no new transport, network client, polling loop, outbound queue, or payload history;
+- guided setup shows installation, running state, permission, UserService binding, service UID, Accessibility, overlay, READ_LOGS, battery exemption, foreground runtime, and last non-payload error;
+- setup can open/install Shizuku, request permission, bind, and run a privacy-safe read test;
+- the read test reports only type and length, never clipboard content.
+
+### Intentional first-version limitation
+
+Direct Shizuku output is text-only. Image/file content URIs may be readable by the shell UserService but not by the ClipCascade app process because URI grants are process/identity-sensitive. Non-text clips therefore use the existing app-process overlay path until a separate permission/stream-transfer experiment proves a safe implementation.
+
+### What SHIZUKU-001 does not yet do
+
+- It does not monitor clipboard changes by itself.
+- It still needs an event trigger: ordinary listener in foreground, conservative Accessibility, or READ_LOGS/ADB.
+- A Shizuku-side clipboard-change listener will be considered only if real-device evidence shows it is needed and safe.
 
 ## Latest verified Android artifact
 
-- Workflow: `30209366320`
-- Head: `613006702d22444449ce69500934c08e8a953ce0`
-- APK artifact ID: `8634074763`
-- Build-log artifact ID: `8634074053`
-- File: `ClipCascade-Android-stability-standalone.apk`
-- Size: `93,544,663` bytes
-- SHA-256: `b2bca637638a829c8c594df567ca6951f56972ffc70b8c7d03fef326bed4e857`
+- Workflow: `30211592338`
+- Product head: `6dc93e08b10db5f3f138cce6b6d867548f9f89c4`
+- APK artifact ID: `8634676818`
+- Build-log artifact ID: `8634676151`
+- Artifact file: `ClipCascade-Android-stability-standalone.apk`
+- User-facing file: `ClipCascade-Android-stability-shizuku.apk`
+- Size: `93,585,807` bytes
+- SHA-256: `d28da7716e5069ab2ae63926bc0e8b6495adaacdead69ec4590dea69bedf274b`
 - Exact `assets/index.android.bundle`: present
 - APK ZIP integrity: passed
+- APK entry count: `538`
 - Status: debug-signed engineering artifact, not a production release
 
 ## Android build failures retained as evidence
 
 ### Run `30209073143`
 
-`app/build.gradle` referenced `hermesEnabled`, but the upstream-aligned tree lacked `android/gradle.properties`. Standard React Native 0.80 properties were restored, including `newArchEnabled=true` and `hermesEnabled=true`.
+The upstream-aligned tree lacked required React Native Gradle properties. Standard React Native 0.80 properties were restored, including `newArchEnabled=true` and `hermesEnabled=true`.
 
 ### Run `30209210999`
 
 Direct `assembleStandalone` reached React Native CMake autolinking before generated JNI directories existed. The previously proven order was reused: `:app:testDebugUnitTest` then `:app:assembleStandalone`. Dependencies were not patched.
 
-### Run `30209366320`
+### Replaced Shizuku run `30211379415`
 
-Android tests, build, bundle-presence check, ZIP integrity, checksum, and artifact upload passed.
+The run was replaced by a later PR update, but its retained build log reached Kotlin compilation and showed that `IShizukuClipboardService` had not been generated. Root cause: AIDL generation was disabled. Correction: add only `buildFeatures { aidl true }` and retain the official AIDL/UserService design.
+
+### Run `30211592338`
+
+AIDL, Shizuku dependencies, Kotlin, Android resources, app tests, standalone APK, JS-bundle check, ZIP integrity, checksum, and artifact upload passed.
 
 ## Desktop milestone DESKTOP-001
 
-Selectively recovered and reverified on both Ubuntu and Windows:
+Selectively recovered and verified on Ubuntu and Windows:
 
 - authoritative `ConnectionController`;
 - states `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECT_WAIT`, `AUTH_REQUIRED`, `STOPPING`, and `FATAL_ERROR`;
@@ -167,29 +197,23 @@ Selectively recovered and reverified on both Ubuntu and Windows:
 - cancellable retry timers and stale-generation invalidation;
 - no socket-callback sleeps or recursive reconnect;
 - fresh STOMP client per attempt;
-- connection is not reported until STOMP `CONNECTED` and subscription callback complete;
+- connection reported only after STOMP `CONNECTED` and successful subscription callback;
 - timeout, socket error, close-before-CONNECTED, STOMP ERROR, and subscription-failure unblocking;
 - explicit disconnect suppresses the remote-close callback;
-- automatic reconnect after runtime loss;
-- manual immediate reconnect during retry wait;
-- login-required and fatal-error states;
+- automatic and manual reconnect;
+- login-required and fatal states;
 - lost/restored notifications;
 - last accepted send and valid receive observations;
-- GUI and CLI tray projections for connect, reconnect, disconnect, login-required, stopping, and fatal error;
-- legacy P2P boolean fallback retained until P2P is migrated;
-- missing `logging` imports in the archived GUI/CLI tray code were found during review and corrected rather than blindly restored.
+- GUI and CLI tray state projection;
+- legacy P2P boolean fallback retained;
+- missing `logging` imports in the archived GUI/CLI tray code found and corrected.
 
-The existing STOMP destinations, request/cookie handling, encryption payload format, and server protocol were not changed.
+The STOMP destinations, cookie handling, encryption payload format, and server protocol were not changed.
 
-## Latest verified desktop artifacts
+## Verified desktop artifacts
 
-Workflow `30210415035` at head `4174f87e5c4c4d5ffaf6ed07b1862fcfb77623d6` passed:
-
-- desktop syntax checks and unit tests on Ubuntu;
-- desktop syntax checks and unit tests on Windows;
-- Windows PyInstaller EXE build;
-- Linux source-package build;
-- artifact checksums and uploads.
+Original independently checked desktop artifact run: `30210415035`.
+The same desktop tests and package jobs also passed on Shizuku product head in workflow `30211592333`.
 
 ### Windows
 
@@ -197,9 +221,9 @@ Workflow `30210415035` at head `4174f87e5c4c4d5ffaf6ed07b1862fcfb77623d6` passed
 - File: `ClipCascade-Windows-stability.exe`
 - Size: `57,456,012` bytes
 - SHA-256: `4dc7aa89917ae3f0779428327013745dc2c64e33809ee4633fcb2308598e0b69`
-- Independent identification: PE32+ GUI executable, x86-64
+- PE32+ GUI x86-64
 - Artifact ZIP integrity: passed
-- Embedded checksum: matched independent recalculation
+- Embedded checksum matched independent recalculation
 
 ### Linux
 
@@ -207,57 +231,64 @@ Workflow `30210415035` at head `4174f87e5c4c4d5ffaf6ed07b1862fcfb77623d6` passed
 - File: `ClipCascade-Linux-stability.tar.gz`
 - Size: `60,389` bytes
 - SHA-256: `8e3421abf268cd9a6488ec9a8353ae92c5bd88207529324ae83eabdd390640d6`
-- Independent identification: gzip-compressed Unix tar archive
+- gzip-compressed Unix tar
 - Archive integrity: passed
 - Entry count: `59`
-- Embedded checksum: matched independent recalculation
+- Embedded checksum matched independent recalculation
 
-## Explicitly not yet implemented or proven
+## Explicitly not yet proven
 
 ### Android
 
-- successful launch of the latest APK on the user's device;
-- real-device foreground/background capture;
-- Amazon, launcher drawer, browser, selection toolbar, and search-field regression tests;
-- duplicate-send acceptance tests;
-- battery/wakeup measurement;
-- Shizuku integration and guided restart recovery;
+- launch and setup-screen rendering on the user's device;
+- Shizuku installation/start/permission/UserService binding on that device;
+- expected shell UID in the UserService;
+- hidden clipboard Binder read on the user's Android/vendor build;
+- foreground/background clipboard delivery to the server and remote Windows device;
+- automatic overlay fallback after Shizuku stop or denial;
+- Amazon, launcher drawer, browser, selection toolbar, and search-field safety;
+- duplicate-send behavior;
+- battery/wakeup behavior;
+- Shizuku-only clipboard-change monitoring;
 - durable outbound queue or server-level delivery acknowledgement;
-- true end-to-end automatic diagnostic mode.
+- full end-to-end automatic diagnostic flow.
 
 ### Desktop
 
-- public-server runtime test of the generated EXE;
-- forced network-loss and recovery test on a real Windows installation;
-- real tray rendering and manual control acceptance on Windows;
+- generated EXE against the public server;
+- forced real network-loss and recovery;
+- actual tray rendering/manual controls on Windows;
 - seamless in-process reauthentication after `AUTH_REQUIRED`;
-- P2P migration to the authoritative snapshot contract;
-- application-level delivery acknowledgement and durable outbound queue;
+- P2P migration to the snapshot contract;
+- durable outbound queue and application-level delivery acknowledgement;
 - persistent full status window or diagnostics export bundle.
 
 ## Exact next actions
 
-1. Install and launch the latest Android APK on the user's device.
-2. Verify the launcher long-press `バックグラウンド設定` screen in light and dark modes.
-3. Start the existing service and enable overlay plus ClipCascade Accessibility.
-4. Test ordinary foreground, Accessibility background, and READ_LOGS/ADB capture separately.
-5. Test launcher drawer, Amazon, browser, selection toolbar, and search fields for regressions.
-6. Record capture, duplicate-send, focus, dismissed-UI, and battery observations.
-7. Run the generated Windows EXE against the existing server and force network loss/restoration.
-8. Record tray/status/reconnect behavior and any public-server incompatibility.
-9. Implement Shizuku as the preferred stable Android path only after inspecting official Shizuku APIs/demo and OctoClip's documented flow.
-10. Expand diagnostics only after real capture and transport stages are available to test.
+1. Install `ClipCascade-Android-stability-shizuku.apk`.
+2. Start Shizuku using its normal wireless-debugging or computer-assisted setup.
+3. Long-press ClipCascade and open `バックグラウンド設定`.
+4. Confirm readable light/dark rendering.
+5. Confirm Shizuku installed/running, grant ClipCascade permission, and wait for UserService connection.
+6. Confirm the displayed service UID is a shell UID rather than the ClipCascade app UID.
+7. Copy text and run the privacy-safe Shizuku read test.
+8. Start the existing ClipCascade foreground service and test background text copies through Accessibility.
+9. Stop Shizuku and repeat to verify overlay fallback.
+10. Test launcher drawer, Amazon, browser, selection toolbar, and search fields for focus/input regressions.
+11. Record missed sends, duplicate sends, UI changes, wakeups, and battery behavior.
+12. Run `ClipCascade-Windows-stability.exe` against the existing server and force network loss/restoration.
+13. Decide from evidence whether a Shizuku-side change listener, durable queue, or expanded diagnostics are the next bottleneck.
 
 ## Continuation checklist
 
 A new thread must recover without archived patchwork:
 
-- canonical baseline, active branch, and PR;
-- original product requirements;
-- permanent no-wheel-reinvention rule;
-- required reference links;
-- Android and desktop implementation status;
+- baseline, active branch, PR, and latest green product head;
+- original requirements;
+- no-wheel-reinvention rule;
+- required references;
+- A11Y, Shizuku, and desktop implementation boundaries;
 - build-verified versus runtime/device-verified claims;
 - latest workflows, artifacts, sizes, and hashes;
 - retained failures and corrections;
-- exact next action.
+- exact next actions.
