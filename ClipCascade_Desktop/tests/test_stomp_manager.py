@@ -119,6 +119,7 @@ stub_module(
 stub_module("gui.tray", TaskbarPanel=StubTaskbarPanel)
 
 from connection.controller import ConnectionController
+from connection.errors import ConnectionErrorCode
 from connection.state import ConnectionState
 from stomp_ws.stomp_manager import STOMPManager
 
@@ -356,6 +357,29 @@ class STOMPManagerIntegrationTests(unittest.TestCase):
         self.assertEqual(manager.clipboard_manager.stop_count, 1)
         pending.fire(force=True)
         self.assertEqual(len(factory.clients), 1)
+
+    def test_disconnect_while_already_disconnected_emits_no_invalid_transition(self):
+        manager, _factory, _scheduler, _clock = self.make_manager()
+        diagnostics = []
+        manager.connection_controller._on_diagnostic = (
+            lambda code, message: diagnostics.append((code, message))
+        )
+
+        manager.disconnect()
+
+        self.assertEqual(
+            manager.get_connection_snapshot().state,
+            ConnectionState.DISCONNECTED,
+        )
+        self.assertEqual(diagnostics, [])
+
+    def test_generic_connection_error_maps_to_transport_closed(self):
+        manager, _factory, _scheduler, _clock = self.make_manager()
+
+        info = manager._normalize_exception(ConnectionError("handshake closed"))
+
+        self.assertEqual(info.code, ConnectionErrorCode.TRANSPORT_CLOSED)
+        self.assertTrue(info.recoverable)
 
 
 if __name__ == "__main__":
