@@ -9,6 +9,8 @@ data class AcquisitionDiagnosticsSnapshot(
     val ordinaryRunning: Boolean,
     val ordinaryStartCount: Long,
     val ordinaryTriggerCount: Long,
+    val ordinaryLastStartedAtMonotonicMs: Long?,
+    val ordinaryLastStoppedAtMonotonicMs: Long?,
     val ordinaryLastTriggerAtMonotonicMs: Long?,
     val ordinaryLastErrorCode: BackendReasonCode?,
     val logcatSdkEligible: Boolean,
