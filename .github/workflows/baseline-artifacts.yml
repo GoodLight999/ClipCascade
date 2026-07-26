@@ -57,7 +57,7 @@ jobs:
         run: python -m unittest discover -s tests -p "test_*.py" -v
 
   android-apk:
-    name: Android debug APK
+    name: Android tests and debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -85,12 +85,12 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
-      - name: Build debug APK
+      - name: Run acquisition unit tests and build debug APK
         run: |
           mkdir -p ci-logs/android
           chmod +x android/gradlew
           set -o pipefail
-          (cd android && ./gradlew --no-daemon --stacktrace assembleDebug) 2>&1 | tee ci-logs/android/gradle-build.log
+          (cd android && ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug) 2>&1 | tee ci-logs/android/gradle-build.log
 
       - name: Upload Android build log
         if: always()
