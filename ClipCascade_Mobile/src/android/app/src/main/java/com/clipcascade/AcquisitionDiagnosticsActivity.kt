@@ -80,6 +80,14 @@ class AcquisitionDiagnosticsActivity : AppCompatActivity() {
 
         container.addView(
             Button(this).apply {
+                text = getString(R.string.acquisition_diagnostics_run_self_test)
+                setOnClickListener { runSelfTest() }
+            },
+            matchWidthParams(topMarginDp = 8),
+        )
+
+        container.addView(
+            Button(this).apply {
                 text = getString(R.string.acquisition_diagnostics_overlay_settings)
                 setOnClickListener { openOverlaySettings() }
             },
@@ -114,18 +122,18 @@ class AcquisitionDiagnosticsActivity : AppCompatActivity() {
         }
     }
 
+    private fun acquisitionModule(): ClipboardListenerModule? = runCatching {
+        val application = applicationContext as MainApplication
+        val reactContext = application
+            .reactNativeHost
+            .reactInstanceManager
+            .currentReactContext
+            ?: return@runCatching null
+        reactContext.getNativeModule(ClipboardListenerModule::class.java)
+    }.getOrNull()
+
     private fun refreshSnapshot() {
-        val snapshot = runCatching {
-            val application = applicationContext as MainApplication
-            val reactContext = application
-                .reactNativeHost
-                .reactInstanceManager
-                .currentReactContext
-                ?: return@runCatching null
-            reactContext
-                .getNativeModule(ClipboardListenerModule::class.java)
-                ?.snapshotForDiagnostics()
-        }.getOrNull()
+        val snapshot = acquisitionModule()?.snapshotForDiagnostics()
 
         statusView.text = if (snapshot == null) {
             getString(R.string.acquisition_diagnostics_module_unavailable)
@@ -135,6 +143,30 @@ class AcquisitionDiagnosticsActivity : AppCompatActivity() {
                 nowMonotonicMs = SystemClock.elapsedRealtime(),
             )
         }
+    }
+
+    private fun runSelfTest() {
+        val module = acquisitionModule()
+        if (module == null) {
+            statusView.text = getString(
+                R.string.acquisition_diagnostics_module_unavailable,
+            )
+            return
+        }
+
+        val result = runCatching { module.startAcquisitionSelfTest() }
+        if (result.isFailure) {
+            val failureName = result.exceptionOrNull()?.javaClass?.simpleName ?: "Unknown"
+            statusView.text = getString(
+                R.string.acquisition_diagnostics_self_test_emit_failed,
+                failureName,
+            )
+            return
+        }
+
+        refreshSnapshot()
+        statusView.postDelayed({ refreshSnapshot() }, 350)
+        statusView.postDelayed({ refreshSnapshot() }, 5_200)
     }
 
     private fun openOverlaySettings() {
