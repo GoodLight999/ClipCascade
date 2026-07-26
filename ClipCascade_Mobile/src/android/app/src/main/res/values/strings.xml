@@ -8,6 +8,8 @@
     <string name="acquisition_diagnostics_loading">Loading acquisition state…</string>
     <string name="acquisition_diagnostics_module_unavailable">The React Native capture module is not active in this process. Open ClipCascade, start the service, then return and refresh.</string>
     <string name="acquisition_diagnostics_refresh">Refresh</string>
+    <string name="acquisition_diagnostics_run_self_test">Run native → React Native self-test</string>
+    <string name="acquisition_diagnostics_self_test_emit_failed">Self-test event could not be emitted (%1$s).</string>
     <string name="acquisition_diagnostics_overlay_settings">Overlay permission settings</string>
     <string name="acquisition_diagnostics_open_app">Open ClipCascade</string>
     <string name="acquisition_diagnostics_close">Close</string>
