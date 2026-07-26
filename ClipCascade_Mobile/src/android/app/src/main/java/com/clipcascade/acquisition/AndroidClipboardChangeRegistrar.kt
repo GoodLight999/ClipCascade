@@ -15,6 +15,8 @@ class AndroidClipboardChangeRegistrar(
     @Synchronized
     override fun register(listener: () -> Unit) {
         if (listeners.containsKey(listener)) {
+            // The same logical listener may remain registered after a framework
+            // removal failure. Reuse it instead of creating a duplicate.
             return
         }
         val androidListener = ClipboardManager.OnPrimaryClipChangedListener {
@@ -26,7 +28,8 @@ class AndroidClipboardChangeRegistrar(
 
     @Synchronized
     override fun unregister(listener: () -> Unit) {
-        val androidListener = listeners.remove(listener) ?: return
+        val androidListener = listeners[listener] ?: return
         clipboardManager.removePrimaryClipChangedListener(androidListener)
+        listeners.remove(listener)
     }
 }
