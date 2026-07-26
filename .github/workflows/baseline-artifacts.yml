@@ -1,9 +1,9 @@
 name: Clean rebuild verification
 
 on:
-  push:
+  pull_request:
     branches:
-      - clean-rebuild
+      - main
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
