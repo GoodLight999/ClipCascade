@@ -10,6 +10,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.clipcascade.acquisition.AcquisitionBackendId
 import com.clipcascade.acquisition.AcquisitionDiagnosticsSnapshot
+import com.clipcascade.acquisition.AcquisitionSelfTestTracker
 import com.clipcascade.acquisition.AndroidClipboardChangeRegistrar
 import com.clipcascade.acquisition.BackendReasonCode
 import com.clipcascade.acquisition.BackendStartCode
@@ -24,6 +25,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableMap
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.text.SimpleDateFormat
@@ -33,13 +35,19 @@ import java.util.Locale
 class ClipboardListenerModule(
     reactContext: ReactApplicationContext,
 ) : ReactContextBaseJavaModule(reactContext) {
+    private val monotonicClock = MonotonicClock { SystemClock.elapsedRealtime() }
+
     private val clipboardManager = reactContext.getSystemService(
         Context.CLIPBOARD_SERVICE,
     ) as android.content.ClipboardManager
 
     private val ordinaryBackend = OrdinaryClipboardBackend(
         registrar = AndroidClipboardChangeRegistrar(clipboardManager),
-        clock = MonotonicClock { SystemClock.elapsedRealtime() },
+        clock = monotonicClock,
+    )
+
+    private val selfTestTracker = AcquisitionSelfTestTracker(
+        clock = monotonicClock,
     )
 
     @Volatile
@@ -122,6 +130,46 @@ class ClipboardListenerModule(
     }
 
     /**
+     * Starts a synthetic native -> React Native -> native acknowledgement.
+     * The event contains only a diagnostic test ID and never reads clipboard
+     * content or enters the outbound send path.
+     */
+    @Synchronized
+    fun startAcquisitionSelfTest(): String {
+        val testId = selfTestTracker.start()
+        val event = Arguments.createMap().apply {
+            putString("testId", testId)
+        }
+        try {
+            reactApplicationContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit(SELF_TEST_EVENT_NAME, event)
+        } catch (exception: Exception) {
+            selfTestTracker.markEmitFailed(testId)
+            throw exception
+        }
+        return testId
+    }
+
+    @ReactMethod
+    fun runAcquisitionSelfTest(promise: Promise) {
+        try {
+            promise.resolve(startAcquisitionSelfTest())
+        } catch (exception: Exception) {
+            promise.reject(
+                "ACQUISITION_SELF_TEST_EMIT_FAILED",
+                "Failed to emit acquisition self-test event",
+                exception,
+            )
+        }
+    }
+
+    @ReactMethod
+    fun acknowledgeAcquisitionSelfTest(testId: String) {
+        selfTestTracker.acknowledge(testId)
+    }
+
+    /**
      * Native callers and React Native use the same immutable, payload-free
      * snapshot. Keeping one builder prevents UI and support diagnostics from
      * disagreeing about capture health.
@@ -130,6 +178,7 @@ class ClipboardListenerModule(
     fun snapshotForDiagnostics(): AcquisitionDiagnosticsSnapshot {
         val ordinary = ordinaryBackend.snapshot()
         val read = ClipboardReadRuntime.snapshot()
+        val selfTest = selfTestTracker.snapshot()
         return AcquisitionDiagnosticsSnapshot(
             requested = isListening,
             ordinaryRunning = ordinary.running,
@@ -157,6 +206,11 @@ class ClipboardListenerModule(
             readAttemptCount = read.readAttemptCount,
             successfulReadCount = read.successfulReadCount,
             failedReadCount = read.failedReadCount,
+            selfTestStatus = selfTest.status,
+            selfTestRequestedAtMonotonicMs = selfTest.requestedAtMonotonicMs,
+            selfTestAcknowledgedAtMonotonicMs = selfTest.acknowledgedAtMonotonicMs,
+            selfTestAttemptCount = selfTest.attemptCount,
+            selfTestPassCount = selfTest.passCount,
         )
     }
 
@@ -164,6 +218,20 @@ class ClipboardListenerModule(
     fun getAcquisitionSnapshot(promise: Promise) {
         try {
             val snapshot = snapshotForDiagnostics()
+            val selfTestMap = Arguments.createMap().apply {
+                putString("status", snapshot.selfTestStatus.name)
+                putDouble("attemptCount", snapshot.selfTestAttemptCount.toDouble())
+                putDouble("passCount", snapshot.selfTestPassCount.toDouble())
+                putLongOrNull(
+                    "requestedAtMonotonicMs",
+                    snapshot.selfTestRequestedAtMonotonicMs,
+                )
+                putLongOrNull(
+                    "acknowledgedAtMonotonicMs",
+                    snapshot.selfTestAcknowledgedAtMonotonicMs,
+                )
+            }
+
             val ordinaryMap = Arguments.createMap().apply {
                 putString("backendId", AcquisitionBackendId.ORDINARY_LISTENER.name)
                 putBoolean("running", snapshot.ordinaryRunning)
@@ -231,6 +299,7 @@ class ClipboardListenerModule(
             promise.resolve(
                 Arguments.createMap().apply {
                     putBoolean("requested", snapshot.requested)
+                    putMap("selfTest", selfTestMap)
                     putMap("ordinaryListener", ordinaryMap)
                     putMap("legacyLogcatOverlay", logcatMap)
                     putMap("clipboardRead", readMap)
@@ -408,5 +477,6 @@ class ClipboardListenerModule(
 
     private companion object {
         const val TAG = "ClipCascadeCapture"
+        const val SELF_TEST_EVENT_NAME = "onAcquisitionSelfTest"
     }
 }
