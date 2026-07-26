@@ -153,3 +153,82 @@ This document is append-only except for correcting factual errors. Every meaning
   - Android log artifact `8629066946`.
 - Decision: Baseline build reproduction gate is complete. Compilation success does not prove runtime clipboard reliability.
 - Follow-up: Freeze the desktop connection-state contract, write unit tests, and only then replace the existing reconnect booleans and UI assumptions.
+
+## 2026-07-26 — Implement pure desktop connection model
+
+- Baseline commit: product baseline `fd2cbbce69d5e5fa6b9b758d13a7dc6efdcb8a39`
+- Environment/device: Python 3.11 unit tests on GitHub Actions `ubuntu-latest` and `windows-latest`
+- Hypothesis: Reconnect behavior can be made deterministic and testable before touching STOMP or GUI code.
+- Change or command: Added `connection/state.py`, `errors.py`, `retry.py`, and `controller.py`; added injected clock, scheduler, random source, immutable snapshots, stale-timer generations, observer isolation, and unit tests.
+- Expected result: State transitions, bounded backoff, cancellation, auth stop, fatal stop, shutdown, stable retry reset, and timestamps are deterministic without network access.
+- Observed result: The pure model compiled and all tests passed on Windows and Linux in workflow run `30193070597`.
+- Evidence/artifacts: `docs/DESKTOP_CONNECTION_STATE_MACHINE.md`; `ClipCascade_Desktop/tests/test_connection_controller.py`; `test_retry_policy.py`.
+- Decision: Use this controller as the only P2S connection truth. Do not adapt GUI and STOMP in the same commit.
+- Follow-up: Correct low-level STOMP readiness semantics before controller integration.
+
+## 2026-07-26 — Wait for actual STOMP readiness
+
+- Baseline commit: clean branch before STOMP manager integration
+- Environment/device: Fake WebSocket/STOMP unit tests on Windows and Linux CI
+- Hypothesis: The upstream client can report success after WebSocket open but before the STOMP `CONNECTED` frame and subscription callback complete.
+- Change or command: Reworked `stomp_ws/client.py` to wait separately for WebSocket open and STOMP readiness; added timeout, `ERROR`, early-close, socket-error, callback-failure, and explicit-disconnect tests.
+- Expected result: `Client.connect()` returns only after the receive subscription is installed; every premature failure unblocks and raises.
+- Observed result: All STOMP client tests passed on both operating systems in workflow run `30193266256`.
+- Evidence/artifacts: Commit `6508bfb8936017ed6b86468b27209182f83d5da4`; `test_stomp_client.py`.
+- Decision: Treat STOMP `CONNECTED` plus successful subscription as the minimum connected state.
+- Follow-up: Integrate `STOMPManager` through the tested controller without callback sleeps.
+
+## 2026-07-26 — Integrate P2S manager with authoritative state controller
+
+- Baseline commit: clean branch after STOMP client readiness fix
+- Environment/device: Fake P2S client integration tests on Windows and Linux CI
+- Hypothesis: Fixed callback sleeps and recursive reconnect calls can be replaced without changing the server protocol.
+- Change or command: Reworked `stomp_ws/stomp_manager.py` to create one controller, create a new client per attempt, schedule cancellable retries, normalize errors, record send/receive observations, start clipboard monitoring once, and expose snapshots/status.
+- Expected result: Initial success/failure, runtime close, manual reconnect, automatic recovery, auth stop, send/receive timestamps, and explicit disconnect behave through one state machine.
+- Observed result: Integration tests passed on both operating systems. Windows EXE, Linux package, and Android APK remained buildable in workflow run `30193473983`.
+- Evidence/artifacts: Commit `55a643f580322326e699a2765ac51cc8b8dc06c5`; `test_stomp_manager.py`; workflow run `30193473983`.
+- Decision: The old P2S `time.sleep(RECONNECT_WS_TIMER)` and recursive close-callback `connect()` path are retired.
+- Follow-up: Migrate GUI and CLI controls from local booleans to snapshot-derived actions.
+
+## 2026-07-26 — Drive GUI and CLI controls from P2S snapshots
+
+- Baseline commit: P2S state-controller integration
+- Environment/device: Pure presentation tests, Windows/Linux unit jobs, Windows PyInstaller build, Linux package build
+- Hypothesis: A shared pure mapping can prevent GUI and CLI from presenting actions that contradict transport state while preserving P2P compatibility.
+- Change or command: Added `connection/tray_view.py`; migrated GUI and CLI menus to snapshot-derived labels/actions; retained a legacy boolean fallback only for P2P. Also corrected already-disconnected teardown and classified `ConnectionError` before generic `OSError`.
+- Expected result: P2S presents Connect, Cancel, Disconnect, Reconnect now, Login required, Stopping, or Retry according to the real snapshot. P2P behavior does not regress before its own migration.
+- Observed result: All five jobs succeeded in workflow run `30193922241`: Android APK, Windows EXE, Linux package, Windows tests, and Linux tests.
+- Evidence/artifacts:
+  - head `bb5f047fb448b59591b9590b8762a5ba907ecc50`;
+  - Android artifact `8629529566`;
+  - Windows artifact `8629510789`;
+  - Linux artifact `8629490534`;
+  - Android log artifact `8629528730`.
+- Decision: P2S connection state and primary GUI/CLI controls now share one source of truth. P2P remains explicitly legacy rather than being silently mixed into the new controller.
+- Follow-up: Perform a real Windows public-server smoke test and forced network-loss recovery test.
+
+## 2026-07-26 — Independently verify P2S status-UI artifacts
+
+- Baseline commit: `bb5f047fb448b59591b9590b8762a5ba907ecc50`
+- Environment/device: Downloaded GitHub artifacts inspected in the execution container
+- Hypothesis: The status-UI build artifacts are complete and their embedded checksum files match.
+- Change or command: Downloaded Windows and Android artifacts from run `30193922241`, verified embedded SHA-256 files, identified file formats, and tested APK ZIP integrity.
+- Expected result: No corruption or naming mismatch.
+- Observed result: All checks passed.
+- Evidence/artifacts:
+  - Windows `ClipCascade-Windows-baseline.exe`, 57,456,724 bytes, SHA-256 `64190743de0c19a581675db255db7736d74602c5098ebf7c632c03bf66f1552a`, identified as PE32+ x86-64 Windows GUI executable.
+  - Android `ClipCascade-Android-baseline-debug.apk`, 146,796,102 bytes, SHA-256 `2aae59fc24b7d9e50b58f5be89b1f54267197f08624ba08aff161d901e6408bc`, identified as an Android APK; archive integrity passed.
+- Decision: Make these files available for manual testing. Do not describe the APK as an Android reliability fix; Android product code is unchanged except for the build configuration restoration.
+- Follow-up: Record actual desktop runtime behavior separately from CI success.
+
+## 2026-07-26 — Reduce duplicate and documentation-only CI work
+
+- Baseline commit: P2S status-UI implementation
+- Environment/device: GitHub Actions trigger behavior
+- Hypothesis: Simultaneous branch-push and pull-request triggers rebuild the same code, while PR path evaluation can still run the full matrix for documentation-only commits because the overall PR contains product changes.
+- Change or command: Renamed the workflow to `Clean rebuild verification`, renamed artifacts from `baseline` to `clean-rebuild`, expanded compile checks to GUI/CLI, ignored Markdown/docs on branch pushes, and removed the redundant pull-request trigger.
+- Expected result: One verification run per product-code push; documentation-only handoff updates do not consume Android/Windows builds.
+- Observed result: A documentation update made before removing the PR trigger reproduced the unwanted PR run and cancelled its Android job. The redundant trigger was then removed in commit `04261e9d14b9e058c231a744631bbe34eb4665d1`.
+- Evidence/artifacts: Workflow commits `a2ef19fc5b617137af2cb5ab3e54c8fccab41fdf` and `04261e9d14b9e058c231a744631bbe34eb4665d1`; cancelled Android job in run `30194151707` was explicitly re-run.
+- Decision: Use branch-push verification plus manual dispatch. Keep documentation maintenance independent from heavyweight artifact generation.
+- Follow-up: Confirm the re-run artifact names and append their IDs/hashes when complete.
