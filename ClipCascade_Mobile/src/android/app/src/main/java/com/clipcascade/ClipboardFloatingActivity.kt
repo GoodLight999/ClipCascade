@@ -4,7 +4,10 @@ package com.clipcascade
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewTreeObserver
@@ -23,33 +26,52 @@ class ClipboardFloatingActivity : AppCompatActivity() {
     private lateinit var clipboardManager: ClipboardManager
     private var reactContext: ReactContext? = null
     private var isViewAttached = false
-    private lateinit var globalLayoutListener: ViewTreeObserver.OnGlobalLayoutListener
+    private var globalLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        overridePendingTransition(0, 0)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Log.w(TAG, "Overlay permission is not available; skipping background clipboard read")
+            finishWithoutAnimation()
+            return
+        }
 
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         reactContext = getReactContext()
 
-        createFloatingView()
-        makeFloatingViewInFocus()
-
-        globalLayoutListener = object : ViewTreeObserver.OnGlobalLayoutListener {
-            override fun onGlobalLayout() {
-                try {
-                    floatingView.viewTreeObserver.removeOnGlobalLayoutListener(this)
-                    getClipboardContent()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                } finally {
-                    makeFloatingViewOutOfFocus()
-                    removeFloatingView()
-                }
-            }
+        if (reactContext == null || !ClipboardListenerModule.isRuntimeActive()) {
+            Log.w(TAG, "React Native clipboard runtime is inactive; skipping background clipboard read")
+            finishWithoutAnimation()
+            return
         }
 
-        floatingView.viewTreeObserver.addOnGlobalLayoutListener(globalLayoutListener)
+        try {
+            createFloatingView()
+            makeFloatingViewInFocus()
+
+            globalLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+                try {
+                    globalLayoutListener?.let {
+                        floatingView.viewTreeObserver.removeOnGlobalLayoutListener(it)
+                    }
+                    getClipboardContent()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Unable to read clipboard from overlay activity", e)
+                } finally {
+                    makeFloatingViewOutOfFocus()
+                    removeFloatingView(finishActivity = true)
+                }
+            }
+
+            floatingView.viewTreeObserver.addOnGlobalLayoutListener(globalLayoutListener)
+        } catch (e: Exception) {
+            Log.e(TAG, "Unable to create clipboard overlay", e)
+            removeFloatingView(finishActivity = false)
+            finishWithoutAnimation()
+        }
     }
 
     private fun createFloatingView() {
@@ -72,40 +94,30 @@ class ClipboardFloatingActivity : AppCompatActivity() {
     private fun getClipboardContent() {
         val clip = clipboardManager.primaryClip
         if (clip != null && clip.itemCount > 0) {
-
-            val description = clip.description
-            if (description == null) {
-                return
-            }
-
-            val mimeType = description.getMimeType(0)
-            if (mimeType == null) {
-                return
-            }
-
+            val description = clip.description ?: return
+            val mimeType = description.getMimeType(0) ?: return
             val item = clip.getItemAt(0)
             val params: WritableMap = Arguments.createMap()
-            
+
             if (mimeType.startsWith("text/") && item.text != null) {
-                // Text
                 params.putString("content", item.text.toString())
                 params.putString("type", "text")
             }
             else if (mimeType.startsWith("image/") && item.uri != null) {
-                // Image
                 params.putString("content", item.uri.toString())
                 params.putString("type", "image")
             }
             else if (item.uri != null) {
-                // Files
                 params.putString("content", item.uri.toString())
                 params.putString("type", "files")
             }
+            else {
+                return
+            }
 
-            // Emit event to JS
             reactContext
                 ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                ?.emit("onClipboardChange", params) 
+                ?.emit("onClipboardChange", params)
         }
     }
 
@@ -131,28 +143,45 @@ class ClipboardFloatingActivity : AppCompatActivity() {
         return reactInstanceManager.currentReactContext
     }
 
-    private fun removeFloatingView() {
+    private fun removeFloatingView(finishActivity: Boolean) {
         if (isViewAttached) {
             try {
-                floatingView.viewTreeObserver.removeOnGlobalLayoutListener(globalLayoutListener)
+                globalLayoutListener?.let {
+                    floatingView.viewTreeObserver.removeOnGlobalLayoutListener(it)
+                }
             } catch (_: Exception) {}
 
-            windowManager.removeViewImmediate(floatingView)
+            try {
+                windowManager.removeViewImmediate(floatingView)
+            } catch (e: Exception) {
+                Log.w(TAG, "Unable to remove clipboard overlay", e)
+            }
             isViewAttached = false
         }
+
+        if (finishActivity && !isFinishing) {
+            finishWithoutAnimation()
+        }
+    }
+
+    private fun finishWithoutAnimation() {
         finish()
+        overridePendingTransition(0, 0)
     }
 
     override fun onDestroy() {
+        removeFloatingView(finishActivity = false)
         super.onDestroy()
-        removeFloatingView()
     }
 
     companion object {
+        private const val TAG = "ClipboardFloating"
+
         fun getIntent(context: Context): Intent {
             return Intent(context.applicationContext, ClipboardFloatingActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                        Intent.FLAG_ACTIVITY_NO_ANIMATION or
+                        Intent.FLAG_ACTIVITY_NO_HISTORY or
                         Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
             }
         }
