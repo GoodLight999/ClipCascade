@@ -1,19 +1,25 @@
-name: Baseline artifact build
+name: Clean rebuild verification
 
 on:
   push:
     branches:
       - clean-rebuild
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: baseline-artifacts-${{ github.workflow }}-${{ github.ref }}
+  group: clean-rebuild-verification-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -42,8 +48,14 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install websocket_client==1.8.0
 
-      - name: Compile connection model and tests
-        run: python -m compileall -q src/connection src/stomp_ws tests
+      - name: Compile desktop connection surfaces and tests
+        run: >-
+          python -m compileall -q
+          src/connection
+          src/stomp_ws
+          src/gui
+          src/cli
+          tests
 
       - name: Run unit tests
         env:
@@ -90,7 +102,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ClipCascade-Android-build-log
+          name: ClipCascade-Android-clean-rebuild-build-log
           path: ClipCascade_Mobile/src/ci-logs/android/gradle-build.log
           if-no-files-found: warn
           retention-days: 30
@@ -98,15 +110,15 @@ jobs:
       - name: Stage APK and checksum
         run: |
           mkdir -p ci-artifacts/android
-          cp android/app/build/outputs/apk/debug/app-debug.apk ci-artifacts/android/ClipCascade-Android-baseline-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk ci-artifacts/android/ClipCascade-Android-clean-rebuild-debug.apk
           cd ci-artifacts/android
-          sha256sum ClipCascade-Android-baseline-debug.apk > SHA256SUMS.txt
+          sha256sum ClipCascade-Android-clean-rebuild-debug.apk > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClipCascade-Android-baseline-debug
+          name: ClipCascade-Android-clean-rebuild-debug
           path: ClipCascade_Mobile/src/ci-artifacts/android/
           if-no-files-found: error
           retention-days: 30
@@ -145,15 +157,15 @@ jobs:
       - name: Stage EXE and checksum
         run: |
           New-Item -ItemType Directory -Force -Path ci-artifacts/windows | Out-Null
-          Copy-Item dist/ClipCascade.exe ci-artifacts/windows/ClipCascade-Windows-baseline.exe
-          $hash = (Get-FileHash ci-artifacts/windows/ClipCascade-Windows-baseline.exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  ClipCascade-Windows-baseline.exe" | Set-Content -Encoding ascii ci-artifacts/windows/SHA256SUMS.txt
+          Copy-Item dist/ClipCascade.exe ci-artifacts/windows/ClipCascade-Windows-clean-rebuild.exe
+          $hash = (Get-FileHash ci-artifacts/windows/ClipCascade-Windows-clean-rebuild.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ClipCascade-Windows-clean-rebuild.exe" | Set-Content -Encoding ascii ci-artifacts/windows/SHA256SUMS.txt
           Get-Content ci-artifacts/windows/SHA256SUMS.txt
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClipCascade-Windows-baseline
+          name: ClipCascade-Windows-clean-rebuild
           path: ClipCascade_Desktop/src/ci-artifacts/windows/
           if-no-files-found: error
           retention-days: 30
@@ -186,15 +198,15 @@ jobs:
             --exclude 'dist' \
             ClipCascade_Desktop/src/ ci-artifacts/linux/package/ClipCascade/
           cp LICENSE ci-artifacts/linux/package/ClipCascade/LICENSE
-          tar -C ci-artifacts/linux/package -czf ci-artifacts/linux/ClipCascade-Linux-baseline.tar.gz ClipCascade
+          tar -C ci-artifacts/linux/package -czf ci-artifacts/linux/ClipCascade-Linux-clean-rebuild.tar.gz ClipCascade
           cd ci-artifacts/linux
-          sha256sum ClipCascade-Linux-baseline.tar.gz > SHA256SUMS.txt
+          sha256sum ClipCascade-Linux-clean-rebuild.tar.gz > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClipCascade-Linux-baseline
+          name: ClipCascade-Linux-clean-rebuild
           path: ci-artifacts/linux/
           if-no-files-found: error
           retention-days: 30
