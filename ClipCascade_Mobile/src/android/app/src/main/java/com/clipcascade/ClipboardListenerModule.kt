@@ -88,8 +88,6 @@ class ClipboardListenerModule(
             )
         }
 
-        // Re-inspect on every request so granting READ_LOGS or overlay permission
-        // does not require reconstructing the React Native module.
         val logcatStarted = startLegacyLogcatMonitoringIfAvailable()
         isListening = ordinaryStarted || logcatStarted
     }
@@ -237,7 +235,7 @@ class ClipboardListenerModule(
                 "yyyy-MM-dd HH:mm:ss.SSS",
                 Locale.getDefault(),
             ).format(Date())
-            process = Runtime.getRuntime().exec(
+            val startedProcess = Runtime.getRuntime().exec(
                 arrayOf(
                     "logcat",
                     "-T",
@@ -246,16 +244,17 @@ class ClipboardListenerModule(
                     "*:S",
                 ),
             )
+            process = startedProcess
 
             synchronized(this) {
                 if (generation != logcatGeneration) {
-                    process.destroy()
+                    startedProcess.destroy()
                     return
                 }
-                logcatProcess = process
+                logcatProcess = startedProcess
             }
 
-            BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+            BufferedReader(InputStreamReader(startedProcess.inputStream)).use { reader ->
                 while (
                     generation == logcatGeneration &&
                     !Thread.currentThread().isInterrupted
