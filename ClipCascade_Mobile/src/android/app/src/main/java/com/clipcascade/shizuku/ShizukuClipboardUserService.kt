@@ -11,6 +11,11 @@ import java.lang.reflect.InvocationTargetException
 /**
  * Runs with Shizuku's shell identity and performs one clipboard read on demand.
  * It owns no network connection, queue, or clipboard-change polling.
+ *
+ * The first implementation intentionally returns text only. URI grants obtained
+ * by the shell process do not automatically belong to the app process, so image
+ * and file clips are reported as fallback-required instead of emitting a URI
+ * that the existing sender might be unable to open.
  */
 class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
     constructor() : super()
@@ -46,39 +51,18 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
         val mimeType = if (description.mimeTypeCount > 0) description.getMimeType(0) else ""
         val item = clip.getItemAt(0)
         val text = item.text?.toString()
-        val uri = item.uri?.toString()
 
-        val type: String
-        val content: String
-        when {
-            text != null && mimeType.startsWith("text/") -> {
-                type = "text"
-                content = text
-            }
-            uri != null && mimeType.startsWith("image/") -> {
-                type = "image"
-                content = uri
-            }
-            uri != null -> {
-                type = "files"
-                content = uri
-            }
-            text != null -> {
-                type = "text"
-                content = text
-            }
-            else -> {
-                return JSONObject()
-                    .put("status", "unsupported")
-                    .put("mimeType", mimeType)
-                    .toString()
-            }
+        if (text != null) {
+            return JSONObject()
+                .put("status", "ok")
+                .put("type", "text")
+                .put("content", text)
+                .put("mimeType", mimeType)
+                .toString()
         }
 
         return JSONObject()
-            .put("status", "ok")
-            .put("type", type)
-            .put("content", content)
+            .put("status", "needs_fallback")
             .put("mimeType", mimeType)
             .toString()
     }
@@ -107,7 +91,8 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
                 .invoke(null, binder)
                 ?: error("Clipboard service interface is unavailable")
 
-            val method = service.javaClass.methods
+            val interfaceClass = Class.forName("android.content.IClipboard")
+            val method = interfaceClass.methods
                 .filter { it.name == "getPrimaryClip" }
                 .maxByOrNull { it.parameterCount }
                 ?: error("getPrimaryClip is unavailable on this Android build")
