@@ -53,12 +53,12 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
-      - name: Build standalone APK
+      - name: Generate app code, run app tests, and build standalone APK
         run: |
           mkdir -p ci-logs/android
           chmod +x android/gradlew
           set -o pipefail
-          (cd android && ./gradlew --no-daemon --stacktrace :app:assembleStandalone) 2>&1 | tee ci-logs/android/gradle-build.log
+          (cd android && ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleStandalone) 2>&1 | tee ci-logs/android/gradle-build.log
 
       - name: Upload build log
         if: always()
