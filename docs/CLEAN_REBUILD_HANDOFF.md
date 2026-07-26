@@ -10,7 +10,7 @@ Last updated: 2026-07-26 (Asia/Tokyo)
 - Mirror branch: `main`
 - Active branch: `clean-rebuild`
 - Active draft PR: `#3`
-- Latest fully green **product-code/pipeline** head: `a94b830fb954d09fc742b39833cebd5915988566`
+- Latest fully green product-code/pipeline head: `a94b830fb954d09fc742b39833cebd5915988566`
 - Latest fully green workflow: `30203690726`
 
 `main` was verified identical to the upstream baseline: ahead 0, behind 0, changed files 0.
@@ -22,14 +22,15 @@ The prior 529-commit patchwork PR #1 is closed and unmerged. Do not use its bran
 1. `docs/CLEAN_REBUILD_HANDOFF.md`
 2. `docs/EXPERIMENT_LOG.md`
 3. `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_ACQUISITION.md`
-4. `docs/ANDROID_ACQUISITION_ARCHITECTURE.md`
-5. `docs/BUILD_REPRODUCTION.md`
-6. `docs/BASELINE_ARCHITECTURE_INVENTORY.md`
-7. `docs/DESKTOP_CONNECTION_STATE_MACHINE.md`
-8. Draft PR #3 description and recent comments
-9. Latest product-code diff
+4. `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_STANDALONE.md`
+5. `docs/ANDROID_ACQUISITION_ARCHITECTURE.md`
+6. `docs/BUILD_REPRODUCTION.md`
+7. `docs/BASELINE_ARCHITECTURE_INVENTORY.md`
+8. `docs/DESKTOP_CONNECTION_STATE_MACHINE.md`
+9. Draft PR #3 description and recent comments
+10. Latest product-code diff
 
-Where older documents describe pre-migration status, this handoff and the dated Android experiment log are authoritative.
+Where older documents describe pre-migration status, this handoff and the dated experiment logs are authoritative.
 
 ## Permanent operating rules
 
@@ -43,28 +44,28 @@ Where older documents describe pre-migration status, this handoff and the dated 
 8. Android background reliability requires real-device evidence.
 9. Do not patch generated `node_modules` merely to make CI green.
 10. GUI, transport, acquisition, and diagnostics must not own conflicting state.
-11. Normal logs, diagnostics, and support exports must not contain clipboard payloads, credentials, or secret-bearing URLs.
+11. Never retain clipboard payloads, credentials, or secret-bearing URLs in normal diagnostics.
 12. Acquisition success is not transport acknowledgement; transport acceptance is not server delivery acknowledgement.
-13. Do not inspect the archived patchwork branch except for a narrowly named evidence-driven comparison.
+13. Do not inspect archived patchwork except for narrowly named evidence-driven comparison.
 14. Never distribute a React Native debug APK as a standalone test artifact unless Metro is deliberately part of the test.
-15. A user-installable Android artifact must pass an automated APK check for `assets/index.android.bundle`.
+15. A user-installable Android artifact must pass an APK-internal check for `assets/index.android.bundle`.
 
-## CI gate
+## Current CI gate
 
 Workflow: `.github/workflows/baseline-artifacts.yml`
 
 Triggers:
 
-- one `pull_request` run for product-code updates targeting `main`;
-- `workflow_dispatch` for an explicit rebuild;
-- documentation-only changes under `docs/**` or `**/*.md` are ignored;
-- no simultaneous push trigger, preventing duplicate matrices.
+- one pull-request run for product-code updates targeting `main`;
+- `workflow_dispatch` for explicit rebuilds;
+- docs-only changes ignored;
+- no simultaneous push trigger.
 
 Jobs:
 
 1. desktop unit tests on Ubuntu;
 2. desktop unit tests on Windows;
-3. Android app JVM tests plus **standalone bundled APK**;
+3. Android app JVM tests plus standalone bundled APK;
 4. Windows standalone EXE;
 5. Linux source package.
 
@@ -74,31 +75,27 @@ Android command:
 :app:testDebugUnitTest :app:assembleStandalone
 ```
 
-The `standalone` Android build type:
+The Android `standalone` build type:
 
 - inherits release runtime semantics;
-- is signed with the debug key and remains an engineering artifact;
-- is not listed in React Native `debuggableVariants`;
-- packages the Hermes JavaScript bundle;
-- does not require Metro at runtime.
+- uses debug signing and remains an engineering artifact;
+- is excluded from React Native `debuggableVariants`;
+- packages the Hermes JS bundle;
+- does not require Metro.
 
-CI rejects the Android artifact unless all of these pass:
+CI requires:
 
-```text
-assets/index.android.bundle exists in the APK
-APK ZIP integrity passes
-embedded SHA-256 is generated
-```
+- exact APK entry `assets/index.android.bundle`;
+- APK ZIP integrity;
+- embedded SHA-256.
 
 Unqualified `testDebugUnitTest` is prohibited because it compiles defective sample tests in third-party React Native subprojects.
-
-The clean branch also restores the omitted standard React Native 0.80 `android/gradle.properties`. That is a build repair, not a runtime fix.
 
 ## Desktop P2S status
 
 Implemented and CI-green:
 
-- one authoritative `ConnectionController`;
+- authoritative `ConnectionController`;
 - states `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECT_WAIT`, `AUTH_REQUIRED`, `STOPPING`, `FATAL_ERROR`;
 - immutable snapshots and normalized errors;
 - capped exponential backoff with jitter;
@@ -106,16 +103,17 @@ Implemented and CI-green:
 - no socket-callback sleeps or recursive reconnect;
 - actual STOMP `CONNECTED` plus subscription completion before connected state;
 - fresh client per attempt;
-- manual reconnect, automatic recovery, lost/restored notification;
+- manual reconnect and automatic recovery;
+- lost/restored notifications;
 - last accepted send and valid receive observations;
-- GUI and CLI controls derived from snapshots;
-- explicit legacy fallback for P2P;
-- Windows and Ubuntu automated tests;
-- Windows EXE and Linux package compatibility.
+- GUI/CLI controls derived from snapshots;
+- explicit P2P legacy fallback;
+- Windows and Ubuntu tests;
+- Windows EXE and Linux package gates.
 
 Not yet proven or implemented:
 
-- real public-server smoke test of the generated Windows EXE;
+- public-server runtime test of generated Windows EXE;
 - forced network-loss recovery on Windows;
 - in-process reauthentication after `AUTH_REQUIRED`;
 - P2P migration to the same snapshot contract;
@@ -124,113 +122,64 @@ Not yet proven or implemented:
 - application-level delivery acknowledgement;
 - durable outbound queue.
 
-## Android acquisition architecture status
-
-### Pure contracts and policy
+## Android acquisition status
 
 Implemented and CI-green:
 
-- `ClipboardAcquisitionBackend` interface;
+- `ClipboardAcquisitionBackend` contract;
 - backend IDs `ORDINARY_LISTENER`, `ACCESSIBILITY`, `LOGCAT_OVERLAY`, `SHIZUKU`, `ADB_ASSISTED`, `MANUAL_SHARE`;
-- capability state, reason code, required action, coverage, trigger, read-result, and coordinator vocabularies;
-- pure backend selection policy;
-- pure coordinator reducer;
+- capability, reason, required action, coverage, trigger, read-result, and coordinator vocabularies;
+- pure backend selection policy and coordinator reducer;
 - trigger deduplication model;
-- backend runtime snapshots;
-- healthy `AVAILABLE` backends selected before any `DEGRADED` backend;
-- configured priority used only within the same capability quality.
+- healthy `AVAILABLE` backend selected before any `DEGRADED` backend;
+- `OrdinaryClipboardBackend` with idempotent and concurrency-safe start/stop;
+- one shared `ClipboardReadRuntime` for ordinary and overlay reads;
+- legacy logcat process/thread generation ownership;
+- stale callback invalidation;
+- separate permission, match, overlay, focus, read, and process diagnostics;
+- no clipboard content retained in diagnostics.
 
-### Ordinary listener
+Exactly 46 Android JVM tests pass:
 
-- `OrdinaryClipboardBackend` owns idempotent start/stop and trigger metadata.
-- `AndroidClipboardChangeRegistrar` is the thin Android framework adapter.
-- Tests cover start/stop, concurrent start, stale callback, registration failure, unregistration failure, trigger delivery failure, counters, and monotonic timestamps.
+| Surface | Count |
+|---|---:|
+| Acquisition state reducer | 12 |
+| Backend selection | 9 |
+| Ordinary listener | 8 |
+| Trigger deduplication | 9 |
+| Diagnostics formatter | 2 |
+| Self-test tracker | 6 |
+| **Total** | **46** |
 
-### Shared native read runtime
-
-- `ClipboardReadRuntime` is the single extraction and React Native emission path used by the ordinary listener and legacy overlay.
-- Existing text, image URI, and file URI event shape is preserved.
-- Diagnostics retain only counts, timestamps, backend ID, and stable result.
-- Clipboard content is never retained by diagnostics.
-
-### Legacy logcat/overlay hardening
-
-- `READ_LOGS` and overlay capability are checked on every start request.
-- logcat process/thread ownership uses a generation token.
-- stop invalidates stale callbacks.
-- log match, overlay launch, focus failure, read failure, process state, and permission state are distinct observations.
-- `ClipboardFloatingActivity` uses the shared read runtime and idempotent teardown.
-
-## Android acquisition diagnostics
+## Acquisition diagnostics and self-test
 
 Implemented and CI-green:
 
 - immutable `AcquisitionDiagnosticsSnapshot`;
-- native and React Native diagnostics use the same snapshot builder;
-- pure `AcquisitionDiagnosticsFormatter` with tests;
+- native and React Native diagnostics use one snapshot builder;
+- pure formatter with tests;
 - independent native `AcquisitionDiagnosticsActivity`;
-- static launcher long-press shortcut: `Capture status`;
-- actions: Refresh, run self-test, overlay settings, open ClipCascade, close;
-- selectable monospaced status text;
-- no clipboard content, credentials, or server URLs.
+- launcher long-press shortcut `Capture status`;
+- Refresh, self-test, overlay settings, open app, and close actions;
+- payload-free native → React Native self-test;
+- states `IDLE`, `PENDING`, `PASSED`, `TIMED_OUT`, `EMIT_FAILED`;
+- five-second deterministic timeout;
+- test-ID matching and stale ACK rejection;
+- independent `AcquisitionSelfTestBridge.js` initialized from `index.js`.
 
-Native API:
+Interpretation on device:
 
-```text
-ClipboardListener.getAcquisitionSnapshot()
-```
-
-Current fields include:
-
-- acquisition requested;
-- ordinary listener running/start/trigger/error state and lifecycle timestamps;
-- `READ_LOGS` and overlay permission;
-- logcat thread/process/generation;
-- latest log match and overlay launch;
-- latest read backend/result;
-- read attempt/success/failure counts;
-- native → React Native self-test state and counts.
-
-## Payload-free native → React Native self-test
-
-Implemented and CI-green:
-
-- `AcquisitionSelfTestTracker` states: `IDLE`, `PENDING`, `PASSED`, `TIMED_OUT`, `EMIT_FAILED`;
-- deterministic 5-second timeout;
-- matching test ID only; stale/mismatched ACK ignored;
-- new test supersedes the previous ID;
-- native emits only `{testId}` on `onAcquisitionSelfTest`;
-- independent `AcquisitionSelfTestBridge.js` is initialized from `index.js`;
-- JS validates the ID and calls `acknowledgeAcquisitionSelfTest(testId)`;
-- the self-test does not read the clipboard and does not enter encryption, WebSocket, P2P, P2S, or outbound clipboard handlers;
-- the diagnostic Activity refreshes immediately, after 350 ms, and after timeout.
-
-Interpretation on a real device:
-
-- `PASSED`: native event reached the active React Native root runtime and the matching ACK returned.
+- `PASSED`: native test event reached the active React Native root runtime and matching ACK returned.
 - `TIMED_OUT`: no matching ACK returned within five seconds.
-- `EMIT_FAILED`: native event emission itself failed.
+- `EMIT_FAILED`: native event emission failed.
 
-A `PASSED` result does **not** prove clipboard capture, transport, server receipt, or remote clipboard application.
-
-## Automated Android verification
-
-Exactly 46 app JVM tests are present and passed:
-
-- acquisition state reducer: 12;
-- backend selection: 9;
-- ordinary listener backend: 8;
-- trigger deduplication: 9;
-- diagnostics formatter: 2;
-- self-test tracker: 6.
-
-Production Kotlin, Manifest, shortcut resources, React Native/Hermes bundle, diagnostics Activity, and standalone APK assembly all passed.
+`PASSED` does not prove real clipboard capture, transport, server receipt, or remote clipboard application.
 
 ## Latest verified artifacts
 
-Workflow run: `30203690726`
+Workflow: `30203690726`
 
-Product-code/pipeline head: `a94b830fb954d09fc742b39833cebd5915988566`
+Head: `a94b830fb954d09fc742b39833cebd5915988566`
 
 All five jobs succeeded.
 
@@ -241,66 +190,67 @@ All five jobs succeeded.
 | Windows EXE | `8632434975` | `ClipCascade-Windows-clean-rebuild.exe` | 57,456,724 bytes | `36da95c51e473b8bf33677f81142ea70bdfcd81a968e24e8a0be4878e11ce103` |
 | Linux package | `8632420551` | `ClipCascade-Linux-clean-rebuild.tar.gz` | 68,791 bytes | `6fadbb46751fe0e714f85d9118c69c2ecc7ea14c0d8a76b2d85c2eed0114ba6b` |
 
-Independent post-download checks passed:
+Independent checks passed:
 
 - Android embedded SHA-256;
-- Android package identification;
-- `assets/index.android.bundle` present;
+- APK identification;
+- exact `assets/index.android.bundle` entry;
 - APK ZIP integrity;
-- Windows embedded SHA-256;
-- PE32+ x86-64 GUI identification;
-- Linux embedded SHA-256;
-- gzip identification and 53-entry archive enumeration.
+- Windows embedded SHA-256 and PE32+ x86-64 GUI identification;
+- Linux embedded SHA-256, gzip identification, and 53-entry enumeration.
 
-The Android APK uses release runtime behavior but debug signing. It is a standalone engineering artifact, not a production release.
+The APK has release runtime behavior but debug signing. It is a standalone engineering artifact, not a production release.
 
-## Failed attempts that must remain understood
+## Failures that must remain understood
 
 ### Run `30201114997`
 
-Unqualified `testDebugUnitTest` compiled defective sample tests in `@react-native-module/pbkdf2`. The product did not require a dependency patch. CI was scoped to `:app:testDebugUnitTest`.
+Unqualified `testDebugUnitTest` compiled defective `@react-native-module/pbkdf2` sample tests. CI was scoped to `:app:testDebugUnitTest`; generated dependencies were not patched.
 
 ### Run `30201352946`
 
-Five JUnit expectations used `Int` literals against intentionally `Long` counters/timestamps. Production types were preserved and test expectations corrected.
+Five JUnit expectations used `Int` literals against intentionally `Long` counters/timestamps. Production types were preserved; tests were corrected.
 
-### Distributed debug APK required Metro
+### Debug APK required Metro
 
-The artifact from run `30202889590` was built with `assembleDebug`. React Native deliberately skips JS bundling for the debug variant, so installation on a disconnected device produced `Unable to load script` and requested Metro/ADB reverse. The APK was structurally valid but unsuitable as a standalone user-test artifact.
+Workflow `30202889590` used `assembleDebug`. React Native deliberately skipped JS bundling, so the installed APK displayed `Unable to load script` and requested Metro/`adb reverse`.
 
-Decision:
+This was a packaging decision error, not a device setup error. The debug APK is superseded for ordinary installation.
 
-- the old debug APK is superseded and must not be redistributed for ordinary installation;
-- retain `debug` for Metro development;
-- distribute only the `standalone` variant for device testing;
-- require automated bundle-presence verification in CI.
+Correction:
 
-Detailed evidence: `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_ACQUISITION.md`.
+- retain debug for deliberate Metro development;
+- distribute only the `standalone` variant;
+- fail CI if the packaged bundle is missing.
+
+Detailed evidence:
+
+- `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_ACQUISITION.md`
+- `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_STANDALONE.md`
 
 ## Not implemented or not proven
 
 - AccessibilityService backend;
 - Shizuku backend;
 - ADB-assisted backend;
-- adaptive coordinator that starts/stops the selected background backend;
+- adaptive coordinator that starts/stops selected background backends;
 - durable outbound queue and server acknowledgement;
-- real-device foreground/background capture acceptance;
-- on-device success of the new standalone artifact;
-- overlay focus-regression testing;
-- duplicate-send testing under multiple acquisition triggers;
+- successful launch of the new standalone APK on the user's device;
+- real-device foreground/background acquisition acceptance;
+- overlay focus-regression and duplicate-send tests;
 - power measurements;
 - production release signing.
 
 ## Exact next actions
 
-1. Uninstall or overwrite the old debug APK with the latest **standalone** APK.
-2. Launch it without Metro, USB, or `adb reverse`; confirm the main React Native screen loads.
-3. Start the ClipCascade service so the React Native context exists.
+1. Replace the old debug APK with the latest standalone APK.
+2. Launch without Metro, USB, or `adb reverse`; verify the React Native main screen loads.
+3. Start the ClipCascade service.
 4. Long-press the app icon and select `Capture status`.
-5. Run the native → React Native self-test and record `PASSED`, `TIMED_OUT`, or `EMIT_FAILED`.
-6. Separately test ordinary foreground clipboard capture.
-7. Separately test legacy logcat/overlay background capture from launcher/search fields, browser pages, Amazon, text-selection toolbars, and apps that emit no recognizable accessibility copy event.
-8. Record whether overlay focus dismisses search, changes selection, opens unwanted UI, or causes duplicates.
+5. Run the native → React Native self-test and record its state.
+6. Test ordinary foreground capture separately.
+7. Test legacy logcat/overlay background capture from launcher/search, browser, Amazon, selection toolbars, and apps with no accessibility copy event.
+8. Record focus changes, dismissed UI, unwanted windows, and duplicate sends.
 9. Classify the existing path per device as healthy, degraded, or blocked.
 10. Implement Accessibility only behind the existing backend contract and capability probe.
 11. Add Shizuku only after detection, permission, reboot recovery, guided setup, and post-setup self-test are specified.
@@ -309,13 +259,13 @@ Detailed evidence: `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_ACQUISITION.md`.
 
 ## Valid continuation criterion
 
-A new thread must be able to identify, without reading archived patchwork code:
+A new thread must recover, without archived patchwork code:
 
 - exact upstream baseline;
 - active branch and PR;
-- latest green product-code/pipeline head and workflow;
+- latest green head and workflow;
 - completed desktop and Android work;
-- failed attempts and decisions;
+- all failed attempts and decisions;
 - current standalone artifacts and hashes;
 - unverified claims;
 - exact next action.
