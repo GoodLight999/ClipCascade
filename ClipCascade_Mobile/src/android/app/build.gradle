@@ -2,51 +2,14 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
-/**
- * This is the configuration block to customize your React Native Android app.
- * By default you don't need to apply any configuration, just uncomment the lines you need.
- */
 react {
-    /* Folders */
-    //   The root of your project, i.e. where "package.json" lives. Default is '../..'
-    // root = file("../../")
-    //   The folder where the react-native NPM package is. Default is ../../node_modules/react-native
-    // reactNativeDir = file("../../node_modules/react-native")
-    //   The folder where the React Native Codegen package is. Default is ../../node_modules/@react-native/codegen
-    // codegenDir = file("../../node_modules/@react-native/codegen")
-    //   The cli.js file which is the React Native CLI entrypoint. Default is ../../node_modules/react-native/cli.js
-    // cliFile = file("../node_modules/react-native/cli.js")
-
-    /* Variants */
-    // Only debug may depend on Metro. The standalone engineering build must
-    // package assets/index.android.bundle and use release runtime semantics.
     debuggableVariants = ["debug"]
-
-    /* Bundling */
-    // nodeExecutableAndArgs = ["node"]
-    // bundleCommand = "ram-bundle"
-    // bundleConfig = file(../js/MyBundleConfig.jsbundle)
-    // bundleAssetName = "MyApplication.android.bundle"
-    // entryFile = file("../js/MyApplication.android.js")
-    // extraPackagerArgs = []
-
-    /* Hermes Commands */
-    // hermesCommand = "$rootDir/my-custom-hermesc/bin/hermesc"
-    // hermesFlags = ["-O", "-output-source-map"]
-
-    /* Autolinking */
     autolinkLibrariesWithApp()
 }
 
-/**
- * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
- */
 def enableProguardInReleaseBuilds = false
-
-/**
- * The preferred build flavor of JavaScriptCore (JSC).
- */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
+def shizukuVersion = '13.1.5'
 
 android {
     ndkVersion rootProject.ext.ndkVersion
@@ -87,9 +50,8 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
         standalone {
-            // Reuse release runtime behavior so the packaged application never
-            // requests Metro. Debug signing keeps the artifact explicitly for
-            // engineering and device acceptance rather than production release.
+            // Release runtime semantics package the JS bundle, while debug signing
+            // keeps this explicitly an engineering/device-acceptance artifact.
             initWith release
             signingConfig signingConfigs.debug
             minifyEnabled false
@@ -99,7 +61,6 @@ android {
 }
 
 dependencies {
-    // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
     if (hermesEnabled.toBoolean()) {
@@ -108,15 +69,13 @@ dependencies {
         implementation jscFlavor
     }
 
-    // Guava
     implementation "com.google.guava:guava:33.4.8-android"
-
-    // WorkManager
     implementation "androidx.work:work-runtime-ktx:2.10.3"
-
-    // DocumentFile
     implementation "androidx.documentfile:documentfile:1.1.0"
-
-    // Kotlin serialization
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0"
+
+    // Official Shizuku API. UserService performs only privileged clipboard
+    // reads; existing React Native transport remains authoritative.
+    implementation "dev.rikka.shizuku:api:$shizukuVersion"
+    implementation "dev.rikka.shizuku:provider:$shizukuVersion"
 }
