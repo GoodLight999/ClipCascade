@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.clipcascade.acquisition.AcquisitionBackendId
+import com.clipcascade.acquisition.AcquisitionDiagnosticsSnapshot
 import com.clipcascade.acquisition.AndroidClipboardChangeRegistrar
 import com.clipcascade.acquisition.BackendReasonCode
 import com.clipcascade.acquisition.BackendStartCode
@@ -120,69 +121,116 @@ class ClipboardListenerModule(
         isListening = false
     }
 
+    /**
+     * Native callers and React Native use the same immutable, payload-free
+     * snapshot. Keeping one builder prevents UI and support diagnostics from
+     * disagreeing about capture health.
+     */
+    @Synchronized
+    fun snapshotForDiagnostics(): AcquisitionDiagnosticsSnapshot {
+        val ordinary = ordinaryBackend.snapshot()
+        val read = ClipboardReadRuntime.snapshot()
+        return AcquisitionDiagnosticsSnapshot(
+            requested = isListening,
+            ordinaryRunning = ordinary.running,
+            ordinaryStartCount = ordinary.startCount,
+            ordinaryTriggerCount = ordinary.triggerCount,
+            ordinaryLastStartedAtMonotonicMs = ordinary.lastStartedAtMonotonicMs,
+            ordinaryLastStoppedAtMonotonicMs = ordinary.lastStoppedAtMonotonicMs,
+            ordinaryLastTriggerAtMonotonicMs = ordinary.lastTriggerAtMonotonicMs,
+            ordinaryLastErrorCode = ordinary.lastErrorCode,
+            logcatSdkEligible = Build.VERSION.SDK_INT > Build.VERSION_CODES.P,
+            readLogsGranted = hasReadLogsPermission(),
+            overlayGranted = hasOverlayPermission(),
+            logcatThreadAlive = logcatThread?.isAlive == true,
+            logcatProcessAlive = logcatProcess?.isAlive == true,
+            logcatGeneration = logcatGeneration,
+            lastLogcatMatchAtMonotonicMs =
+                lastLogcatMatchAtMonotonicMs.takeIf { it >= 0 },
+            lastOverlayLaunchAtMonotonicMs =
+                lastOverlayLaunchAtMonotonicMs.takeIf { it >= 0 },
+            logcatLastErrorCode = lastLogcatErrorCode,
+            lastReadAttemptAtMonotonicMs = read.lastReadAttemptAtMonotonicMs,
+            lastSuccessfulReadAtMonotonicMs = read.lastSuccessfulReadAtMonotonicMs,
+            lastReadBackend = read.lastReadBackend,
+            lastReadResult = read.lastReadResult,
+            readAttemptCount = read.readAttemptCount,
+            successfulReadCount = read.successfulReadCount,
+            failedReadCount = read.failedReadCount,
+        )
+    }
+
     @ReactMethod
     fun getAcquisitionSnapshot(promise: Promise) {
         try {
-            val ordinary = ordinaryBackend.snapshot()
+            val snapshot = snapshotForDiagnostics()
             val ordinaryMap = Arguments.createMap().apply {
-                putString("backendId", ordinary.backendId.name)
-                putBoolean("running", ordinary.running)
-                putDouble("startCount", ordinary.startCount.toDouble())
-                putDouble("triggerCount", ordinary.triggerCount.toDouble())
+                putString("backendId", AcquisitionBackendId.ORDINARY_LISTENER.name)
+                putBoolean("running", snapshot.ordinaryRunning)
+                putDouble("startCount", snapshot.ordinaryStartCount.toDouble())
+                putDouble("triggerCount", snapshot.ordinaryTriggerCount.toDouble())
                 putLongOrNull(
                     "lastStartedAtMonotonicMs",
-                    ordinary.lastStartedAtMonotonicMs,
+                    snapshot.ordinaryLastStartedAtMonotonicMs,
                 )
                 putLongOrNull(
                     "lastStoppedAtMonotonicMs",
-                    ordinary.lastStoppedAtMonotonicMs,
+                    snapshot.ordinaryLastStoppedAtMonotonicMs,
                 )
                 putLongOrNull(
                     "lastTriggerAtMonotonicMs",
-                    ordinary.lastTriggerAtMonotonicMs,
+                    snapshot.ordinaryLastTriggerAtMonotonicMs,
                 )
-                putStringOrNull("lastErrorCode", ordinary.lastErrorCode?.name)
+                putStringOrNull(
+                    "lastErrorCode",
+                    snapshot.ordinaryLastErrorCode?.name,
+                )
             }
 
             val logcatMap = Arguments.createMap().apply {
                 putString("backendId", AcquisitionBackendId.LOGCAT_OVERLAY.name)
-                putBoolean("sdkEligible", Build.VERSION.SDK_INT > Build.VERSION_CODES.P)
-                putBoolean("readLogsGranted", hasReadLogsPermission())
-                putBoolean("overlayGranted", hasOverlayPermission())
-                putBoolean("threadAlive", logcatThread?.isAlive == true)
-                putBoolean("processAlive", logcatProcess?.isAlive == true)
-                putDouble("generation", logcatGeneration.toDouble())
+                putBoolean("sdkEligible", snapshot.logcatSdkEligible)
+                putBoolean("readLogsGranted", snapshot.readLogsGranted)
+                putBoolean("overlayGranted", snapshot.overlayGranted)
+                putBoolean("threadAlive", snapshot.logcatThreadAlive)
+                putBoolean("processAlive", snapshot.logcatProcessAlive)
+                putDouble("generation", snapshot.logcatGeneration.toDouble())
                 putLongOrNull(
                     "lastLogcatMatchAtMonotonicMs",
-                    lastLogcatMatchAtMonotonicMs.takeIf { it >= 0 },
+                    snapshot.lastLogcatMatchAtMonotonicMs,
                 )
                 putLongOrNull(
                     "lastOverlayLaunchAtMonotonicMs",
-                    lastOverlayLaunchAtMonotonicMs.takeIf { it >= 0 },
+                    snapshot.lastOverlayLaunchAtMonotonicMs,
                 )
-                putStringOrNull("lastErrorCode", lastLogcatErrorCode?.name)
+                putStringOrNull(
+                    "lastErrorCode",
+                    snapshot.logcatLastErrorCode?.name,
+                )
             }
 
-            val read = ClipboardReadRuntime.snapshot()
             val readMap = Arguments.createMap().apply {
                 putLongOrNull(
                     "lastReadAttemptAtMonotonicMs",
-                    read.lastReadAttemptAtMonotonicMs,
+                    snapshot.lastReadAttemptAtMonotonicMs,
                 )
                 putLongOrNull(
                     "lastSuccessfulReadAtMonotonicMs",
-                    read.lastSuccessfulReadAtMonotonicMs,
+                    snapshot.lastSuccessfulReadAtMonotonicMs,
                 )
-                putStringOrNull("lastReadBackend", read.lastReadBackend?.name)
-                putStringOrNull("lastReadResult", read.lastReadResult?.name)
-                putDouble("readAttemptCount", read.readAttemptCount.toDouble())
-                putDouble("successfulReadCount", read.successfulReadCount.toDouble())
-                putDouble("failedReadCount", read.failedReadCount.toDouble())
+                putStringOrNull("lastReadBackend", snapshot.lastReadBackend?.name)
+                putStringOrNull("lastReadResult", snapshot.lastReadResult?.name)
+                putDouble("readAttemptCount", snapshot.readAttemptCount.toDouble())
+                putDouble(
+                    "successfulReadCount",
+                    snapshot.successfulReadCount.toDouble(),
+                )
+                putDouble("failedReadCount", snapshot.failedReadCount.toDouble())
             }
 
             promise.resolve(
                 Arguments.createMap().apply {
-                    putBoolean("requested", isListening)
+                    putBoolean("requested", snapshot.requested)
                     putMap("ordinaryListener", ordinaryMap)
                     putMap("legacyLogcatOverlay", logcatMap)
                     putMap("clipboardRead", readMap)
