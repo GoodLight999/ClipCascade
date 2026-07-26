@@ -1,3 +1,14 @@
 <resources>
     <string name="app_name">ClipCascade</string>
+    <string name="acquisition_diagnostics_title">Acquisition diagnostics</string>
+    <string name="acquisition_diagnostics_short_label">Capture status</string>
+    <string name="acquisition_diagnostics_long_label">Open acquisition diagnostics</string>
+    <string name="acquisition_diagnostics_disabled_message">Acquisition diagnostics unavailable</string>
+    <string name="acquisition_diagnostics_description">Sanitized native capture health. Clipboard contents, credentials, and server URLs are never displayed. A successful read is not a server delivery acknowledgement.</string>
+    <string name="acquisition_diagnostics_loading">Loading acquisition state…</string>
+    <string name="acquisition_diagnostics_module_unavailable">The React Native capture module is not active in this process. Open ClipCascade, start the service, then return and refresh.</string>
+    <string name="acquisition_diagnostics_refresh">Refresh</string>
+    <string name="acquisition_diagnostics_overlay_settings">Overlay permission settings</string>
+    <string name="acquisition_diagnostics_open_app">Open ClipCascade</string>
+    <string name="acquisition_diagnostics_close">Close</string>
 </resources>
