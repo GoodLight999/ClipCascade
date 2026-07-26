@@ -1,0 +1,157 @@
+name: Baseline artifact build
+
+on:
+  push:
+    branches:
+      - clean-rebuild
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-artifacts-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-apk:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: ClipCascade_Mobile/src
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Build debug APK
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew --no-daemon --stacktrace assembleDebug
+
+      - name: Stage APK and checksum
+        run: |
+          mkdir -p ci-artifacts/android
+          cp android/app/build/outputs/apk/debug/app-debug.apk ci-artifacts/android/ClipCascade-Android-baseline-debug.apk
+          cd ci-artifacts/android
+          sha256sum ClipCascade-Android-baseline-debug.apk > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-Android-baseline-debug
+          path: ClipCascade_Mobile/src/ci-artifacts/android/
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-exe:
+    name: Windows standalone EXE
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: ClipCascade_Desktop/src
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: ClipCascade_Desktop/src/requirements_win.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements_win.txt
+          python -m pip install PyInstaller==6.11.1
+
+      - name: Compile-check Python source
+        run: python -m compileall -q .
+
+      - name: Build standalone executable
+        run: python -m PyInstaller --clean --noconfirm ClipCascade_win.spec
+
+      - name: Stage EXE and checksum
+        run: |
+          New-Item -ItemType Directory -Force -Path ci-artifacts/windows | Out-Null
+          Copy-Item dist/ClipCascade.exe ci-artifacts/windows/ClipCascade-Windows-baseline.exe
+          $hash = (Get-FileHash ci-artifacts/windows/ClipCascade-Windows-baseline.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ClipCascade-Windows-baseline.exe" | Set-Content -Encoding ascii ci-artifacts/windows/SHA256SUMS.txt
+          Get-Content ci-artifacts/windows/SHA256SUMS.txt
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-Windows-baseline
+          path: ClipCascade_Desktop/src/ci-artifacts/windows/
+          if-no-files-found: error
+          retention-days: 30
+
+  linux-package:
+    name: Linux source package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compile-check Python source
+        working-directory: ClipCascade_Desktop/src
+        run: python -m compileall -q .
+
+      - name: Create Linux distribution package
+        shell: bash
+        run: |
+          mkdir -p ci-artifacts/linux/package
+          rsync -a \
+            --exclude '__pycache__' \
+            --exclude '*.pyc' \
+            --exclude 'build' \
+            --exclude 'dist' \
+            ClipCascade_Desktop/src/ ci-artifacts/linux/package/ClipCascade/
+          cp LICENSE ci-artifacts/linux/package/ClipCascade/LICENSE
+          tar -C ci-artifacts/linux/package -czf ci-artifacts/linux/ClipCascade-Linux-baseline.tar.gz ClipCascade
+          cd ci-artifacts/linux
+          sha256sum ClipCascade-Linux-baseline.tar.gz > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-Linux-baseline
+          path: ci-artifacts/linux/
+          if-no-files-found: error
+          retention-days: 30
