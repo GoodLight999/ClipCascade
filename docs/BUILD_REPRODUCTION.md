@@ -6,12 +6,13 @@ Last updated: 2026-07-26 (Asia/Tokyo)
 
 This document defines the automated test and artifact gate for `clean-rebuild`.
 
-A green run proves that one product-code head:
+A green run proves that one product-code/pipeline head:
 
 - passes desktop tests on Windows and Ubuntu;
 - passes Android app JVM tests;
-- compiles the Android native and React Native surfaces;
-- produces an Android debug APK;
+- compiles Android native and React Native surfaces;
+- generates and packages the React Native/Hermes JavaScript bundle;
+- produces a standalone Android engineering APK that does not require Metro;
 - produces a standalone Windows executable;
 - produces a Linux source package;
 - emits platform SHA-256 files.
@@ -59,7 +60,7 @@ python -m unittest discover -s tests -p "test_*.py" -v
 
 The suite covers connection state, retry policy, STOMP readiness, P2S integration, and GUI/CLI action mapping.
 
-## Android tests and debug APK
+## Android tests and standalone APK
 
 ### Toolchain
 
@@ -71,6 +72,7 @@ The suite covers connection state, retry policy, STOMP readiness, P2S integratio
 - target SDK: 35
 - app minimum SDK: 26
 - React Native: 0.80.2
+- Hermes enabled
 
 ### Required upstream build restoration
 
@@ -86,6 +88,30 @@ hermesEnabled=true
 
 This is a build repair, not a runtime reliability fix.
 
+### Why `assembleDebug` is not distributable here
+
+React Native skips JS bundling for variants listed in `debuggableVariants`. The normal `debug` variant therefore expects Metro and may display:
+
+```text
+Unable to load script.
+Make sure you're running Metro or that your bundle 'index.android.bundle' is packaged correctly for release.
+```
+
+The debug variant remains useful for deliberate Metro development. It must not be distributed as the ordinary physical-device test artifact.
+
+### Standalone build type
+
+`ClipCascade_Mobile/src/android/app/build.gradle` defines:
+
+- `debuggableVariants = ["debug"]`;
+- build type `standalone`;
+- `standalone` inherits release runtime semantics;
+- `standalone` uses the debug signing key;
+- minification is disabled;
+- dependency matching falls back to release then debug.
+
+This combination packages the JS bundle and avoids Metro while remaining clearly non-production.
+
 ### Commands
 
 Run from `ClipCascade_Mobile/src`:
@@ -94,7 +120,7 @@ Run from `ClipCascade_Mobile/src`:
 npm ci
 chmod +x android/gradlew
 cd android
-./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleStandalone
 ```
 
 Do not use unqualified `testDebugUnitTest`. It compiles unit-test sources from every included React Native dependency; `@react-native-module/pbkdf2` contains defective sample tests unrelated to the ClipCascade app.
@@ -102,16 +128,27 @@ Do not use unqualified `testDebugUnitTest`. It compiles unit-test sources from e
 Expected APK:
 
 ```text
-ClipCascade_Mobile/src/android/app/build/outputs/apk/debug/app-debug.apk
+ClipCascade_Mobile/src/android/app/build/outputs/apk/standalone/app-standalone.apk
 ```
 
 Workflow filename:
 
 ```text
-ClipCascade-Android-clean-rebuild-debug.apk
+ClipCascade-Android-clean-rebuild-standalone.apk
 ```
 
-The APK is debug-signed.
+### Mandatory packaged-bundle verification
+
+The workflow runs these checks before artifact upload:
+
+```bash
+APK_PATH=android/app/build/outputs/apk/standalone/app-standalone.apk
+test -f "$APK_PATH"
+unzip -Z1 "$APK_PATH" | grep -Fxq 'assets/index.android.bundle'
+unzip -tq "$APK_PATH"
+```
+
+The Android artifact is invalid if `assets/index.android.bundle` is absent, even if Gradle compilation and APK signing succeeded.
 
 ### Current Android test inventory
 
@@ -136,7 +173,7 @@ The suite covers:
 - payload-free diagnostics rendering;
 - self-test matching ACK, timeout, supersession, and emit failure.
 
-Android framework clipboard behavior, overlay focus behavior, actual JS ACK execution, AccessibilityService, and Shizuku still require device or instrumentation evidence.
+Android framework clipboard behavior, overlay focus behavior, actual on-device JS ACK execution, AccessibilityService, and Shizuku still require physical-device or instrumentation evidence.
 
 ## Windows standalone executable
 
@@ -212,32 +249,40 @@ The archive contains desktop source, requirements, launch code, and license.
 - Head: `b3ff8f72b3a09fda586aebcdadfba1f541446be1`
 - Purpose: immutable diagnostics snapshot, formatter, native Activity, launcher long-press shortcut.
 
-### Payload-free bridge self-test build — current
+### Payload-free bridge self-test debug build
 
 - Run: `30202889590`
-- Product-code head: `01394199be3e40160dcd592e8d0e5ee6a85722d1`
-- Purpose: diagnostics Activity plus native → React Native test-ID/ACK bridge, 46 tests, all artifacts.
+- Head: `01394199be3e40160dcd592e8d0e5ee6a85722d1`
+- Purpose: native → React Native test-ID/ACK bridge and 46 tests.
+- Important outcome: CI was green, but the distributed `assembleDebug` APK lacked packaged JS and required Metro. This is retained as a packaging failure, not a current artifact milestone.
+
+### Standalone bundled Android build — current
+
+- Run: `30203690726`
+- Product-code/pipeline head: `a94b830fb954d09fc742b39833cebd5915988566`
+- Purpose: preserve all 46 tests and diagnostics while producing a Metro-independent APK with an enforced packaged-bundle check.
 
 Artifacts:
 
 | Platform | Artifact ID | Inner file | Size | SHA-256 |
 |---|---:|---|---:|---|
-| Android | `8632223256` | `ClipCascade-Android-clean-rebuild-debug.apk` | 146,868,392 bytes | `a9c23f3d54c529f501ee92fe233cc434264edf862de5b1be82b6b86b2d434808` |
-| Android log | `8632222540` | `gradle-build.log` | see artifact | GitHub digest retained |
-| Windows | `8632211465` | `ClipCascade-Windows-clean-rebuild.exe` | 57,456,724 bytes | `ad09902ba6e6ccc22fce7b42d9aad7f6f6755647e435be05d97d413dfc910491` |
-| Linux | `8632190948` | `ClipCascade-Linux-clean-rebuild.tar.gz` | 68,793 bytes | `9156f49b406e2d4acbd00007fc2194e5a3b3e66fd676541413b8b533576fff50` |
+| Android standalone | `8632482778` | `ClipCascade-Android-clean-rebuild-standalone.apk` | 93,574,655 bytes | `ca7ee41f95f729879a5298bdc2b6e413f0f2086cbc922205e06468d7878f471b` |
+| Android log | `8632482104` | `gradle-build.log` | see artifact | GitHub digest retained |
+| Windows | `8632434975` | `ClipCascade-Windows-clean-rebuild.exe` | 57,456,724 bytes | `36da95c51e473b8bf33677f81142ea70bdfcd81a968e24e8a0be4878e11ce103` |
+| Linux | `8632420551` | `ClipCascade-Linux-clean-rebuild.tar.gz` | 68,791 bytes | `6fadbb46751fe0e714f85d9118c69c2ecc7ea14c0d8a76b2d85c2eed0114ba6b` |
 
 Independent post-download checks:
 
 - Android embedded SHA-256 passed;
 - APK identification passed;
+- exact `assets/index.android.bundle` entry present;
 - APK ZIP integrity passed;
 - Windows embedded SHA-256 passed;
 - Windows identified as PE32+ x86-64 GUI;
 - Linux embedded SHA-256 passed;
 - Linux archive identified as gzip and enumerated successfully with 53 entries.
 
-## Recorded Android CI failures
+## Recorded Android failures
 
 ### Run `30201114997`
 
@@ -247,7 +292,14 @@ Unqualified `testDebugUnitTest` included defective third-party sample tests from
 
 Five app tests compared `Int` expected values with intentionally `Long` counters and timestamps. Production types were preserved; test expectations were corrected.
 
-Detailed evidence: `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_ACQUISITION.md`.
+### Run `30202889590` artifact used without Metro
+
+`assembleDebug` intentionally skipped JS bundling. The installed APK displayed `Unable to load script`. The fix was not to ask the user to run Metro; the artifact gate was changed to a standalone build and an APK-internal bundle check.
+
+Detailed evidence:
+
+- `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_ACQUISITION.md`
+- `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_STANDALONE.md`
 
 ## Success criteria
 
@@ -255,13 +307,13 @@ A product-code gate is green only when all five jobs succeed:
 
 1. `Desktop unit tests (ubuntu-latest)`
 2. `Desktop unit tests (windows-latest)`
-3. `Android tests and debug APK`
+3. `Android tests and standalone APK`
 4. `Windows standalone EXE`
 5. `Linux source package`
 
 For every meaningful product or pipeline change, record:
 
-- exact product-code head;
+- exact product-code/pipeline head;
 - workflow run ID;
 - job outcomes;
 - artifact IDs and filenames;
@@ -276,3 +328,4 @@ For every meaningful product or pipeline change, record:
 4. Do not change product behavior merely to make packaging green.
 5. Do not patch generated dependencies unless the product actually requires it.
 6. Never erase a failed attempt because a later run succeeds.
+7. Never classify an APK as user-installable without verifying the packaged JavaScript asset.
