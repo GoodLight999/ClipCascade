@@ -11,16 +11,17 @@ Last updated: 2026-07-26 (Asia/Tokyo)
 - Mirror branch: `main`
 - Active development branch: `clean-rebuild`
 - Active draft PR: `#3`
+- Latest fully green product head: `bb5f047fb448b59591b9590b8762a5ba907ecc50`
 
-`main` was compared directly against the verified upstream SHA and was identical:
+`main` was directly compared with the verified upstream SHA and was identical:
 
 - ahead: 0
 - behind: 0
 - changed files: 0
 
-The old patchwork draft PR was closed. Do not use its branch, files, assumptions, or architecture as a baseline.
+The previous 529-commit patchwork PR #1 is closed and unmerged. Do not use its branch, implementation, assumptions, or documentation as a baseline.
 
-## Read-first documents
+## Read first
 
 1. `docs/CLEAN_REBUILD_HANDOFF.md`
 2. `docs/EXPERIMENT_LOG.md`
@@ -30,200 +31,214 @@ The old patchwork draft PR was closed. Do not use its branch, files, assumptions
 6. Draft PR #3 description and latest comments
 7. Latest commit diff
 
-## Non-negotiable operating rules
+If these sources disagree, correct the handoff and experiment log before implementing more code.
 
-1. Keep `main` as an upstream mirror. Product changes belong on focused branches and enter through reviewed pull requests.
-2. Update this handoff in every meaningful work session.
-3. Append every experiment, failure, build result, and device observation to `docs/EXPERIMENT_LOG.md`.
-4. Do not stack speculative fixes. Every behavior change must have:
-   - a stated hypothesis;
-   - a bounded implementation;
-   - a reproducible verification method;
-   - an explicit outcome.
-5. Preserve the upstream server protocol and compatibility with the public ClipCascade server.
-6. Do not require root access.
-7. Produce installable artifacts as release gates:
-   - Android APK;
-   - Windows executable/package;
-   - Linux executable/package.
-8. Never report a feature as working merely because compilation or CI passed. Background Android outbound sync requires a real-device acceptance test.
-9. Do not inspect or copy the archived patchwork implementation unless a narrowly scoped experiment explicitly justifies one isolated comparison.
-10. Separate pure models, transport integration, and UI migration into independently testable commits.
+## Non-negotiable rules
+
+1. Keep `main` as an upstream mirror.
+2. Work only on focused branches/commits and preserve attributable changes.
+3. Update this handoff in every meaningful session.
+4. Append hypotheses, exact changes, evidence, failures, results, and decisions to `docs/EXPERIMENT_LOG.md`.
+5. Do not stack speculative fixes.
+6. Preserve the upstream server protocol and public-server compatibility.
+7. Do not require root.
+8. Produce APK, Windows, and Linux artifacts as build gates.
+9. Never equate compilation with runtime correctness.
+10. Android background outbound reliability requires real-device tests.
+11. Do not inspect the archived patchwork branch except for a narrowly named, evidence-driven comparison.
+12. Do not let GUI, transport, and diagnostics maintain conflicting state.
+13. Never log or export clipboard payload contents in normal diagnostics.
 
 ## Product requirements
 
-### Android outbound reliability
+### Android
 
-Make Android-to-server clipboard transmission reliable while the application is backgrounded. Permitted mechanisms include:
+Reliable Android-to-server clipboard sharing while backgrounded. Permitted mechanisms:
 
 - ordinary Android APIs;
 - foreground services;
 - AccessibilityService;
-- Shizuku-mediated privileged operations;
+- Shizuku;
 - ADB-assisted setup or operation;
-- combinations of the above.
+- deliberate combinations and fallback.
 
 Root-only designs are prohibited.
 
-The implementation should prefer the least intrusive available mechanism, automatically detect capabilities, expose clear health state, and fall back deliberately rather than silently.
+The app must detect capabilities, explain setup, verify health after setup, expose the active capture path, and fail visibly rather than silently.
 
-### Power consumption
+### Power
 
-Reduce unnecessary polling, wakeups, reconnect loops, and duplicated clipboard processing without sacrificing reliability. Power work is subordinate to correct delivery and must be measured rather than guessed.
-
-### Setup experience
-
-Provide a guided setup that a non-technical user can complete. Shizuku integration, when present, must include capability detection, step-by-step instructions, deep links where possible, and post-setup verification.
+Correct delivery comes first. After correctness, reduce polling, wakeups, duplicate processing, and reconnect churn using measurements rather than guesses.
 
 ### Automatic diagnostics
 
-Provide a one-action diagnostic mode that:
+One-action diagnostics must eventually verify:
 
-- verifies authentication and server reachability;
-- verifies WebSocket/session state;
-- verifies Android clipboard acquisition paths;
-- verifies background execution capability;
-- verifies outbound queueing and acknowledgement;
-- records reconnect behavior;
-- exports a sanitized support bundle.
+- authentication and server reachability;
+- WebSocket/STOMP state;
+- Android clipboard acquisition path;
+- background execution capability;
+- outbound queue and acknowledgement state;
+- reconnect behavior;
+- sanitized support-bundle export.
 
-### Desktop reliability and visibility
+### Desktop
 
-Windows and Linux clients must provide a persistent status UI after login, including:
+Windows and Linux must expose:
 
-- connected/disconnected/reconnecting state;
-- last successful send and receive;
-- last error with actionable explanation;
+- connected/connecting/reconnecting/disconnected/auth-required/error states;
+- last accepted send and last receive;
+- actionable last error;
 - manual reconnect;
-- automatic reconnect with bounded exponential backoff and jitter;
-- diagnostics export;
-- tray/status integration where supported.
+- bounded automatic reconnect;
+- logs and later diagnostics export;
+- tray/CLI integration.
 
-## Architecture guardrails
-
-- One authoritative connection state machine per client.
-- One authoritative outbound queue per client.
-- Idempotent message handling and duplicate suppression.
-- Explicit capability model for Android acquisition methods.
-- No hidden infinite retry loops.
-- No feature-specific reconnect implementations.
-- No UI-only state that disagrees with transport state.
-- Structured logs with stable event names.
-- Sensitive clipboard contents must not appear in normal logs or exported diagnostics.
-
-## Verified upstream architecture findings
-
-Detailed evidence is recorded in `docs/BASELINE_ARCHITECTURE_INVENTORY.md`.
+## Verified upstream architecture
 
 ### Android
 
 - React Native `0.80.2` with Kotlin native modules.
-- The large `StartForegroundService.js` module currently owns transport, encryption, clipboard event listeners, duplicate suppression, foreground-service behavior, and media/file handling.
-- `ClipboardListenerModule.kt` uses both a normal clipboard listener and a protected `READ_LOGS` logcat reader.
-- The logcat path watches `ClipboardService:E`; when it sees a matching denial/event line, it launches `ClipboardFloatingActivity`.
-- `ClipboardFloatingActivity` creates an overlay, temporarily takes focus, reads the clipboard, emits an event to React Native, and closes.
-- This path is timing-sensitive and does not separate capture health from transport health.
+- `StartForegroundService.js` currently owns transport, encryption, capture event listeners, duplicate suppression, service behavior, and media/file handling.
+- `ClipboardListenerModule.kt` combines a normal clipboard listener with protected `READ_LOGS` logcat monitoring.
+- The logcat path watches `ClipboardService:E` and launches `ClipboardFloatingActivity`.
+- `ClipboardFloatingActivity` creates an overlay, temporarily takes focus, reads the clipboard, emits to React Native, and closes.
+- This capture path is timing-sensitive and does not separately expose capture health and transport health.
 
-### Desktop
+### Desktop before this clean work
 
-- Python, Tkinter/pystray, STOMP/WebSocket, and PyInstaller.
-- `STOMPManager.get_stats()` returns `None`.
-- reconnect uses fixed-delay sleep and recursive `connect()` from the close callback.
-- tray state initializes as connected independently of transport truth.
-- the tray polls stats every second, but the STOMP implementation supplies none.
+- Python, Tkinter/pystray, STOMP/WebSocket, PyInstaller.
+- P2S `get_stats()` returned `None`.
+- Close callbacks slept for a fixed interval and recursively called `connect()`.
+- The tray initialized itself as connected independently of transport truth.
+- The low-level client could return after WebSocket open before STOMP readiness.
 
-### External behavioral references
+### References
 
-- Octoclip documents no-root Accessibility and Shizuku setup flows.
-- Accessibility is acknowledged to miss copy operations that produce no recognizable accessibility event.
-- Shizuku modes demonstrate capability detection, guided authorization, verification, and reboot-recovery UX patterns.
-- No Octoclip source code is used.
+- Octoclip Accessibility and Shizuku documentation is used only as behavioral/setup reference.
+- The surviving Go fork may be inspected at explicitly named revisions for lifecycle and no-root acquisition evidence.
+- No external implementation is copied wholesale.
 
-## Reproducible baseline artifacts
+## Build reproduction
 
-Authoritative workflow: `.github/workflows/baseline-artifacts.yml`
+Workflow: `.github/workflows/baseline-artifacts.yml`
 
-The first Android attempt exposed an upstream build-tree omission: `android/app/build.gradle` referenced `hermesEnabled`, but the repository lacked `android/gradle.properties`. The clean branch restored the standard React Native 0.80 Android properties in commit `e725f479c5075baa6d32ed465322d6c0ee06979f`. This is a build-configuration repair, not a runtime reliability fix.
+Current workflow behavior:
 
-First fully green workflow:
+- branch-push verification on `clean-rebuild`;
+- manual dispatch;
+- documentation/Markdown-only branch pushes ignored;
+- no duplicate pull-request trigger;
+- Windows and Linux unit-test matrix;
+- Android debug APK;
+- Windows standalone EXE;
+- Linux source package;
+- embedded SHA-256 files;
+- Android Gradle log uploaded even on failure.
 
-- run ID: `30192411087`
-- build-config head: `e725f479c5075baa6d32ed465322d6c0ee06979f`
-- Android: success
-- Windows: success
-- Linux: success
+The upstream Android tree omitted `android/gradle.properties` while `app/build.gradle` referenced `hermesEnabled`. The clean branch restored the standard React Native 0.80 properties in commit `e725f479c5075baa6d32ed465322d6c0ee06979f`. This is a build repair, not an Android reliability fix.
 
-Verified artifacts:
+## Desktop P2S implementation status
 
-| Platform | Artifact ID | Inner file | Size | SHA-256 |
-|---|---:|---|---:|---|
-| Android | `8629067655` | `ClipCascade-Android-baseline-debug.apk` | 146,796,102 bytes | `0bac8825d51fe90bb1c07dca8fc9a39c28236b034896f23e33b87e5b29a850ba` |
-| Windows | `8629026745` | `ClipCascade-Windows-baseline.exe` | 57,432,247 bytes | `7d7c16ca582ffc6881d7a268934e4b13c56f87bd04868689d367f6cf8a381b04` |
-| Linux | `8629014836` | `ClipCascade-Linux-baseline.tar.gz` | 60,070 bytes | `6ae8433d278bfdc1e530171cdf8a7414a57d8d94927fdab607ce452d6dd99a5f` |
+Detailed contract and evidence: `docs/DESKTOP_CONNECTION_STATE_MACHINE.md`
 
-Independent checks passed for artifact checksum files, APK archive integrity, Windows PE format, and Linux archive enumeration.
+Implemented:
 
-The APK is debug-signed. A reproducible release-signing process remains a later release gate.
+- authoritative `ConnectionController`;
+- states: `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECT_WAIT`, `AUTH_REQUIRED`, `STOPPING`, `FATAL_ERROR`;
+- immutable snapshots;
+- normalized errors;
+- capped exponential backoff with jitter;
+- cancellable timers and stale-generation protection;
+- no `sleep()` inside socket-close callbacks;
+- actual STOMP `CONNECTED` plus subscription completion before connected state;
+- fresh client per connection attempt;
+- manual reconnect and automatic recovery paths;
+- runtime lost/restored notifications;
+- last accepted send and last valid receive observations;
+- P2S GUI and CLI primary controls derived from snapshots;
+- explicit P2P legacy fallback rather than a mixed partial migration;
+- Windows/Linux automated tests;
+- Windows EXE and Linux package build compatibility.
 
-## Desktop state-machine contract
+Not yet proven:
 
-`docs/DESKTOP_CONNECTION_STATE_MACHINE.md` is now the authoritative implementation contract.
+- real public-server runtime login/connect on the generated EXE;
+- forced network-loss countdown and recovery on Windows;
+- in-process reauthentication after `AUTH_REQUIRED`;
+- P2P migration;
+- full persistent status window;
+- diagnostics bundle export;
+- application-level delivery acknowledgement or durable outbound queue.
 
-Key decisions:
+## Latest fully green verification
 
-- transport owns connection truth;
-- initial state is `DISCONNECTED`, not connected;
-- states are `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECT_WAIT`, `AUTH_REQUIRED`, `STOPPING`, and `FATAL_ERROR`;
-- retry uses cancellable capped exponential backoff with jitter;
-- socket callbacks never sleep;
-- snapshots provide state, retry timing, last send/receive, and normalized error fields;
-- pure model/tests, STOMP integration, and tray migration must be separate commits.
+Workflow run: `30193922241`
 
-No desktop product code has yet been migrated to this contract.
+All five jobs succeeded:
+
+- Android debug APK;
+- Windows standalone EXE;
+- Linux source package;
+- desktop unit tests on Ubuntu;
+- desktop unit tests on Windows.
+
+Artifacts:
+
+| Platform | Artifact ID | Size inside artifact | SHA-256 |
+|---|---:|---:|---|
+| Android debug APK | `8629529566` | 146,796,102 bytes | `2aae59fc24b7d9e50b58f5be89b1f54267197f08624ba08aff161d901e6408bc` |
+| Windows EXE | `8629510789` | 57,456,724 bytes | `64190743de0c19a581675db255db7736d74602c5098ebf7c632c03bf66f1552a` |
+| Linux package | `8629490534` | See workflow artifact | Embedded checksum generated by workflow |
+| Android build log | `8629528730` | See workflow artifact | GitHub artifact digest available |
+
+Independent checks passed:
+
+- embedded Windows checksum;
+- Windows PE32+ x86-64 GUI format;
+- embedded Android checksum;
+- Android APK identification;
+- APK ZIP integrity.
+
+The Android APK remains a debug-signed upstream-behavior build. It does **not** contain the requested Android background reliability redesign yet.
 
 ## Planned delivery sequence
 
-1. Baseline inventory and reproducible upstream builds. **Complete.**
-2. Protocol and transport characterization without server changes. **In progress.**
-3. Desktop connection-state refactor and visible status UI.
-4. Android acquisition capability matrix and instrumentation.
-5. Android foreground/background delivery state machine.
-6. Accessibility path prototype and real-device evaluation.
-7. Shizuku path prototype and guided setup.
-8. Adaptive fallback policy and power measurements.
-9. One-action diagnostic mode and support bundle.
-10. Release workflows producing APK, Windows, and Linux artifacts.
-
-## Current state
-
-Completed:
-
-- verified pristine upstream mirror;
-- archived the previous patchwork development line;
-- created `clean-rebuild` and draft PR #3;
-- established canonical handoff and append-only experiment records;
-- inventoried Android capture and desktop reconnect failure surfaces;
-- added repeatable Android, Windows, and Linux artifact CI;
-- preserved and diagnosed the initial Android Gradle failure;
-- restored the omitted React Native 0.80 Gradle properties;
-- generated and independently verified APK, EXE, and Linux package artifacts;
-- specified the desktop connection state machine and its test gates.
-
-Runtime behavior has not yet been changed or claimed fixed. In particular, Android background outbound reliability remains untested on a real device.
+1. Baseline inventory and reproducible upstream builds — **complete**.
+2. Desktop P2S state model, STOMP readiness, reconnect, and status controls — **implemented and CI-green; live smoke test pending**.
+3. Desktop diagnostics/status panel and live network-loss verification.
+4. Android acquisition capability contract and instrumentation.
+5. Android capture-event normalization and durable outbound queue.
+6. Accessibility prototype and real-device evaluation.
+7. Shizuku prototype and guided setup.
+8. Optional ADB-assisted path and setup automation.
+9. Adaptive fallback and power measurement.
+10. One-action diagnostics/support bundle.
+11. Release signing and final APK/EXE/Linux artifacts.
 
 ## Exact next actions
 
-1. Add the pure Python connection model, normalized errors, retry calculator, injected scheduler/clock interfaces, and unit tests described in `docs/DESKTOP_CONNECTION_STATE_MACHINE.md`.
-2. Add Windows and Linux CI test jobs without changing `STOMPManager` yet.
-3. Characterize STOMP close/auth/error callbacks and map them to normalized events.
-4. Integrate the tested controller into `STOMPManager` in a separate commit.
-5. Migrate tray rendering to immutable snapshots in another separate commit.
-6. Build Windows and Linux artifacts and perform forced-network-loss smoke tests.
-7. Characterize server send semantics before designing durable queue deletion.
-8. Begin Android capability-backend implementation only after desktop diagnostics patterns are stable.
+1. Run the current Windows EXE against the unchanged public server.
+2. Verify login, connect, copy send/receive, manual disconnect, and quit.
+3. Force network loss and verify reconnect countdown, manual retry, automatic recovery, and notification behavior.
+4. Record sanitized logs and exact observations in `docs/EXPERIMENT_LOG.md`.
+5. Design and add the Android `ClipboardAcquisitionBackend` capability contract before touching existing capture triggers.
+6. Add capture-health events and an acquisition-only diagnostic model independent from transport.
+7. Recover narrowly relevant Android lifecycle facts from `wuxinkami/ClipCascade_go_fork` history without importing its architecture wholesale.
+8. Prototype ordinary-listener and Accessibility backends behind the same contract.
+9. Add Shizuku only after the capability and diagnostic interfaces are stable.
 
-## Definition of a valid handoff
+## Definition of a valid continuation
 
-A new thread must be able to continue by reading only the read-first documents listed above.
+A new thread must be able to identify:
 
-If those sources disagree, this file and the experiment log must be corrected before further implementation.
+- exact upstream baseline;
+- active branch and PR;
+- latest green product head;
+- completed implementation;
+- unverified claims;
+- current artifacts;
+- exact next action;
+- prior failed attempts and their evidence.
+
+Those facts must be obtainable from this file, `docs/EXPERIMENT_LOG.md`, the state-machine document, PR #3, and the latest diff without reading the archived patchwork branch.
