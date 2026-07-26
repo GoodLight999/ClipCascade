@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="acquisition_diagnostics"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/acquisition_diagnostics_short_label"
+        android:shortcutLongLabel="@string/acquisition_diagnostics_long_label"
+        android:shortcutDisabledMessage="@string/acquisition_diagnostics_disabled_message">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.clipcascade"
+            android:targetClass="com.clipcascade.AcquisitionDiagnosticsActivity" />
+    </shortcut>
+</shortcuts>
