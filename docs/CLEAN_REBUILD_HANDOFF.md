@@ -24,9 +24,11 @@ The old patchwork draft PR was closed. Do not use its branch, files, assumptions
 
 1. `docs/CLEAN_REBUILD_HANDOFF.md`
 2. `docs/EXPERIMENT_LOG.md`
-3. `docs/BASELINE_ARCHITECTURE_INVENTORY.md`
-4. Draft PR #3 description and latest comments
-5. Latest commit diff
+3. `docs/BUILD_REPRODUCTION.md`
+4. `docs/BASELINE_ARCHITECTURE_INVENTORY.md`
+5. `docs/DESKTOP_CONNECTION_STATE_MACHINE.md`
+6. Draft PR #3 description and latest comments
+7. Latest commit diff
 
 ## Non-negotiable operating rules
 
@@ -46,6 +48,7 @@ The old patchwork draft PR was closed. Do not use its branch, files, assumptions
    - Linux executable/package.
 8. Never report a feature as working merely because compilation or CI passed. Background Android outbound sync requires a real-device acceptance test.
 9. Do not inspect or copy the archived patchwork implementation unless a narrowly scoped experiment explicitly justifies one isolated comparison.
+10. Separate pure models, transport integration, and UI migration into independently testable commits.
 
 ## Product requirements
 
@@ -136,10 +139,52 @@ Detailed evidence is recorded in `docs/BASELINE_ARCHITECTURE_INVENTORY.md`.
 - Shizuku modes demonstrate capability detection, guided authorization, verification, and reboot-recovery UX patterns.
 - No Octoclip source code is used.
 
+## Reproducible baseline artifacts
+
+Authoritative workflow: `.github/workflows/baseline-artifacts.yml`
+
+The first Android attempt exposed an upstream build-tree omission: `android/app/build.gradle` referenced `hermesEnabled`, but the repository lacked `android/gradle.properties`. The clean branch restored the standard React Native 0.80 Android properties in commit `e725f479c5075baa6d32ed465322d6c0ee06979f`. This is a build-configuration repair, not a runtime reliability fix.
+
+First fully green workflow:
+
+- run ID: `30192411087`
+- build-config head: `e725f479c5075baa6d32ed465322d6c0ee06979f`
+- Android: success
+- Windows: success
+- Linux: success
+
+Verified artifacts:
+
+| Platform | Artifact ID | Inner file | Size | SHA-256 |
+|---|---:|---|---:|---|
+| Android | `8629067655` | `ClipCascade-Android-baseline-debug.apk` | 146,796,102 bytes | `0bac8825d51fe90bb1c07dca8fc9a39c28236b034896f23e33b87e5b29a850ba` |
+| Windows | `8629026745` | `ClipCascade-Windows-baseline.exe` | 57,432,247 bytes | `7d7c16ca582ffc6881d7a268934e4b13c56f87bd04868689d367f6cf8a381b04` |
+| Linux | `8629014836` | `ClipCascade-Linux-baseline.tar.gz` | 60,070 bytes | `6ae8433d278bfdc1e530171cdf8a7414a57d8d94927fdab607ce452d6dd99a5f` |
+
+Independent checks passed for artifact checksum files, APK archive integrity, Windows PE format, and Linux archive enumeration.
+
+The APK is debug-signed. A reproducible release-signing process remains a later release gate.
+
+## Desktop state-machine contract
+
+`docs/DESKTOP_CONNECTION_STATE_MACHINE.md` is now the authoritative implementation contract.
+
+Key decisions:
+
+- transport owns connection truth;
+- initial state is `DISCONNECTED`, not connected;
+- states are `DISCONNECTED`, `CONNECTING`, `CONNECTED`, `RECONNECT_WAIT`, `AUTH_REQUIRED`, `STOPPING`, and `FATAL_ERROR`;
+- retry uses cancellable capped exponential backoff with jitter;
+- socket callbacks never sleep;
+- snapshots provide state, retry timing, last send/receive, and normalized error fields;
+- pure model/tests, STOMP integration, and tray migration must be separate commits.
+
+No desktop product code has yet been migrated to this contract.
+
 ## Planned delivery sequence
 
-1. Baseline inventory and reproducible upstream builds.
-2. Protocol and transport characterization without server changes.
+1. Baseline inventory and reproducible upstream builds. **Complete.**
+2. Protocol and transport characterization without server changes. **In progress.**
 3. Desktop connection-state refactor and visible status UI.
 4. Android acquisition capability matrix and instrumentation.
 5. Android foreground/background delivery state machine.
@@ -151,29 +196,31 @@ Detailed evidence is recorded in `docs/BASELINE_ARCHITECTURE_INVENTORY.md`.
 
 ## Current state
 
-Completed in this session:
+Completed:
 
-- verified that `main` exactly matches upstream SHA `fd2cbbce69d5e5fa6b9b758d13a7dc6efdcb8a39`;
-- closed the previous patchwork draft PR as archived;
-- created `clean-rebuild` directly from the verified upstream SHA;
-- created draft PR #3;
+- verified pristine upstream mirror;
+- archived the previous patchwork development line;
+- created `clean-rebuild` and draft PR #3;
 - established canonical handoff and append-only experiment records;
-- inventoried the mobile and desktop architecture and identified the primary Android capture and desktop reconnect failure surfaces;
-- recorded the clean architecture direction without changing product code.
+- inventoried Android capture and desktop reconnect failure surfaces;
+- added repeatable Android, Windows, and Linux artifact CI;
+- preserved and diagnosed the initial Android Gradle failure;
+- restored the omitted React Native 0.80 Gradle properties;
+- generated and independently verified APK, EXE, and Linux package artifacts;
+- specified the desktop connection state machine and its test gates.
 
-No product code has been changed yet.
+Runtime behavior has not yet been changed or claimed fixed. In particular, Android background outbound reliability remains untested on a real device.
 
-The current execution environment could not clone GitHub directly because outbound DNS resolution to `github.com` is blocked. GitHub connector reads and writes remain functional. Therefore no local APK/EXE build has yet been claimed or fabricated.
+## Exact next actions
 
-## Next actions
-
-1. Inventory `.github/workflows` and determine whether existing GitHub Actions can produce unsigned Android, Windows, and Linux artifacts from PR #3.
-2. Add a baseline build workflow on `clean-rebuild` only if upstream automation cannot be reused safely.
-3. Run pristine lint/tests/builds and record exact toolchain versions, commands, logs, artifact names, and hashes.
-4. Characterize the STOMP delivery semantics before defining durable queue deletion rules.
-5. Write the interface-level Android acquisition and connection-state proposal.
-6. Implement the desktop state machine first because it is lower risk and provides reusable diagnostics patterns.
-7. Begin Android backend work only after baseline APK production is reproducible.
+1. Add the pure Python connection model, normalized errors, retry calculator, injected scheduler/clock interfaces, and unit tests described in `docs/DESKTOP_CONNECTION_STATE_MACHINE.md`.
+2. Add Windows and Linux CI test jobs without changing `STOMPManager` yet.
+3. Characterize STOMP close/auth/error callbacks and map them to normalized events.
+4. Integrate the tested controller into `STOMPManager` in a separate commit.
+5. Migrate tray rendering to immutable snapshots in another separate commit.
+6. Build Windows and Linux artifacts and perform forced-network-loss smoke tests.
+7. Characterize server send semantics before designing durable queue deletion.
+8. Begin Android capability-backend implementation only after desktop diagnostics patterns are stable.
 
 ## Definition of a valid handoff
 
