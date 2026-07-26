@@ -17,6 +17,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  desktop-unit-tests:
+    name: Desktop unit tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    defaults:
+      run:
+        working-directory: ClipCascade_Desktop
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Compile connection model and tests
+        run: python -m compileall -q src/connection tests
+
+      - name: Run unit tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/ClipCascade_Desktop/src
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
   android-apk:
     name: Android debug APK
     runs-on: ubuntu-latest
