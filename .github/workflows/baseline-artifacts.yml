@@ -39,8 +39,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install test dependencies
+        run: python -m pip install websocket_client==1.8.0
+
       - name: Compile connection model and tests
-        run: python -m compileall -q src/connection tests
+        run: python -m compileall -q src/connection src/stomp_ws tests
 
       - name: Run unit tests
         env:
