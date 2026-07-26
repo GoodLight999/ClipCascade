@@ -3,19 +3,28 @@
     <string name="background_setup_title">ClipCascade バックグラウンド設定</string>
     <string name="background_setup_short_label">バックグラウンド設定</string>
     <string name="background_setup_long_label">ClipCascade バックグラウンド取得を設定</string>
-    <string name="background_setup_intro">Android 10以降のバックグラウンド送信を設定します。ユーザー補助はコピー操作を検出するトリガーだけに使い、通信と重複排除は既存のClipCascade前景サービスが担当します。</string>
-    <string name="background_setup_status">ユーザー補助: %1$s\n他のアプリの上に表示: %2$s\nREAD_LOGS（ADB経路）: %3$s\nバッテリー最適化の除外: %4$s\nClipCascade前景サービス: %5$s</string>
+    <string name="background_setup_intro">推奨順はShizuku → ユーザー補助 → オーバーレイ/ADBです。Shizukuが使える場合は画面を奪わず直接読み、通信と重複排除は既存のClipCascade前景サービスが担当します。</string>
+    <string name="background_setup_status">Shizukuインストール: %1$s\nShizuku起動: %2$s\nShizuku権限: %3$s\nShizuku読取サービス: %4$s\nユーザー補助: %5$s\n他のアプリの上に表示（予備経路）: %6$s\nREAD_LOGS（ADBトリガー）: %7$s\nバッテリー最適化の除外: %8$s\nClipCascade前景サービス: %9$s\n直近のShizukuエラー: %10$s</string>
     <string name="status_enabled">有効</string>
     <string name="status_disabled">無効</string>
-    <string name="open_accessibility_settings">1. ユーザー補助の設定を開く</string>
-    <string name="open_overlay_settings">2. 他のアプリの上に表示を許可</string>
-    <string name="open_battery_settings">3. バッテリー最適化の設定を開く</string>
+    <string name="status_bound_uid">接続済み（UID %1$d）</string>
+    <string name="status_not_bound">未接続</string>
+    <string name="status_none">なし</string>
+    <string name="open_shizuku">1. Shizukuを開く／未導入なら入手する</string>
+    <string name="request_shizuku_permission">2. Shizuku権限を許可して接続</string>
+    <string name="test_shizuku_read">3. Shizuku読み取りをテスト</string>
+    <string name="open_accessibility_settings">4. ユーザー補助の設定を開く</string>
+    <string name="open_overlay_settings">5. 予備経路用「他のアプリの上に表示」</string>
+    <string name="open_battery_settings">6. バッテリー最適化の設定を開く</string>
     <string name="copy_adb_fallback">ADBフォールバック用コマンドをコピー</string>
     <string name="refresh_status">状態を再確認</string>
     <string name="open_clipcascade">ClipCascadeを開く</string>
-    <string name="background_setup_safety_note">安全設計: 通常のクリックや文字選択だけでは反応しません。コピー操作またはコピー完了通知を高い確度で判定でき、かつClipCascade前景サービスが稼働中の場合だけ、既存のオーバーレイ取得経路を一度起動します。</string>
+    <string name="background_setup_safety_note">安全設計: ユーザー補助は通常のクリックや文字選択だけでは反応しません。コピー操作を高い確度で検出した場合だけ、Shizuku読取を一度要求します。Shizukuが利用できない場合に限り、既存オーバーレイへ自動フォールバックします。クリップボード内容は診断表示やログへ保存しません。</string>
+    <string name="shizuku_test_started">Shizuku読み取りを確認しています…</string>
+    <string name="shizuku_test_success">成功: 種類=%1$s、長さ=%2$d（内容は表示しません）</string>
+    <string name="shizuku_test_failure">失敗: %1$s</string>
     <string name="adb_commands_copied">ADBコマンドをクリップボードへコピーしました</string>
     <string name="settings_unavailable">この端末では設定画面を開けませんでした</string>
     <string name="accessibility_service_label">ClipCascade コピー検出</string>
-    <string name="accessibility_service_description">コピー操作とコピー完了通知だけを検出し、ClipCascadeの既存バックグラウンド送信経路を起動します。画面内容の収集や一般的なクリック操作の監視は行いません。</string>
+    <string name="accessibility_service_description">コピー操作とコピー完了通知だけを検出し、Shizukuまたは既存フォールバック経路へ通知します。画面内容の収集や一般的なクリック操作の監視は行いません。</string>
 </resources>
