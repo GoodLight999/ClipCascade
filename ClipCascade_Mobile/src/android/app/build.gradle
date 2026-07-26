@@ -18,8 +18,9 @@ react {
     // cliFile = file("../node_modules/react-native/cli.js")
 
     /* Variants */
-    //   The list of variants that are debuggable. For those variants, skip JS bundling.
-    // debuggableVariants = ["liteDebug", "prodDebug"]
+    // Only the development debug variant may depend on Metro. The standalone
+    // engineering variant must package assets/index.android.bundle.
+    debuggableVariants = ["debug"]
 
     /* Bundling */
     // nodeExecutableAndArgs = ["node"]
@@ -84,6 +85,15 @@ android {
             signingConfig signingConfigs.release
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+        standalone {
+            // Release runtime semantics ensure the app loads its packaged JS
+            // bundle instead of requesting Metro, while debug signing keeps this
+            // an explicitly non-production engineering artifact.
+            initWith release
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+            matchingFallbacks = ["release", "debug"]
         }
     }
 }
