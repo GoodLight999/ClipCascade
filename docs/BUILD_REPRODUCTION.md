@@ -1,22 +1,66 @@
-# Baseline Build Reproduction
+# Clean Rebuild Verification and Artifact Reproduction
 
 Last updated: 2026-07-26 (Asia/Tokyo)
 
 ## Purpose
 
-This document defines the first reproducible build gate for the clean rebuild. It builds the upstream product code from baseline commit `fd2cbbce69d5e5fa6b9b758d13a7dc6efdcb8a39`, plus one documented restoration of the React Native 0.80 standard Android Gradle properties that were absent from the upstream tree.
+This document defines the reproducible build and automated-test gate for `clean-rebuild`.
 
-The build does not claim that runtime behavior is correct. It proves only that installable/distributable baseline artifacts can be produced repeatedly from a known commit.
+The gate proves that a specific commit:
+
+- passes the desktop test suite on Windows and Linux;
+- compiles the complete desktop Python source;
+- produces an Android debug APK;
+- produces a standalone Windows executable;
+- produces a Linux source package;
+- emits SHA-256 files with each platform artifact.
+
+A green build does **not** prove real-device Android background capture, public-server connectivity, or forced-network-loss recovery. Those require separate runtime evidence.
 
 ## Authoritative workflow
 
-- Workflow: `.github/workflows/baseline-artifacts.yml`
-- Trigger: pushes to `clean-rebuild`, pull requests targeting `main`, or manual dispatch
+- File: `.github/workflows/baseline-artifacts.yml`
+- Display name: `Clean rebuild verification`
+- Automatic trigger: non-documentation pushes to `clean-rebuild`
+- Manual trigger: `workflow_dispatch`
+- Documentation-only pushes ignored: `docs/**`, `**/*.md`
 - Artifact retention: 30 days
-- Every artifact directory contains `SHA256SUMS.txt`
-- Android Gradle output is uploaded even when the Android job fails
+- Every platform artifact contains `SHA256SUMS.txt`
+- Android Gradle output is uploaded even after Android build failure
 
-## Android baseline APK
+There is intentionally no pull-request trigger. The active draft PR uses `clean-rebuild` as its head, so a PR trigger duplicated every branch-push build and could rebuild the entire historical PR diff for documentation-only updates.
+
+## Desktop automated tests
+
+### Platforms
+
+- `ubuntu-latest`
+- `windows-latest`
+- Python 3.11
+- `websocket_client==1.8.0`
+
+### Commands
+
+Run from `ClipCascade_Desktop`:
+
+```bash
+python -m pip install websocket_client==1.8.0
+python -m compileall -q src/connection src/stomp_ws src/gui src/cli tests
+PYTHONPATH=src python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+PowerShell equivalent:
+
+```powershell
+python -m pip install websocket_client==1.8.0
+python -m compileall -q src/connection src/stomp_ws src/gui src/cli tests
+$env:PYTHONPATH = "$PWD/src"
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+The suite currently covers the pure connection controller, retry policy, low-level STOMP handshake, P2S manager integration, and GUI/CLI action mapping.
+
+## Android debug APK
 
 ### Toolchain
 
@@ -31,7 +75,7 @@ The build does not claim that runtime behavior is correct. It proves only that i
 
 ### Required upstream build-config restoration
 
-The upstream baseline did not contain `ClipCascade_Mobile/src/android/gradle.properties`, while `android/app/build.gradle` directly referenced `hermesEnabled`. The first CI attempt therefore failed during Gradle configuration with:
+The verified upstream baseline did not contain `ClipCascade_Mobile/src/android/gradle.properties`, while `android/app/build.gradle` directly referenced `hermesEnabled`. The first build failed during Gradle configuration with:
 
 ```text
 Could not get unknown property 'hermesEnabled'
@@ -47,7 +91,7 @@ newArchEnabled=true
 hermesEnabled=true
 ```
 
-This is a build-configuration repair. It does not change the ClipCascade server protocol or application feature logic.
+This is a build-configuration repair. It does not change the ClipCascade server protocol or Android clipboard behavior.
 
 ### Reproduction commands
 
@@ -60,19 +104,19 @@ cd android
 ./gradlew --no-daemon --stacktrace assembleDebug
 ```
 
-### Expected output
+Gradle output:
 
 ```text
 ClipCascade_Mobile/src/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The workflow renames it to:
+Current workflow filename:
 
 ```text
-ClipCascade-Android-baseline-debug.apk
+ClipCascade-Android-clean-rebuild-debug.apk
 ```
 
-This is a debug-signed APK for baseline validation. It is not a production release signature.
+The file is debug-signed. It is not a production-release signature.
 
 ## Windows standalone executable
 
@@ -81,7 +125,7 @@ This is a debug-signed APK for baseline validation. It is not a production relea
 - Runner: `windows-latest`
 - Python: 3.11
 - PyInstaller: 6.11.1
-- Application dependencies: `ClipCascade_Desktop/src/requirements_win.txt`
+- Dependencies: `ClipCascade_Desktop/src/requirements_win.txt`
 
 ### Reproduction commands
 
@@ -95,84 +139,112 @@ python -m compileall -q .
 python -m PyInstaller --clean --noconfirm ClipCascade_win.spec
 ```
 
-### Expected output
+PyInstaller output:
 
 ```text
 ClipCascade_Desktop/src/dist/ClipCascade.exe
 ```
 
-The workflow renames it to:
+Current workflow filename:
 
 ```text
-ClipCascade-Windows-baseline.exe
+ClipCascade-Windows-clean-rebuild.exe
 ```
 
 ## Linux package
 
-The upstream project distributes Linux as source rather than through a maintained Linux PyInstaller specification. The baseline gate therefore compile-checks the Python source and packages the upstream Linux client source tree without inventing a new executable architecture.
+The upstream project distributes Linux as source rather than through a maintained Linux PyInstaller specification. The current gate therefore compile-checks the complete Python source and packages it without inventing an untested native-executable architecture.
 
 ### Toolchain
 
 - Runner: `ubuntu-latest`
 - Python: 3.11
 
-### Reproduction commands
+### Reproduction command
 
 ```bash
 cd ClipCascade_Desktop/src
 python -m compileall -q .
 ```
 
-The workflow then creates:
+Current workflow filename:
 
 ```text
-ClipCascade-Linux-baseline.tar.gz
+ClipCascade-Linux-clean-rebuild.tar.gz
 ```
 
-The archive contains the upstream desktop client source, `requirements.txt`, launch code, and the repository license. A native Linux executable may be added later as a separately tested delivery task; it must not silently replace the upstream source-package model.
+The archive contains the desktop source, requirements, launch code, and repository license. A native Linux executable remains a separate release task.
 
-## First green baseline result
+## First green upstream-baseline result
 
-- Workflow run: `30192411087`
-- Head commit: `e725f479c5075baa6d32ed465322d6c0ee06979f`
-- Android job: success
-- Windows job: success
-- Linux job: success
+- Run: `30192411087`
+- Head: `e725f479c5075baa6d32ed465322d6c0ee06979f`
+- Android: success
+- Windows: success
+- Linux: success
 
-Generated artifacts:
+This run established that the upstream product plus the Android Gradle-properties restoration could be built.
 
-| Platform | GitHub artifact ID | Inner file | Size | SHA-256 |
+## First fully green P2S state/UI result
+
+- Run: `30193922241`
+- Head: `bb5f047fb448b59591b9590b8762a5ba907ecc50`
+- Android APK: success
+- Windows EXE: success
+- Linux package: success
+- Ubuntu desktop tests: success
+- Windows desktop tests: success
+
+Verified artifacts:
+
+| Platform | Artifact ID | Inner file | Size | SHA-256 |
 |---|---:|---|---:|---|
-| Android | `8629067655` | `ClipCascade-Android-baseline-debug.apk` | 146,796,102 bytes | `0bac8825d51fe90bb1c07dca8fc9a39c28236b034896f23e33b87e5b29a850ba` |
-| Windows | `8629026745` | `ClipCascade-Windows-baseline.exe` | 57,432,247 bytes | `7d7c16ca582ffc6881d7a268934e4b13c56f87bd04868689d367f6cf8a381b04` |
-| Linux | `8629014836` | `ClipCascade-Linux-baseline.tar.gz` | 60,070 bytes | `6ae8433d278bfdc1e530171cdf8a7414a57d8d94927fdab607ce452d6dd99a5f` |
+| Android | `8629529566` | `ClipCascade-Android-baseline-debug.apk` | 146,796,102 bytes | `2aae59fc24b7d9e50b58f5be89b1f54267197f08624ba08aff161d901e6408bc` |
+| Windows | `8629510789` | `ClipCascade-Windows-baseline.exe` | 57,456,724 bytes | `64190743de0c19a581675db255db7736d74602c5098ebf7c632c03bf66f1552a` |
+| Linux | `8629490534` | baseline Linux tarball | recorded inside artifact | embedded `SHA256SUMS.txt` |
+| Android log | `8629528730` | `gradle-build.log` | recorded by GitHub | GitHub artifact digest available |
 
-Independent post-download checks performed in the execution container:
+Independent post-download checks passed for the Android embedded checksum, APK ZIP integrity, Windows embedded checksum, and Windows PE32+ x86-64 GUI format.
 
-- Android artifact ZIP checksum file passed.
-- APK archive integrity test passed with no compressed-data errors.
-- The APK was identified as an Android package containing Gradle app metadata.
-- Windows artifact ZIP checksum file passed.
-- The executable was identified as a PE32+ x86-64 Windows GUI executable.
-- Linux artifact ZIP checksum file passed.
-- The tarball contents were enumerated successfully.
+## First green clean artifact-name result
+
+Workflow run `30194151707`, head `a2ef19fc5b617137af2cb5ab3e54c8fccab41fdf`, was initially interrupted by a later documentation-triggered run. The cancelled Android job was re-run explicitly. The latest attempt completed all five jobs successfully.
+
+Artifacts using the current names:
+
+| Platform | Artifact ID | Artifact name |
+|---|---:|---|
+| Android | `8629632706` | `ClipCascade-Android-clean-rebuild-debug` |
+| Android log | `8629631994` | `ClipCascade-Android-clean-rebuild-build-log` |
+| Windows | `8629573494` | `ClipCascade-Windows-clean-rebuild` |
+| Linux | `8629557341` | `ClipCascade-Linux-clean-rebuild` |
+
+The duplicate PR trigger was subsequently removed in commit `04261e9d14b9e058c231a744631bbe34eb4665d1`.
 
 ## Success criteria
 
-A baseline build is green only when all three jobs complete and upload their expected artifacts:
+A product-code verification run is green only when all five jobs succeed:
 
-1. `ClipCascade-Android-baseline-debug`
-2. `ClipCascade-Windows-baseline`
-3. `ClipCascade-Linux-baseline`
+1. `Desktop unit tests (ubuntu-latest)`
+2. `Desktop unit tests (windows-latest)`
+3. `Android debug APK`
+4. `Windows standalone EXE`
+5. `Linux source package`
 
-The exact workflow run ID, job outcomes, artifact IDs, filenames, and SHA-256 values must be appended to `docs/EXPERIMENT_LOG.md` after every meaningful change to the build pipeline.
+For every meaningful build-pipeline or product change, record:
+
+- exact head SHA;
+- workflow run ID;
+- job outcomes;
+- artifact IDs and filenames;
+- SHA-256 values when independently downloaded;
+- any distinction between compile-time evidence and runtime evidence.
 
 ## Failure handling
 
-When a job fails:
-
 1. Preserve the failing log and exact commit SHA.
-2. Record the failed step and error text in `docs/EXPERIMENT_LOG.md`.
-3. Change only the minimum build or CI surface needed to test one hypothesis.
+2. Record the failed step and exact error in `docs/EXPERIMENT_LOG.md`.
+3. Change only the minimum surface needed to test one hypothesis.
 4. Do not alter product behavior merely to make packaging green.
-5. Re-run the failed job or create a new commit, then record the result.
+5. Re-run the isolated failed/cancelled job when the successful jobs remain valid.
+6. Never overwrite a prior failure record merely because a later retry succeeds.
