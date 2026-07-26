@@ -13,9 +13,9 @@ class AcquisitionStateReducerTest {
         val snapshot = reducer.initialSnapshot(100)
 
         assertEquals(AcquisitionCoordinatorState.STOPPED, snapshot.state)
-        assertEquals(100, snapshot.stateSinceMonotonicMs)
+        assertEquals(100L, snapshot.stateSinceMonotonicMs)
         assertTrue(snapshot.activeBackends.isEmpty())
-        assertEquals(0, snapshot.triggerCount)
+        assertEquals(0L, snapshot.triggerCount)
         assertNull(snapshot.lastReadResult)
     }
 
@@ -177,9 +177,9 @@ class AcquisitionStateReducerTest {
             ),
         )
 
-        assertEquals(1, duplicate.triggerCount)
-        assertEquals(1, duplicate.suppressedDuplicateTriggerCount)
-        assertEquals(200, duplicate.lastTriggerAtMonotonicMs)
+        assertEquals(1L, duplicate.triggerCount)
+        assertEquals(1L, duplicate.suppressedDuplicateTriggerCount)
+        assertEquals(200L, duplicate.lastTriggerAtMonotonicMs)
         assertEquals(
             AcquisitionBackendId.ORDINARY_LISTENER,
             duplicate.lastTriggerBackend,
@@ -202,9 +202,9 @@ class AcquisitionStateReducerTest {
             ),
         )
 
-        assertEquals(1, snapshot.successfulReadCount)
-        assertEquals(0, snapshot.failedReadCount)
-        assertEquals(300, snapshot.lastSuccessfulReadAtMonotonicMs)
+        assertEquals(1L, snapshot.successfulReadCount)
+        assertEquals(0L, snapshot.failedReadCount)
+        assertEquals(300L, snapshot.lastSuccessfulReadAtMonotonicMs)
         assertEquals(ClipboardReadResultCode.SUCCESS, snapshot.lastReadResult)
     }
 
@@ -231,8 +231,8 @@ class AcquisitionStateReducerTest {
             ),
         )
 
-        assertEquals(0, snapshot.successfulReadCount)
-        assertEquals(0, snapshot.failedReadCount)
+        assertEquals(0L, snapshot.successfulReadCount)
+        assertEquals(0L, snapshot.failedReadCount)
         assertEquals(AcquisitionCoordinatorState.ACTIVE, snapshot.state)
     }
 
@@ -255,9 +255,9 @@ class AcquisitionStateReducerTest {
         )
 
         assertEquals(AcquisitionCoordinatorState.DEGRADED, snapshot.state)
-        assertEquals(1, snapshot.failedReadCount)
-        assertEquals(150, snapshot.lastSuccessfulReadAtMonotonicMs)
-        assertEquals(300, snapshot.stateSinceMonotonicMs)
+        assertEquals(1L, snapshot.failedReadCount)
+        assertEquals(150L, snapshot.lastSuccessfulReadAtMonotonicMs)
+        assertEquals(300L, snapshot.stateSinceMonotonicMs)
     }
 
     @Test
@@ -282,7 +282,7 @@ class AcquisitionStateReducerTest {
         assertEquals(AcquisitionCoordinatorState.STOPPING, stopping.state)
         assertEquals(AcquisitionCoordinatorState.STOPPED, stopped.state)
         assertNull(stopped.selectedBackgroundBackend)
-        assertEquals(0, stopped.triggerCount)
+        assertEquals(0L, stopped.triggerCount)
         assertTrue(stopped.activeBackends.isEmpty())
     }
 
