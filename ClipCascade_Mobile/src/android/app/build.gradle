@@ -17,6 +17,9 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace "com.clipcascade"
+    buildFeatures {
+        aidl true
+    }
     defaultConfig {
         applicationId "com.clipcascade"
         minSdkVersion 26
