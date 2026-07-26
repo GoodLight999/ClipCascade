@@ -10,6 +10,7 @@ Last updated: 2026-07-26 (Asia/Tokyo)
 - Verified upstream baseline SHA: `fd2cbbce69d5e5fa6b9b758d13a7dc6efdcb8a39`
 - Mirror branch: `main`
 - Active development branch: `clean-rebuild`
+- Active draft PR: `#3`
 
 `main` was compared directly against the verified upstream SHA and was identical:
 
@@ -18,6 +19,14 @@ Last updated: 2026-07-26 (Asia/Tokyo)
 - changed files: 0
 
 The old patchwork draft PR was closed. Do not use its branch, files, assumptions, or architecture as a baseline.
+
+## Read-first documents
+
+1. `docs/CLEAN_REBUILD_HANDOFF.md`
+2. `docs/EXPERIMENT_LOG.md`
+3. `docs/BASELINE_ARCHITECTURE_INVENTORY.md`
+4. Draft PR #3 description and latest comments
+5. Latest commit diff
 
 ## Non-negotiable operating rules
 
@@ -36,6 +45,7 @@ The old patchwork draft PR was closed. Do not use its branch, files, assumptions
    - Windows executable/package;
    - Linux executable/package.
 8. Never report a feature as working merely because compilation or CI passed. Background Android outbound sync requires a real-device acceptance test.
+9. Do not inspect or copy the archived patchwork implementation unless a narrowly scoped experiment explicitly justifies one isolated comparison.
 
 ## Product requirements
 
@@ -98,6 +108,34 @@ Windows and Linux clients must provide a persistent status UI after login, inclu
 - Structured logs with stable event names.
 - Sensitive clipboard contents must not appear in normal logs or exported diagnostics.
 
+## Verified upstream architecture findings
+
+Detailed evidence is recorded in `docs/BASELINE_ARCHITECTURE_INVENTORY.md`.
+
+### Android
+
+- React Native `0.80.2` with Kotlin native modules.
+- The large `StartForegroundService.js` module currently owns transport, encryption, clipboard event listeners, duplicate suppression, foreground-service behavior, and media/file handling.
+- `ClipboardListenerModule.kt` uses both a normal clipboard listener and a protected `READ_LOGS` logcat reader.
+- The logcat path watches `ClipboardService:E`; when it sees a matching denial/event line, it launches `ClipboardFloatingActivity`.
+- `ClipboardFloatingActivity` creates an overlay, temporarily takes focus, reads the clipboard, emits an event to React Native, and closes.
+- This path is timing-sensitive and does not separate capture health from transport health.
+
+### Desktop
+
+- Python, Tkinter/pystray, STOMP/WebSocket, and PyInstaller.
+- `STOMPManager.get_stats()` returns `None`.
+- reconnect uses fixed-delay sleep and recursive `connect()` from the close callback.
+- tray state initializes as connected independently of transport truth.
+- the tray polls stats every second, but the STOMP implementation supplies none.
+
+### External behavioral references
+
+- Octoclip documents no-root Accessibility and Shizuku setup flows.
+- Accessibility is acknowledged to miss copy operations that produce no recognizable accessibility event.
+- Shizuku modes demonstrate capability detection, guided authorization, verification, and reboot-recovery UX patterns.
+- No Octoclip source code is used.
+
 ## Planned delivery sequence
 
 1. Baseline inventory and reproducible upstream builds.
@@ -118,25 +156,27 @@ Completed in this session:
 - verified that `main` exactly matches upstream SHA `fd2cbbce69d5e5fa6b9b758d13a7dc6efdcb8a39`;
 - closed the previous patchwork draft PR as archived;
 - created `clean-rebuild` directly from the verified upstream SHA;
-- established canonical handoff and experiment-log requirements.
+- created draft PR #3;
+- established canonical handoff and append-only experiment records;
+- inventoried the mobile and desktop architecture and identified the primary Android capture and desktop reconnect failure surfaces;
+- recorded the clean architecture direction without changing product code.
 
 No product code has been changed yet.
 
+The current execution environment could not clone GitHub directly because outbound DNS resolution to `github.com` is blocked. GitHub connector reads and writes remain functional. Therefore no local APK/EXE build has yet been claimed or fabricated.
+
 ## Next actions
 
-1. Inventory the upstream project structure and existing build/release workflows.
-2. Reproduce upstream Android, Windows, and Linux builds without modifications.
-3. Record exact commands, toolchain versions, outputs, and failures.
-4. Identify the existing Android clipboard listener, lifecycle boundaries, transport ownership, and reconnect implementation.
-5. Write a narrow architecture proposal before modifying product code.
+1. Inventory `.github/workflows` and determine whether existing GitHub Actions can produce unsigned Android, Windows, and Linux artifacts from PR #3.
+2. Add a baseline build workflow on `clean-rebuild` only if upstream automation cannot be reused safely.
+3. Run pristine lint/tests/builds and record exact toolchain versions, commands, logs, artifact names, and hashes.
+4. Characterize the STOMP delivery semantics before defining durable queue deletion rules.
+5. Write the interface-level Android acquisition and connection-state proposal.
+6. Implement the desktop state machine first because it is lower risk and provides reusable diagnostics patterns.
+7. Begin Android backend work only after baseline APK production is reproducible.
 
 ## Definition of a valid handoff
 
-A new thread must be able to continue by reading only:
-
-1. this file;
-2. `docs/EXPERIMENT_LOG.md`;
-3. the active pull request description and latest comments;
-4. the latest commit diff.
+A new thread must be able to continue by reading only the read-first documents listed above.
 
 If those sources disagree, this file and the experiment log must be corrected before further implementation.
