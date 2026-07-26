@@ -29,4 +29,9 @@ data class AcquisitionDiagnosticsSnapshot(
     val readAttemptCount: Long,
     val successfulReadCount: Long,
     val failedReadCount: Long,
+    val selfTestStatus: AcquisitionSelfTestStatus = AcquisitionSelfTestStatus.IDLE,
+    val selfTestRequestedAtMonotonicMs: Long? = null,
+    val selfTestAcknowledgedAtMonotonicMs: Long? = null,
+    val selfTestAttemptCount: Long = 0,
+    val selfTestPassCount: Long = 0,
 )
