@@ -11,7 +11,10 @@
 
 import {AppRegistry} from 'react-native';
 import App from './App';
+import {startAcquisitionSelfTestBridge} from './AcquisitionSelfTestBridge';
 import {name as appName} from './app.json';
+
+startAcquisitionSelfTestBridge();
 
 AppRegistry.registerComponent(appName, () => App);
 AppRegistry.registerHeadlessTask('Restart', () => require('./HeadlessTask'));
