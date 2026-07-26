@@ -116,15 +116,15 @@ Android background clipboard capture can be improved without creating a second t
 - `AndroidManifest.xml` and `strings.xml`
   - register the service/activity and user-facing text.
 
-### Current result
+### Current result at source-implementation checkpoint
 
-Source implementation is committed on `stability-recovery`.
+Source implementation was committed on `stability-recovery`.
 
-### Verification status
+### Verification status at source-implementation checkpoint
 
-Not yet compiled. Not yet installed. No runtime claim is valid yet.
+Not yet compiled. Not yet installed. No runtime claim was valid at this checkpoint.
 
-### Required next evidence
+### Required next evidence at source-implementation checkpoint
 
 1. Android resource/Kotlin compilation.
 2. Standalone APK containing the JavaScript bundle.
@@ -146,9 +146,119 @@ A11Y-001 must be revised or rejected if it:
 
 ---
 
-## Next experiment queue
+## Next experiment queue at A11Y-001 source checkpoint
 
 1. `BUILD-001`: compile A11Y-001 and produce a bundled installable APK.
 2. `DEVICE-001`: real-device acceptance matrix for foreground, Accessibility, and READ_LOGS paths.
 3. `SHIZUKU-001`: verify current official Shizuku API and design a preferred stable capture path without changing transport.
 4. `DESKTOP-001`: review and selectively recover the independent Windows connection-controller subset from `a94b830fb954d09fc742b39833cebd5915988566`.
+
+---
+
+## 2026-07-27 — Experiment BUILD-001: bundled Android APK
+
+### Goal
+
+Compile A11Y-001, run app-scoped Android tests, package a Metro-independent APK, and verify that the JavaScript bundle is actually inside the APK.
+
+### Packaging reused instead of reinvented
+
+Recovered only the previously successful packaging rule from the archived development line:
+
+- `standalone` build type inherits release runtime semantics;
+- `standalone` uses debug signing for engineering installation;
+- only `debug` is a React Native debuggable variant;
+- CI requires the exact APK entry `assets/index.android.bundle`;
+- CI verifies APK ZIP integrity and records SHA-256.
+
+No archived Android feature code or diagnostics UI was restored.
+
+### Attempt 1 — workflow run `30209073143`
+
+Result: failed before Android source compilation.
+
+Observed error:
+
+- `app/build.gradle` referenced `hermesEnabled`;
+- the upstream-aligned repository did not contain `ClipCascade_Mobile/src/android/gradle.properties`;
+- Gradle raised `MissingPropertyException` for `hermesEnabled`.
+
+Correction:
+
+- added the standard React Native 0.80 project properties;
+- `newArchEnabled=true`;
+- `hermesEnabled=true`;
+- retained AndroidX and the existing supported ABI set.
+
+This was a concrete restoration of required template configuration, not a feature redesign.
+
+### Attempt 2 — workflow run `30209210999`
+
+Result: failed during React Native CMake autolinking.
+
+Observed error:
+
+- direct `:app:assembleStandalone` ran before generated JNI/codegen directories existed for async-storage, clipboard, and document picker;
+- CMake failed on missing `build/generated/source/codegen/jni` directories.
+
+Rejected correction:
+
+- do not disable the new architecture merely to bypass the error;
+- do not patch generated `node_modules` or CMake files.
+
+Accepted correction:
+
+- reuse the exact build ordering previously proven in CI;
+- run `:app:testDebugUnitTest` before `:app:assembleStandalone`;
+- the app-scoped test task generates the required code before the standalone native build.
+
+### Attempt 3 — workflow run `30209366320`
+
+Head SHA: `613006702d22444449ce69500934c08e8a953ce0`
+
+Result: passed.
+
+Verified steps:
+
+- repository checkout;
+- Node and Java setup;
+- `npm ci`;
+- app-scoped debug unit-test task and code generation;
+- standalone APK build;
+- exact `assets/index.android.bundle` entry present;
+- APK ZIP integrity;
+- APK artifact upload;
+- build-log artifact upload.
+
+### Artifact evidence
+
+- APK artifact ID: `8634074763`
+- Build-log artifact ID: `8634074053`
+- File: `ClipCascade-Android-stability-standalone.apk`
+- Size: `93,544,663` bytes
+- SHA-256: `b2bca637638a829c8c594df567ca6951f56972ffc70b8c7d03fef326bed4e857`
+- Signing/status: debug-signed engineering artifact, not production release
+
+The artifact was downloaded independently after Actions completion. Its SHA-256, APK identification, exact JavaScript-bundle entry, and ZIP integrity were rechecked outside the workflow.
+
+### BUILD-001 conclusion
+
+BUILD-001 passed. A11Y-001 is build-verified but remains device-unverified.
+
+No claim is made yet about:
+
+- actual background clipboard capture;
+- Amazon/search-field safety;
+- duplicate-send behavior;
+- battery impact;
+- server or remote-device delivery.
+
+---
+
+## Current experiment queue
+
+1. `DEVICE-001`: install the latest APK and test foreground, Accessibility, and READ_LOGS paths separately.
+2. `DEVICE-002`: test launcher drawer, Amazon, browser, search fields, and selection toolbars for focus/input regressions.
+3. `DEVICE-003`: record duplicate-send and battery/wakeup behavior.
+4. `SHIZUKU-001`: use official Shizuku source/API/demo and OctoClip's documented flow to design the preferred stable path without changing transport.
+5. `DESKTOP-001`: selectively recover and retest the Windows connection controller; do not restore archived PR #3 wholesale.
