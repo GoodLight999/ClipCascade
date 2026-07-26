@@ -7,6 +7,17 @@ object AcquisitionDiagnosticsFormatter {
     ): String = buildString {
         appendLine("Acquisition request: ${yesNo(snapshot.requested)}")
         appendLine()
+        appendLine("Native → React Native self-test")
+        appendLine("  status: ${snapshot.selfTestStatus.name}")
+        appendLine("  attempts: ${snapshot.selfTestAttemptCount}")
+        appendLine("  passed: ${snapshot.selfTestPassCount}")
+        appendLine(
+            "  requested: ${age(snapshot.selfTestRequestedAtMonotonicMs, nowMonotonicMs)}",
+        )
+        appendLine(
+            "  acknowledged: ${age(snapshot.selfTestAcknowledgedAtMonotonicMs, nowMonotonicMs)}",
+        )
+        appendLine()
         appendLine("Ordinary listener")
         appendLine("  running: ${yesNo(snapshot.ordinaryRunning)}")
         appendLine("  starts: ${snapshot.ordinaryStartCount}")
