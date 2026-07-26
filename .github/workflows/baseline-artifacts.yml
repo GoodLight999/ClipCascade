@@ -57,7 +57,7 @@ jobs:
         run: python -m unittest discover -s tests -p "test_*.py" -v
 
   android-apk:
-    name: Android tests and debug APK
+    name: Android tests and standalone APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -85,12 +85,12 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
-      - name: Run acquisition unit tests and build debug APK
+      - name: Run acquisition unit tests and build standalone APK
         run: |
           mkdir -p ci-logs/android
           chmod +x android/gradlew
           set -o pipefail
-          (cd android && ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug) 2>&1 | tee ci-logs/android/gradle-build.log
+          (cd android && ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleStandalone) 2>&1 | tee ci-logs/android/gradle-build.log
 
       - name: Upload Android build log
         if: always()
@@ -101,18 +101,22 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Stage APK and checksum
+      - name: Verify packaged JavaScript and stage APK
         run: |
+          APK_PATH=android/app/build/outputs/apk/standalone/app-standalone.apk
+          test -f "$APK_PATH"
+          unzip -Z1 "$APK_PATH" | grep -Fxq 'assets/index.android.bundle'
+          unzip -tq "$APK_PATH"
           mkdir -p ci-artifacts/android
-          cp android/app/build/outputs/apk/debug/app-debug.apk ci-artifacts/android/ClipCascade-Android-clean-rebuild-debug.apk
+          cp "$APK_PATH" ci-artifacts/android/ClipCascade-Android-clean-rebuild-standalone.apk
           cd ci-artifacts/android
-          sha256sum ClipCascade-Android-clean-rebuild-debug.apk > SHA256SUMS.txt
+          sha256sum ClipCascade-Android-clean-rebuild-standalone.apk > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClipCascade-Android-clean-rebuild-debug
+          name: ClipCascade-Android-clean-rebuild-standalone
           path: ClipCascade_Mobile/src/ci-artifacts/android/
           if-no-files-found: error
           retention-days: 30
