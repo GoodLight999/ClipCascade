@@ -14,6 +14,9 @@ A new thread must read this file before inspecting or changing code.
 - Upstream-aligned baseline SHA: `fd2cbbce69d5e5fa6b9b758d13a7dc6efdcb8a39`
 - Mirror branch: `main`
 - Active development branch: `stability-recovery`
+- Active draft PR: `#4`
+- Latest green product head: `613006702d22444449ce69500934c08e8a953ce0`
+- Latest green Android workflow: `30209366320`
 - Active branch started from the exact baseline SHA above.
 
 The repository reset is already complete. **Do not reset, reconstruct, or re-baseline the repository again.**
@@ -70,6 +73,7 @@ Inspect these before implementing the corresponding feature:
 3. OctoClip Shizuku documentation: `https://docs.octoclip.app/features/source/background-monitoring/android/shizuku`
 4. OctoClip Accessibility documentation: `https://docs.octoclip.app/features/source/background-monitoring/android/accessibility`
 5. Official Android documentation for clipboard, Accessibility, foreground services, and background activity restrictions.
+6. Official Shizuku source, API guide, demo, and user setup documentation before Shizuku implementation.
 
 ## Archived development lines
 
@@ -96,7 +100,7 @@ The current upstream application already contains:
 - battery and ADB setup instructions;
 - boot and headless service infrastructure.
 
-The recovery branch must extend this path rather than create a second transport or connection engine.
+The recovery branch extends this path rather than creating a second transport or connection engine.
 
 ## Reference archaeology result
 
@@ -114,7 +118,7 @@ Its Accessibility service also triggered on generic clicks and text-selection ch
 
 Branch: `stability-recovery`
 
-Implemented in source, not yet build-verified:
+Implemented and Android-build verified:
 
 - process-wide visibility of whether the existing React Native clipboard listener runtime is active;
 - a conservative `ClipCascadeAccessibilityService`;
@@ -130,12 +134,42 @@ Implemented in source, not yet build-verified:
 - native `BackgroundSetupActivity` with Accessibility, overlay, READ_LOGS, battery-exemption, and foreground-runtime status;
 - buttons to open system settings, copy the existing ADB fallback commands, refresh status, and return to ClipCascade;
 - launcher long-press shortcut for the setup screen;
-- default Android theme colors instead of a custom diagnostic panel, avoiding the previous dark-mode contrast failure.
+- default Android theme colors instead of a custom diagnostic panel, avoiding the previous dark-mode contrast failure;
+- Metro-free `standalone` build variant using release runtime semantics and debug signing;
+- CI gate for app tests, APK build, embedded JavaScript bundle, APK ZIP integrity, artifact upload, and SHA-256.
+
+Build verification does **not** prove real-device background capture or UI safety.
+
+## Latest verified Android artifact
+
+- Workflow run: `30209366320`
+- Head SHA: `613006702d22444449ce69500934c08e8a953ce0`
+- APK artifact ID: `8634074763`
+- Build-log artifact ID: `8634074053`
+- File: `ClipCascade-Android-stability-standalone.apk`
+- Size: `93,544,663` bytes
+- SHA-256: `b2bca637638a829c8c594df567ca6951f56972ffc70b8c7d03fef326bed4e857`
+- Exact APK entry `assets/index.android.bundle`: present
+- APK ZIP integrity: passed
+- Signing/status: debug-signed engineering artifact; not a production release
+
+## Build failures retained as evidence
+
+### Run `30209073143`
+
+`app/build.gradle` referenced `hermesEnabled`, but the upstream-aligned tree did not contain `android/gradle.properties`. Added the standard React Native 0.80 properties, including `newArchEnabled=true` and `hermesEnabled=true`.
+
+### Run `30209210999`
+
+Direct `assembleStandalone` reached React Native CMake autolinking before generated JNI code existed. Reused the previously successful ordering: `:app:testDebugUnitTest` followed by `:app:assembleStandalone`. This generates app code before the standalone native build without patching dependencies.
+
+### Run `30209366320`
+
+All Android build, test, bundle-presence, ZIP-integrity, and artifact-upload steps passed.
 
 ## Explicitly not yet implemented or proven
 
-- Successful Android compilation of the active implementation unit.
-- Installable standalone APK from `stability-recovery`.
+- Successful launch of the latest APK on the user's Android device.
 - Real-device capture in foreground or background.
 - Amazon, launcher drawer, browser, selection toolbar, and search-field regression tests.
 - Duplicate-send acceptance tests.
@@ -149,26 +183,27 @@ Implemented in source, not yet build-verified:
 
 ## Exact next actions
 
-1. Compile the Android project from `stability-recovery` and fix only concrete compiler/resource errors.
-2. Add a focused CI workflow that builds an installable bundled APK without requiring Metro, reusing the previously verified bundling rule rather than redesigning packaging.
-3. Inspect the resulting APK for `assets/index.android.bundle` and ZIP integrity.
-4. Install and test the APK on a real Android device.
-5. Test ordinary foreground capture, Accessibility-triggered background capture, and existing READ_LOGS/ADB capture separately.
-6. Test launcher drawer, Amazon, browser, selection toolbars, and search fields for focus/input regressions.
-7. Record every result in `docs/EXPERIMENT_LOG.md` and update this file.
-8. Research and implement Shizuku as the preferred stable path, using official Shizuku APIs and OctoClip's documented user flow as references.
-9. Selectively recover the reviewed Windows reconnect implementation and tests; do not restore PR #3 wholesale.
-10. Build and publish APK, EXE, and Linux artifacts only with accurate labels describing what has and has not been device-tested.
+1. Install `ClipCascade-Android-stability-standalone.apk` on a real Android device.
+2. Open the launcher long-press `バックグラウンド設定` shortcut and verify readable light/dark rendering.
+3. Start the existing ClipCascade service and enable overlay plus the ClipCascade Accessibility service.
+4. Test ordinary foreground capture, Accessibility-triggered background capture, and existing READ_LOGS/ADB capture separately.
+5. Test launcher drawer, Amazon, browser, selection toolbars, and search fields for focus/input regressions.
+6. Record capture success, duplicate sends, focus changes, dismissed UI, and battery observations in `docs/EXPERIMENT_LOG.md`.
+7. Research and implement Shizuku as the preferred stable path, using official Shizuku APIs and OctoClip's documented user flow as references.
+8. Selectively recover the reviewed Windows reconnect implementation and tests; do not restore PR #3 wholesale.
+9. Build Windows EXE and Linux artifacts after the selective desktop recovery is green.
+10. Expand the current status screen into a true end-to-end diagnostic flow only after capture paths are real and testable.
 
 ## Continuation checklist
 
 A new thread must be able to state, without consulting archived patchwork:
 
-- canonical baseline and active branch;
+- canonical baseline, active branch, and active PR;
 - original product requirements;
 - permanent no-wheel-reinvention rule;
 - required reference links;
 - what is implemented in the active branch;
-- what is unverified;
-- latest build/test artifacts and hashes, once available;
+- what is build-verified versus device-verified;
+- latest artifacts and hashes;
+- retained build failures and corrections;
 - exact next action.
