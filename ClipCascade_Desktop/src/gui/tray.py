@@ -5,12 +5,14 @@ import time
 import tkinter as tk
 from tkinter import filedialog
 import webbrowser
-from pystray import Icon, MenuItem as item, Menu
-from PIL import Image, ImageDraw
 
+from PIL import Image, ImageDraw
+from pystray import Icon, MenuItem as item, Menu
+
+from connection.tray_view import TrayPrimaryAction, derive_tray_connection_view
 from core.config import Config
-from gui.info import CustomDialog
 from core.constants import *
+from gui.info import CustomDialog
 
 if PLATFORM != WINDOWS:
     import subprocess
@@ -51,24 +53,33 @@ class TaskbarPanel:
         if PLATFORM == MACOS:
             try:
                 from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
-                NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+
+                NSApplication.sharedApplication().setActivationPolicy_(
+                    NSApplicationActivationPolicyAccessory
+                )
             except ImportError:
                 pass
 
-        # Initial state: Connected
-        self.is_connected = True
+        # Legacy fallback for P2P until it adopts the authoritative snapshot API.
+        self.is_connected = bool(getattr(self.ws_interface, "is_connected", False))
 
-        # Create the tray icon
         self.icon = Icon(
-            "ClipCascade", self.create_clipboard_icon(), menu=self.create_menu()
+            "ClipCascade",
+            self.create_clipboard_icon(),
+            menu=self.create_menu(),
         )
-
         self.icon.title = "ClipCascade"
 
-        self.update_stats()  # Start the stats update thread
+        self.update_stats()
 
     def run(self):
         self.icon.run()
+
+    def _connection_view(self):
+        return derive_tray_connection_view(
+            self.ws_interface,
+            legacy_is_connected=self.is_connected,
+        )
 
     def _create_clipboard_base_image(self):
         """Shared clipboard artwork for normal tray icon and file-download badge variant."""
@@ -82,7 +93,11 @@ class TaskbarPanel:
         board_coords = (12, 12, 52, 57)
         try:
             draw.rounded_rectangle(
-                board_coords, radius=5, fill=None, outline=outline_color, width=3
+                board_coords,
+                radius=5,
+                fill=None,
+                outline=outline_color,
+                width=3,
             )
         except (AttributeError, TypeError):
             draw.rectangle(board_coords, fill=None, outline=outline_color)
@@ -90,7 +105,11 @@ class TaskbarPanel:
         clip_coords = (22, 7, 42, 17)
         try:
             draw.rounded_rectangle(
-                clip_coords, radius=3, fill=fill_color, outline=outline_color, width=3
+                clip_coords,
+                radius=3,
+                fill=fill_color,
+                outline=outline_color,
+                width=3,
             )
         except (AttributeError, TypeError):
             draw.rectangle(clip_coords, fill=fill_color, outline=outline_color)
@@ -101,7 +120,7 @@ class TaskbarPanel:
         return self._create_clipboard_base_image()
 
     def create_clipboard_icon_with_dot(self):
-        """Same clipboard as normal state, plus a blue notification dot for pending file download."""
+        """Same clipboard as normal state, plus a badge for pending downloads."""
         image = self._create_clipboard_base_image().copy()
         draw = ImageDraw.Draw(image)
         width, height = 64, 64
@@ -131,15 +150,7 @@ class TaskbarPanel:
         return image
 
     def create_menu(self, item_: tuple = None):
-        """Create the menu for the tray icon.
-
-        Args:
-            item_ (tuple, optional): The item that triggered the menu. Defaults to None.
-            item_ = (text, location, callback)
-        Returns:
-            Menu: The menu for the tray icon.
-        """
-        # Menu items
+        """Create the tray menu from current transport truth."""
         menu_items = [
             Menu.SEPARATOR,
             item("🗒️ Open Logs", self._open_logs),
@@ -154,19 +165,37 @@ class TaskbarPanel:
             item("❌ Quit", self._on_quit),
         ]
 
-        # Add connect/disconnect option (top of the menu - 0 index)
-        if not self.is_connected:
-            menu_items.insert(0, item("🔗 Connect", self._on_connect, default=True))
+        connection_view = self._connection_view()
+        if (
+            not connection_view.authoritative
+            and self.is_disconnecting
+            and self.disconnecting_items is not None
+        ):
+            menu_items.insert(
+                self.disconnecting_items[1],
+                item(self.disconnecting_items[0], self.disconnecting_items[2]),
+            )
         else:
-            if self.is_disconnecting and self.disconnecting_items is not None:
-                menu_items.insert(
-                    self.disconnecting_items[1],
-                    item(self.disconnecting_items[0], self.disconnecting_items[2]),
-                )
+            if connection_view.action in (
+                TrayPrimaryAction.CONNECT,
+                TrayPrimaryAction.RECONNECT,
+            ):
+                callback = self._on_connect
+            elif connection_view.action is TrayPrimaryAction.DISCONNECT:
+                callback = self._on_disconnect
             else:
-                menu_items.insert(0, item("⛓️‍💥 Disconnect", self._on_disconnect))
+                callback = None
+            menu_items.insert(
+                0,
+                item(
+                    connection_view.label,
+                    callback,
+                    default=connection_view.action
+                    in (TrayPrimaryAction.CONNECT, TrayPrimaryAction.RECONNECT),
+                    enabled=connection_view.enabled,
+                ),
+            )
 
-        # Add update option (before the last 3 items)
         if self.new_version_available is not None and self.new_version_available[0]:
             menu_items.insert(
                 len(menu_items) - 3,
@@ -176,7 +205,6 @@ class TaskbarPanel:
                 ),
             )
 
-        # Add files download option (top of the menu - 0 index)
         if self.is_file_download_enabled and self.file_download_items is not None:
             menu_items.insert(
                 self.file_download_items[1],
@@ -187,7 +215,6 @@ class TaskbarPanel:
                 ),
             )
 
-        # Add stats option (top of the menu - 0 index)
         if self.previous_stats_items is not None:
             menu_items.insert(
                 self.previous_stats_items[1],
@@ -208,12 +235,15 @@ class TaskbarPanel:
 
     def _update_stats_thread(self):
         while True:
-            current_stats = self.ws_interface.get_stats()
-            if current_stats is not None and self.previous_stats != current_stats:
-                self.previous_stats = current_stats
-                self.previous_stats_items = (current_stats, 0, None)
-                self.update_menu()
-            time.sleep(1)  # Sleep for 1 second
+            try:
+                current_stats = self.ws_interface.get_stats()
+                if current_stats is not None and self.previous_stats != current_stats:
+                    self.previous_stats = current_stats
+                    self.previous_stats_items = (current_stats, 0, None)
+                    self.update_menu()
+            except Exception as error:
+                logging.error(f"Failed to update tray connection status: {error}")
+            time.sleep(1)
 
     @staticmethod
     def open_webbrowser(url):
@@ -229,29 +259,43 @@ class TaskbarPanel:
         TaskbarPanel.open_webbrowser(self.new_version_available[3])
 
     def _on_connect(self, icon, item):
+        connection_view = self._connection_view()
         if self.on_connect_callback:
             try:
                 self.on_connect_callback()
-            except Exception as e:
-                pass
+            except Exception as error:
+                logging.error(f"Manual connection request failed: {error}")
+        if not connection_view.authoritative:
             self.is_connected = True
-            self.update_menu()
+        self.update_menu()
 
     def _on_disconnect(self, icon, item):
-        if self.on_disconnect_callback:
+        connection_view = self._connection_view()
+        if not self.on_disconnect_callback:
+            return
+
+        try:
             self.on_disconnect_callback()
-            if self.ws_interface is not None and self.ws_interface.is_auto_reconnecting:
-                threading.Thread(
-                    target=self._wait_to_disconnect, args=(icon, item), daemon=True
-                ).start()
-            else:
-                self.is_connected = False
-                self.update_menu()
+        except Exception as error:
+            logging.error(f"Manual disconnect request failed: {error}")
+            return
+
+        if connection_view.authoritative:
+            self.update_menu()
+            return
+
+        if self.ws_interface is not None and self.ws_interface.is_auto_reconnecting:
+            threading.Thread(
+                target=self._wait_to_disconnect,
+                args=(icon, item),
+                daemon=True,
+            ).start()
+        else:
+            self.is_connected = False
+            self.update_menu()
 
     def _wait_to_disconnect(self, icon, item):
-        """
-        Wait for the auto-reconnect timer to expire before disconnecting.
-        """
+        """Legacy P2P wait retained until P2P adopts the state controller."""
         if self.ws_interface is None:
             return
 
@@ -262,9 +306,9 @@ class TaskbarPanel:
                 f"⏳ Disconnecting... ({timeout} sec)",
                 0,
                 None,
-            )  # text, location, callback
+            )
             self.update_menu()
-            time.sleep(1)  # seconds
+            time.sleep(1)
             timeout -= 1
         self.is_disconnecting = False
         self.disconnecting_items = None
@@ -305,12 +349,13 @@ class TaskbarPanel:
                 ).mainloop()
         else:
             CustomDialog(
-                f"Log file not found at '{log_file_path}'.", msg_type="error"
+                f"Log file not found at '{log_file_path}'.",
+                msg_type="error",
             ).mainloop()
 
     def _open_program_location(self, icon, item):
+        program_location = get_program_files_directory()
         try:
-            program_location = get_program_files_directory()
             self.open_location(program_location)
         except Exception as e:
             CustomDialog(
@@ -335,7 +380,7 @@ class TaskbarPanel:
         self.update_menu()
 
     def _on_download(self, icon, item, files):
-        """Download the files to the user's Downloads folder."""
+        """Download files to the selected folder."""
         try:
             try:
                 if self.config.data["default_file_download_location"] != "":
@@ -352,34 +397,31 @@ class TaskbarPanel:
                     return
             except RuntimeError as re:
                 target_directory = os.path.join(
-                    get_program_files_directory(), "downloads"
+                    get_program_files_directory(),
+                    "downloads",
                 )
                 if not os.path.exists(target_directory):
                     os.makedirs(target_directory)
                 logging.error(
-                    f"A runtime error occurred while starting filedialog to select a directory. Error: {re}.\n"
-                    + f"Setting the default location to the program directory '{target_directory}'."
+                    "A runtime error occurred while starting the directory picker. "
+                    f"Error: {re}. Using '{target_directory}'."
                 )
                 CustomDialog(
-                    f"ClipCascade 📥: Saving files to the program directory '{target_directory}'.",
+                    f"ClipCascade 📥: Saving files to '{target_directory}'.",
                     msg_type="info",
                     timeout=5000,
                 ).mainloop()
 
-            # Save each file to the chosen directory
             for filename, file_obj in files.items():
                 file_path = os.path.join(target_directory, filename)
-                with open(file_path, "wb") as f:
-                    f.write(file_obj.getvalue())
+                with open(file_path, "wb") as file_handle:
+                    file_handle.write(file_obj.getvalue())
                 logging.debug(f"Saved: {file_path}")
 
         except Exception as e:
             msg = f"An error occurred while downloading files. Error: {e}"
             logging.error(msg)
-            CustomDialog(
-                msg,
-                msg_type="error",
-            ).mainloop()
+            CustomDialog(msg, msg_type="error").mainloop()
 
     def _on_logoff(self, icon, item):
         try:
@@ -389,7 +431,8 @@ class TaskbarPanel:
             self.root.quit()
         except Exception as e:
             CustomDialog(
-                f"An error occurred while logging off: {e}", msg_type="error"
+                f"An error occurred while logging off: {e}",
+                msg_type="error",
             ).mainloop()
 
     def _on_quit(self, icon, item):
