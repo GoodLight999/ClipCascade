@@ -91,30 +91,79 @@ This file is a chronological continuation of `docs/EXPERIMENT_LOG.md` for the An
   - tested APK archive integrity;
   - identified APK and PE formats.
 - Expected result: all five jobs succeed and uploaded artifacts are internally consistent.
-- Observed result: all five jobs succeeded. Android reported 38 passing app tests, generated the debug APK, and uploaded it. Independent checksum and format checks passed.
+- Observed result: all five jobs succeeded. Android had 38 passing app tests, generated the debug APK, and uploaded it. Independent checksum and format checks passed.
 - Evidence/artifacts:
   - workflow run `30201613966`;
   - Android artifact `8631864819`, inner file `ClipCascade-Android-clean-rebuild-debug.apk`, 146,845,313 bytes, SHA-256 `e7097304688544dd0251e3ba19f56fa3da18a51c7994937ea0877d9accf7a103`;
   - Android build-log artifact `8631864069`;
   - Windows artifact `8631829156`, inner file `ClipCascade-Windows-clean-rebuild.exe`, 57,456,724 bytes, SHA-256 `a78e8e26d486a3fff014c860149a4b88fd2eec6799b6c1ade01c2e90a84bcda0`;
   - Linux artifact `8631812042`;
-  - GitHub artifact digests are retained by Actions;
   - APK ZIP integrity: passed;
   - Windows format: PE32+ x86-64 GUI executable.
-- Decision: treat `9b7ca34ab9ffa165848e1d813b7caff04a546c0e` as the latest fully green product-code head. This proves compilation, unit behavior, packaging, and artifact integrity only.
+- Decision: this head proves compilation, unit behavior, packaging, and artifact integrity only.
+- Follow-up: expose sanitized acquisition diagnostics without adding more responsibility to the large React Native screen.
+
+## Add an independent payload-free acquisition diagnostics screen
+
+- Baseline commit: `9b7ca34ab9ffa165848e1d813b7caff04a546c0e`
+- Environment/device: Kotlin/JVM tests and GitHub Actions; no Android device attached
+- Hypothesis: adding diagnostics directly to the roughly 1,500-line React Native application screen would recreate responsibility mixing and make capture health dependent on the main UI lifecycle.
+- Change or command:
+  - added immutable `AcquisitionDiagnosticsSnapshot`;
+  - made native and React Native diagnostics consume the same snapshot builder;
+  - added pure `AcquisitionDiagnosticsFormatter` and two tests;
+  - added native `AcquisitionDiagnosticsActivity`;
+  - registered the activity in `AndroidManifest.xml`;
+  - added static app-icon long-press shortcut `Capture status` through `res/xml/shortcuts.xml`;
+  - added actions to refresh, open overlay settings, open ClipCascade, and close.
+- Expected result: capture state remains visible through a small native surface without storing clipboard contents, credentials, or server URLs.
+- Observed result: workflow run `30202437538` completed all five jobs successfully; Activity, manifest, shortcut resources, formatter tests, and APK assembly all passed.
+- Evidence/artifacts: product head `b3ff8f72b3a09fda586aebcdadfba1f541446be1`; workflow run `30202437538`.
+- Decision: keep diagnostics rendering native and independent from `App.js`; keep the actual snapshot authoritative in `ClipboardListenerModule`.
+- Follow-up: add a payload-free native-to-React-Native bridge self-test.
+
+## Add native-to-React-Native acquisition self-test
+
+- Baseline commit: diagnostics screen milestone
+- Environment/device: pure Kotlin/JUnit, React Native bundle build, GitHub Actions; no Android device attached
+- Hypothesis: a synthetic test ID can prove that a native module event reached the React Native root runtime and that the matching acknowledgement returned, without reading the clipboard or entering transport code.
+- Change or command:
+  - added `AcquisitionSelfTestTracker` with `IDLE`, `PENDING`, `PASSED`, `TIMED_OUT`, and `EMIT_FAILED`;
+  - added six deterministic tracker tests;
+  - native `ClipboardListenerModule.startAcquisitionSelfTest()` emits only `{testId}` on `onAcquisitionSelfTest`;
+  - added independent `AcquisitionSelfTestBridge.js` at the React Native entry point;
+  - the bridge validates the ID and calls `acknowledgeAcquisitionSelfTest(testId)`;
+  - the diagnostic Activity gained `Run native → React Native self-test` and timed refreshes;
+  - diagnostics formatter displays status, counts, and monotonic ages;
+  - neither `StartForegroundService.js` nor the clipboard outbound handler was modified for the self-test.
+- Expected result: JVM tests, React Native bundle, native compilation, resources, and APK assembly pass; on-device execution may then distinguish `PASSED`, `TIMED_OUT`, and `EMIT_FAILED`.
+- Observed result: workflow run `30202889590` completed all five jobs successfully. The Android suite contains exactly 46 `@Test` methods: state reducer 12, backend selection 9, ordinary backend 8, trigger deduplication 9, diagnostics formatter 2, self-test tracker 6.
+- Evidence/artifacts:
+  - product-code head `01394199be3e40160dcd592e8d0e5ee6a85722d1`;
+  - workflow run `30202889590`;
+  - Android artifact `8632223256`, inner APK 146,868,392 bytes, SHA-256 `a9c23f3d54c529f501ee92fe233cc434264edf862de5b1be82b6b86b2d434808`;
+  - Android build-log artifact `8632222540`;
+  - Windows artifact `8632211465`, inner EXE 57,456,724 bytes, SHA-256 `ad09902ba6e6ccc22fce7b42d9aad7f6f6755647e435be05d97d413dfc910491`;
+  - Linux artifact `8632190948`, inner tarball 68,793 bytes, SHA-256 `9156f49b406e2d4acbd00007fc2194e5a3b3e66fd676541413b8b533576fff50`;
+  - Android embedded checksum: passed;
+  - APK ZIP integrity: passed;
+  - Windows embedded checksum and PE32+ x86-64 GUI identification: passed;
+  - Linux embedded checksum, gzip identification, and 53-entry enumeration: passed.
+- Decision: treat `01394199be3e40160dcd592e8d0e5ee6a85722d1` as the latest fully green product-code head. The self-test proves only the event/ACK bridge when it reports `PASSED` on a real device.
 - Follow-up:
-  1. install the APK on a real Android device;
-  2. call and display `getAcquisitionSnapshot()` in the app diagnostics UI;
-  3. verify ordinary foreground capture and legacy logcat-overlay capture separately;
-  4. test background copies from search fields, browser pages, Amazon, selection toolbars, and apps that emit no accessibility copy event;
-  5. verify no overlay focus regression or duplicate send;
-  6. only then implement the Accessibility backend behind the existing contract;
-  7. add Shizuku after the capability probe and guided setup interfaces are stable.
+  1. install this APK on a real Android device;
+  2. open ClipCascade and start the service so the React Native context exists;
+  3. long-press the app icon and select `Capture status`;
+  4. run the native → React Native self-test and record the result;
+  5. separately test real ordinary-listener and legacy logcat-overlay clipboard capture;
+  6. record UI focus regressions and duplicate sends;
+  7. only then implement Accessibility behind the existing backend contract.
 
 ## Claims explicitly not made
 
 - Android background outbound reliability is not yet proven.
-- The current APK does not yet contain an AccessibilityService backend, Shizuku backend, or durable outbound queue.
+- A `PASSED` synthetic self-test does not prove clipboard access, WebSocket transmission, server receipt, or another device applying the clipboard.
+- The current APK does not yet contain an AccessibilityService backend, Shizuku backend, ADB-assisted backend, or durable outbound queue.
 - A successful native read and React Native event emission are not server delivery acknowledgements.
 - Power consumption has not yet been measured.
 - The debug APK is not a release-signed production artifact.
