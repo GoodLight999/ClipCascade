@@ -104,7 +104,10 @@ class STOMPManager(WSInterface):
         elif snapshot.state is ConnectionState.RECONNECT_WAIT:
             remaining = 0
             if snapshot.next_retry_at is not None:
-                remaining = max(0, int(snapshot.next_retry_at - time.monotonic() + 0.999))
+                remaining = max(
+                    0,
+                    int(snapshot.next_retry_at - time.monotonic() + 0.999),
+                )
             status = (
                 f"🔄 Reconnecting in {remaining}s "
                 f"(attempt {snapshot.reconnect_attempt})"
@@ -118,7 +121,10 @@ class STOMPManager(WSInterface):
         else:
             status = "⛓️‍💥 Disconnected"
 
-        if snapshot.last_error_message and snapshot.state is not ConnectionState.CONNECTED:
+        if (
+            snapshot.last_error_message
+            and snapshot.state is not ConnectionState.CONNECTED
+        ):
             status += f" | {snapshot.last_error_message}"
         return status
 
@@ -140,7 +146,10 @@ class STOMPManager(WSInterface):
         if state is ConnectionState.RECONNECT_WAIT:
             accepted = self.connection_controller.manual_reconnect()
         else:
-            if state in (ConnectionState.AUTH_REQUIRED, ConnectionState.FATAL_ERROR):
+            if state in (
+                ConnectionState.AUTH_REQUIRED,
+                ConnectionState.FATAL_ERROR,
+            ):
                 self.connection_controller.configuration_replaced()
             accepted = self.connection_controller.connect()
 
@@ -249,16 +258,20 @@ class STOMPManager(WSInterface):
                 self.connection_controller.connect_failed_recoverable(error)
 
     def _stop_transport(self) -> None:
+        self._cleanup_transport_resources()
+        self.connection_controller.stop_completed()
+
+    def _cleanup_transport_resources(self) -> None:
+        """Release client and clipboard monitor without changing state."""
         self._dispose_current_client()
-        try:
-            self.clipboard_manager.previous_clipboard_hash = 0
-            if self._clipboard_monitor_started:
+        self.clipboard_manager.previous_clipboard_hash = 0
+        if self._clipboard_monitor_started:
+            try:
                 self.clipboard_manager.stop()
+            except Exception as exception:
+                logging.error(f"Failed to stop clipboard monitoring: {exception}")
+            finally:
                 self._clipboard_monitor_started = False
-        except Exception as exception:
-            logging.error(f"Failed to stop clipboard monitoring: {exception}")
-        finally:
-            self.connection_controller.stop_completed()
 
     def _dispose_current_client(self) -> None:
         with self._client_lock:
@@ -281,7 +294,10 @@ class STOMPManager(WSInterface):
 
         if self.is_login_phase:
             return
-        if snapshot.state is ConnectionState.RECONNECT_WAIT and previous is ConnectionState.CONNECTED:
+        if (
+            snapshot.state is ConnectionState.RECONNECT_WAIT
+            and previous is ConnectionState.CONNECTED
+        ):
             self.notification_manager.notify(
                 title=f"{APP_NAME}: WebSocket Connection Lost ⛓️‍💥",
                 message="Check your internet connection. Retrying…",
@@ -350,17 +366,19 @@ class STOMPManager(WSInterface):
                 False,
                 type(exception).__name__,
             )
-        if isinstance(exception, OSError):
-            return ConnectionErrorInfo(
-                ConnectionErrorCode.NETWORK_UNREACHABLE,
-                "Network connection could not be established",
-                True,
-                type(exception).__name__,
-            )
+        # ConnectionError subclasses OSError, so classify it before generic
+        # operating-system network failures.
         if isinstance(exception, ConnectionError):
             return ConnectionErrorInfo(
                 ConnectionErrorCode.TRANSPORT_CLOSED,
                 "WebSocket or STOMP handshake failed",
+                True,
+                type(exception).__name__,
+            )
+        if isinstance(exception, OSError):
+            return ConnectionErrorInfo(
+                ConnectionErrorCode.NETWORK_UNREACHABLE,
+                "Network connection could not be established",
                 True,
                 type(exception).__name__,
             )
@@ -402,7 +420,8 @@ class STOMPManager(WSInterface):
 
                 if self.clipboard_manager.has_clipboard_changed(payload):
                     self.clipboard_manager.base64_to_clipboard(
-                        base64_string=payload, type_=payload_type
+                        base64_string=payload,
+                        type_=payload_type,
                     )
                 self.connection_controller.record_receive()
         except json.decoder.JSONDecodeError:
@@ -416,7 +435,10 @@ class STOMPManager(WSInterface):
         state = self.connection_controller.snapshot().state
         if state is ConnectionState.RECONNECT_WAIT:
             return self.connection_controller.manual_reconnect()
-        if state in (ConnectionState.AUTH_REQUIRED, ConnectionState.FATAL_ERROR):
+        if state in (
+            ConnectionState.AUTH_REQUIRED,
+            ConnectionState.FATAL_ERROR,
+        ):
             self.connection_controller.configuration_replaced()
             return self.connection_controller.connect()
         if state is ConnectionState.DISCONNECTED:
@@ -426,7 +448,10 @@ class STOMPManager(WSInterface):
     def disconnect(self):
         state = self.connection_controller.snapshot().state
         if state is ConnectionState.DISCONNECTED:
-            self._stop_transport()
+            # Application.finally may call disconnect after a failed login or
+            # after an earlier orderly stop. Clean stale resources without
+            # emitting an invalid STOP_COMPLETED transition.
+            self._cleanup_transport_resources()
             return
         if state is ConnectionState.STOPPING:
             return
