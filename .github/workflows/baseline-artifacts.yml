@@ -48,9 +48,19 @@ jobs:
 
       - name: Build debug APK
         run: |
+          mkdir -p ci-logs/android
           chmod +x android/gradlew
-          cd android
-          ./gradlew --no-daemon --stacktrace assembleDebug
+          set -o pipefail
+          (cd android && ./gradlew --no-daemon --stacktrace assembleDebug) 2>&1 | tee ci-logs/android/gradle-build.log
+
+      - name: Upload Android build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-Android-build-log
+          path: ClipCascade_Mobile/src/ci-logs/android/gradle-build.log
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Stage APK and checksum
         run: |
