@@ -13,10 +13,10 @@ import java.lang.reflect.InvocationTargetException
  * It owns no network connection, queue, or clipboard-change polling.
  */
 class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
-    constructor()
+    constructor() : super()
 
     @Keep
-    constructor(@Suppress("UNUSED_PARAMETER") context: Context)
+    constructor(@Suppress("UNUSED_PARAMETER") context: Context) : super()
 
     override fun getServiceUid(): Int = Process.myUid()
 
@@ -24,10 +24,11 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
         return try {
             encodeClip(HiddenClipboardReader.readPrimaryClip())
         } catch (error: Throwable) {
+            val cause = rootCause(error)
             JSONObject()
                 .put("status", "error")
-                .put("error", rootCause(error).javaClass.simpleName)
-                .put("message", rootCause(error).message ?: "Clipboard read failed")
+                .put("error", cause.javaClass.simpleName)
+                .put("message", cause.message ?: "Clipboard read failed")
                 .toString()
         }
     }
