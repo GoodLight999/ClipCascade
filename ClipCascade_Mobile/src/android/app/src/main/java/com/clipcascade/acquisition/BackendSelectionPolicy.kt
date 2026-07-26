@@ -24,9 +24,15 @@ class BackendSelectionPolicy {
             .filter { backendId -> byId[backendId].isUsable() }
             .toSet()
 
+        // A healthy lower-priority backend is preferable to a degraded
+        // higher-priority one. Priority only breaks ties within the same
+        // capability quality.
         val selected = backgroundPriority.firstOrNull { backendId ->
-            byId[backendId].isUsable()
+            byId[backendId]?.state == BackendCapabilityState.AVAILABLE
+        } ?: backgroundPriority.firstOrNull { backendId ->
+            byId[backendId]?.state == BackendCapabilityState.DEGRADED
         }
+
         if (selected != null) {
             return BackendSelection(
                 selectedBackgroundBackend = selected,
