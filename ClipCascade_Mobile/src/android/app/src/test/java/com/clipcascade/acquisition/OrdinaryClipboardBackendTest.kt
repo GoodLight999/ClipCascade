@@ -74,7 +74,7 @@ class OrdinaryClipboardBackendTest {
 
         assertEquals(1, registrar.registerCount)
         assertTrue(backend.snapshot().running)
-        assertEquals(1, backend.snapshot().startCount)
+        assertEquals(1L, backend.snapshot().startCount)
     }
 
     @Test
@@ -93,10 +93,10 @@ class OrdinaryClipboardBackendTest {
             triggers.single().backendId,
         )
         assertEquals(TriggerType.PRIMARY_CLIP_CHANGED, triggers.single().triggerType)
-        assertEquals(250, triggers.single().monotonicTimestampMs)
+        assertEquals(250L, triggers.single().monotonicTimestampMs)
         assertNull(triggers.single().sourcePackage)
-        assertEquals(1, backend.snapshot().triggerCount)
-        assertEquals(250, backend.snapshot().lastTriggerAtMonotonicMs)
+        assertEquals(1L, backend.snapshot().triggerCount)
+        assertEquals(250L, backend.snapshot().lastTriggerAtMonotonicMs)
     }
 
     @Test
@@ -115,7 +115,7 @@ class OrdinaryClipboardBackendTest {
 
         assertEquals(1, registrar.unregisterCount)
         assertFalse(backend.snapshot().running)
-        assertEquals(200, backend.snapshot().lastStoppedAtMonotonicMs)
+        assertEquals(200L, backend.snapshot().lastStoppedAtMonotonicMs)
         assertTrue(triggers.isEmpty())
     }
 
