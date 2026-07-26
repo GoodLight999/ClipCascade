@@ -66,7 +66,9 @@ class ClipboardFloatingActivity : AppCompatActivity() {
                 }
             }
 
-            floatingView.viewTreeObserver.addOnGlobalLayoutListener(globalLayoutListener)
+            globalLayoutListener?.let {
+                floatingView.viewTreeObserver.addOnGlobalLayoutListener(it)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Unable to create clipboard overlay", e)
             removeFloatingView(finishActivity = false)
