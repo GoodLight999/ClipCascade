@@ -10,8 +10,8 @@ Last updated: 2026-07-26 (Asia/Tokyo)
 - Mirror branch: `main`
 - Active branch: `clean-rebuild`
 - Active draft PR: `#3`
-- Latest fully green **product-code** head: `01394199be3e40160dcd592e8d0e5ee6a85722d1`
-- Latest fully green workflow: `30202889590`
+- Latest fully green **product-code/pipeline** head: `a94b830fb954d09fc742b39833cebd5915988566`
+- Latest fully green workflow: `30203690726`
 
 `main` was verified identical to the upstream baseline: ahead 0, behind 0, changed files 0.
 
@@ -46,6 +46,8 @@ Where older documents describe pre-migration status, this handoff and the dated 
 11. Normal logs, diagnostics, and support exports must not contain clipboard payloads, credentials, or secret-bearing URLs.
 12. Acquisition success is not transport acknowledgement; transport acceptance is not server delivery acknowledgement.
 13. Do not inspect the archived patchwork branch except for a narrowly named evidence-driven comparison.
+14. Never distribute a React Native debug APK as a standalone test artifact unless Metro is deliberately part of the test.
+15. A user-installable Android artifact must pass an automated APK check for `assets/index.android.bundle`.
 
 ## CI gate
 
@@ -62,14 +64,30 @@ Jobs:
 
 1. desktop unit tests on Ubuntu;
 2. desktop unit tests on Windows;
-3. Android app JVM tests plus debug APK;
+3. Android app JVM tests plus **standalone bundled APK**;
 4. Windows standalone EXE;
 5. Linux source package.
 
 Android command:
 
 ```text
-:app:testDebugUnitTest :app:assembleDebug
+:app:testDebugUnitTest :app:assembleStandalone
+```
+
+The `standalone` Android build type:
+
+- inherits release runtime semantics;
+- is signed with the debug key and remains an engineering artifact;
+- is not listed in React Native `debuggableVariants`;
+- packages the Hermes JavaScript bundle;
+- does not require Metro at runtime.
+
+CI rejects the Android artifact unless all of these pass:
+
+```text
+assets/index.android.bundle exists in the APK
+APK ZIP integrity passes
+embedded SHA-256 is generated
 ```
 
 Unqualified `testDebugUnitTest` is prohibited because it compiles defective sample tests in third-party React Native subprojects.
@@ -119,8 +137,8 @@ Implemented and CI-green:
 - pure coordinator reducer;
 - trigger deduplication model;
 - backend runtime snapshots;
-- healthy `AVAILABLE` backends are selected before any `DEGRADED` backend;
-- configured priority breaks ties only within the same capability quality.
+- healthy `AVAILABLE` backends selected before any `DEGRADED` backend;
+- configured priority used only within the same capability quality.
 
 ### Ordinary listener
 
@@ -189,7 +207,7 @@ Implemented and CI-green:
 
 Interpretation on a real device:
 
-- `PASSED`: the native event reached the active React Native root runtime and the matching ACK returned.
+- `PASSED`: native event reached the active React Native root runtime and the matching ACK returned.
 - `TIMED_OUT`: no matching ACK returned within five seconds.
 - `EMIT_FAILED`: native event emission itself failed.
 
@@ -206,34 +224,35 @@ Exactly 46 app JVM tests are present and passed:
 - diagnostics formatter: 2;
 - self-test tracker: 6.
 
-Production Kotlin, Manifest, shortcut resources, React Native bundle, diagnostics Activity, and APK assembly all passed.
+Production Kotlin, Manifest, shortcut resources, React Native/Hermes bundle, diagnostics Activity, and standalone APK assembly all passed.
 
 ## Latest verified artifacts
 
-Workflow run: `30202889590`
+Workflow run: `30203690726`
 
-Product-code head: `01394199be3e40160dcd592e8d0e5ee6a85722d1`
+Product-code/pipeline head: `a94b830fb954d09fc742b39833cebd5915988566`
 
 All five jobs succeeded.
 
 | Platform | Artifact ID | Inner file | Size | SHA-256 |
 |---|---:|---|---:|---|
-| Android debug APK | `8632223256` | `ClipCascade-Android-clean-rebuild-debug.apk` | 146,868,392 bytes | `a9c23f3d54c529f501ee92fe233cc434264edf862de5b1be82b6b86b2d434808` |
-| Android build log | `8632222540` | Gradle log | see artifact | GitHub digest retained |
-| Windows EXE | `8632211465` | `ClipCascade-Windows-clean-rebuild.exe` | 57,456,724 bytes | `ad09902ba6e6ccc22fce7b42d9aad7f6f6755647e435be05d97d413dfc910491` |
-| Linux package | `8632190948` | `ClipCascade-Linux-clean-rebuild.tar.gz` | 68,793 bytes | `9156f49b406e2d4acbd00007fc2194e5a3b3e66fd676541413b8b533576fff50` |
+| Android standalone APK | `8632482778` | `ClipCascade-Android-clean-rebuild-standalone.apk` | 93,574,655 bytes | `ca7ee41f95f729879a5298bdc2b6e413f0f2086cbc922205e06468d7878f471b` |
+| Android build log | `8632482104` | Gradle log | see artifact | GitHub digest retained |
+| Windows EXE | `8632434975` | `ClipCascade-Windows-clean-rebuild.exe` | 57,456,724 bytes | `36da95c51e473b8bf33677f81142ea70bdfcd81a968e24e8a0be4878e11ce103` |
+| Linux package | `8632420551` | `ClipCascade-Linux-clean-rebuild.tar.gz` | 68,791 bytes | `6fadbb46751fe0e714f85d9118c69c2ecc7ea14c0d8a76b2d85c2eed0114ba6b` |
 
 Independent post-download checks passed:
 
 - Android embedded SHA-256;
-- APK identification;
+- Android package identification;
+- `assets/index.android.bundle` present;
 - APK ZIP integrity;
 - Windows embedded SHA-256;
 - PE32+ x86-64 GUI identification;
 - Linux embedded SHA-256;
 - gzip identification and 53-entry archive enumeration.
 
-The APK is debug-signed and is an engineering artifact, not a production release.
+The Android APK uses release runtime behavior but debug signing. It is a standalone engineering artifact, not a production release.
 
 ## Failed attempts that must remain understood
 
@@ -245,6 +264,17 @@ Unqualified `testDebugUnitTest` compiled defective sample tests in `@react-nativ
 
 Five JUnit expectations used `Int` literals against intentionally `Long` counters/timestamps. Production types were preserved and test expectations corrected.
 
+### Distributed debug APK required Metro
+
+The artifact from run `30202889590` was built with `assembleDebug`. React Native deliberately skips JS bundling for the debug variant, so installation on a disconnected device produced `Unable to load script` and requested Metro/ADB reverse. The APK was structurally valid but unsuitable as a standalone user-test artifact.
+
+Decision:
+
+- the old debug APK is superseded and must not be redistributed for ordinary installation;
+- retain `debug` for Metro development;
+- distribute only the `standalone` variant for device testing;
+- require automated bundle-presence verification in CI.
+
 Detailed evidence: `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_ACQUISITION.md`.
 
 ## Not implemented or not proven
@@ -255,30 +285,27 @@ Detailed evidence: `docs/EXPERIMENT_LOG_2026-07-26_ANDROID_ACQUISITION.md`.
 - adaptive coordinator that starts/stops the selected background backend;
 - durable outbound queue and server acknowledgement;
 - real-device foreground/background capture acceptance;
+- on-device success of the new standalone artifact;
 - overlay focus-regression testing;
 - duplicate-send testing under multiple acquisition triggers;
 - power measurements;
-- release signing.
+- production release signing.
 
 ## Exact next actions
 
-1. Install the latest APK on a real Android device.
-2. Open ClipCascade and start the service so the React Native context exists.
-3. Long-press the app icon and select `Capture status`.
-4. Run the native → React Native self-test and record `PASSED`, `TIMED_OUT`, or `EMIT_FAILED`.
-5. Separately test ordinary foreground clipboard capture.
-6. Separately test legacy logcat/overlay background capture from:
-   - launcher/search fields;
-   - browser pages;
-   - Amazon;
-   - text-selection toolbars;
-   - apps that emit no recognizable accessibility copy event.
-7. Record whether overlay focus dismisses search, changes selection, opens unwanted UI, or causes duplicates.
-8. Classify the existing path per device as healthy, degraded, or blocked.
-9. Implement Accessibility only behind the existing backend contract and capability probe.
-10. Add Shizuku only after detection, permission, reboot recovery, guided setup, and post-setup self-test are specified.
-11. Design durable outbound queueing separately from acquisition.
-12. Perform Windows public-server and forced-network-loss smoke tests.
+1. Uninstall or overwrite the old debug APK with the latest **standalone** APK.
+2. Launch it without Metro, USB, or `adb reverse`; confirm the main React Native screen loads.
+3. Start the ClipCascade service so the React Native context exists.
+4. Long-press the app icon and select `Capture status`.
+5. Run the native → React Native self-test and record `PASSED`, `TIMED_OUT`, or `EMIT_FAILED`.
+6. Separately test ordinary foreground clipboard capture.
+7. Separately test legacy logcat/overlay background capture from launcher/search fields, browser pages, Amazon, text-selection toolbars, and apps that emit no recognizable accessibility copy event.
+8. Record whether overlay focus dismisses search, changes selection, opens unwanted UI, or causes duplicates.
+9. Classify the existing path per device as healthy, degraded, or blocked.
+10. Implement Accessibility only behind the existing backend contract and capability probe.
+11. Add Shizuku only after detection, permission, reboot recovery, guided setup, and post-setup self-test are specified.
+12. Design durable outbound queueing separately from acquisition.
+13. Perform Windows public-server and forced-network-loss smoke tests.
 
 ## Valid continuation criterion
 
@@ -286,9 +313,9 @@ A new thread must be able to identify, without reading archived patchwork code:
 
 - exact upstream baseline;
 - active branch and PR;
-- latest green product-code head and workflow;
+- latest green product-code/pipeline head and workflow;
 - completed desktop and Android work;
 - failed attempts and decisions;
-- current artifacts and hashes;
+- current standalone artifacts and hashes;
 - unverified claims;
 - exact next action.
