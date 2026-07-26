@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.ViewGroup
@@ -21,16 +23,17 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 
 /**
- * Native setup screen that remains usable even when the React Native UI or
- * foreground service is not running. It only reports capability state and
- * opens Android's own settings screens; it does not own clipboard transport.
+ * Native setup screen available even when React Native is not active.
+ * It configures capture paths but never owns network transport.
  */
 class BackgroundSetupActivity : AppCompatActivity() {
     private lateinit var statusView: TextView
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = getString(R.string.background_setup_title)
+        ShizukuClipboardBridge.initialize(this)
 
         val scrollView = ScrollView(this)
         val content = LinearLayout(this).apply {
@@ -49,6 +52,21 @@ class BackgroundSetupActivity : AppCompatActivity() {
             setTextIsSelectable(true)
         }
         content.addView(statusView, blockLayoutParams())
+
+        content.addView(actionButton(R.string.open_shizuku) {
+            if (!ShizukuClipboardBridge.openShizuku(this)) {
+                Toast.makeText(this, R.string.settings_unavailable, Toast.LENGTH_LONG).show()
+            }
+        }, blockLayoutParams())
+
+        content.addView(actionButton(R.string.request_shizuku_permission) {
+            ShizukuClipboardBridge.requestPermission()
+            handler.postDelayed(::refreshStatus, 750)
+        }, blockLayoutParams())
+
+        content.addView(actionButton(R.string.test_shizuku_read) {
+            testShizukuRead()
+        }, blockLayoutParams())
 
         content.addView(actionButton(R.string.open_accessibility_settings) {
             openSettings(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -94,7 +112,13 @@ class BackgroundSetupActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        ShizukuClipboardBridge.ensureBound()
         refreshStatus()
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 
     private fun refreshStatus() {
@@ -107,15 +131,45 @@ class BackgroundSetupActivity : AppCompatActivity() {
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         val batteryExempt = powerManager.isIgnoringBatteryOptimizations(packageName)
         val runtimeActive = ClipboardListenerModule.isRuntimeActive()
+        val shizuku = ShizukuClipboardBridge.status()
 
         statusView.text = getString(
             R.string.background_setup_status,
+            enabledLabel(shizuku.installed),
+            enabledLabel(shizuku.binderAlive),
+            enabledLabel(shizuku.permissionGranted),
+            if (shizuku.serviceBound) {
+                getString(R.string.status_bound_uid, shizuku.serviceUid ?: -1)
+            } else {
+                getString(R.string.status_not_bound)
+            },
             enabledLabel(accessibilityEnabled),
             enabledLabel(overlayEnabled),
             enabledLabel(readLogsEnabled),
             enabledLabel(batteryExempt),
-            enabledLabel(runtimeActive)
+            enabledLabel(runtimeActive),
+            shizuku.lastError ?: getString(R.string.status_none)
         )
+    }
+
+    private fun testShizukuRead() {
+        Toast.makeText(this, R.string.shizuku_test_started, Toast.LENGTH_SHORT).show()
+        ShizukuClipboardBridge.readClipboard { result ->
+            val message = if (result.success && result.content != null) {
+                getString(
+                    R.string.shizuku_test_success,
+                    result.type ?: "unknown",
+                    result.content.length
+                )
+            } else {
+                getString(
+                    R.string.shizuku_test_failure,
+                    result.error ?: result.status
+                )
+            }
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            refreshStatus()
+        }
     }
 
     private fun isAccessibilityServiceEnabled(): Boolean {
