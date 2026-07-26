@@ -26,15 +26,14 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) : ReactCont
     private var listener: ClipboardManager.OnPrimaryClipChangedListener? = null
     private var isListening = false
     private var lastEmittedTime: Long = 0 // for clipboard listener debounce
-    private var lastActivityStartTime: Long = 0 // for log cat monitoring  debounce
+    private var lastActivityStartTime: Long = 0 // for log cat monitoring debounce
     private val debounceTime: Long = 0 // milliseconds (increase to debounce clipboard listener)
     private val activityDebounceTime: Long = 1000 // milliseconds (increase to debounce log cat monitoring)
 
-    // logcat‐reader control
+    // logcat-reader control
     private var stopLogcat = false
     private var logcatThread: Thread? = null
     private var logcatProcess: Process? = null
-    
 
     override fun getName(): String {
         return "ClipboardListener"
@@ -43,6 +42,7 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) : ReactCont
     @ReactMethod
     fun startListening() {
         if (isListening) {
+            runtimeActive = true
             return
         }
 
@@ -52,14 +52,14 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) : ReactCont
             if (clip != null && clip.itemCount > 0) {
 
                 val description = clip.description
-                if (description != null) { 
+                if (description != null) {
 
                     val mimeType = description.getMimeType(0)
                     if (mimeType != null) {
-                        
+
                         val item = clip.getItemAt(0)
                         val params: WritableMap = Arguments.createMap()
-                        
+
                         if (mimeType.startsWith("text/") && item.text != null) {
                             // Text
                             params.putString("content", item.text.toString())
@@ -83,12 +83,12 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) : ReactCont
         }
         clipboardManager.addPrimaryClipChangedListener(listener)
         isListening = true
+        runtimeActive = true
 
         // 2) Logcat monitoring
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P &&
             ContextCompat.checkSelfPermission(reactApplicationContext, Manifest.permission.READ_LOGS) == PackageManager.PERMISSION_GRANTED
         ) {
-            // If already stopping, reset flag
             stopLogcat = false
 
             // Start a single dedicated thread
@@ -107,7 +107,6 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) : ReactCont
                                 val currentTime = System.currentTimeMillis()
                                 if (currentTime - lastActivityStartTime > activityDebounceTime) {
                                     lastActivityStartTime = currentTime
-                                    // launch the floating activity
                                     reactApplicationContext.startActivity(
                                         ClipboardFloatingActivity.getIntent(reactApplicationContext)
                                     )
@@ -132,14 +131,16 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) : ReactCont
 
     @ReactMethod
     fun stopListening() {
+        runtimeActive = false
+
         // 1) Remove clipboard listener
         listener?.let {
             clipboardManager.removePrimaryClipChangedListener(it)
             listener = null
-            isListening = false
         }
+        isListening = false
 
-        // 2) Tear down logcat‐reader thread & process
+        // 2) Tear down logcat-reader thread & process
         stopLogcat = true
         try {
             logcatThread?.interrupt()
@@ -150,7 +151,6 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) : ReactCont
         logcatThread = null
         logcatProcess = null
     }
-
 
     private fun sendEventToJS(params: WritableMap) {
         val currentTime = System.currentTimeMillis()
@@ -171,5 +171,12 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) : ReactCont
     fun removeListeners(type: Int?) {
         // Required for RN built-in Event Emitter Calls.
     }
-}
 
+    companion object {
+        @Volatile
+        private var runtimeActive: Boolean = false
+
+        @JvmStatic
+        fun isRuntimeActive(): Boolean = runtimeActive
+    }
+}
