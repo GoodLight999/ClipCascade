@@ -1,0 +1,1 @@
+"""Desktop connection recovery tests."""
