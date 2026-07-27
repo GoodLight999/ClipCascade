@@ -137,9 +137,11 @@ Also required:
 - GUI/CLI tray projection.
 - Windows and Ubuntu tests plus EXE/Linux package generation.
 
-## Latest verified Android artifact
+## Latest verified artifacts
 
 Product head: `3ea7072231a7a3bea0a7ae4eab0c94090fe31103`
+
+### Android
 
 - Workflow: `30276002653`
 - Artifact ID: `8656949852`
@@ -156,20 +158,28 @@ Product head: `3ea7072231a7a3bea0a7ae4eab0c94090fe31103`
 - Gradle: `BUILD SUCCESSFUL in 3m 51s`; 505 tasks executed
 - Status: debug-signed engineering APK; build-verified, not device-verified
 
-Independent packaged-runtime checks found:
+Independent packaged-runtime checks found Binder-request/reprobe markers, compatible-manager diagnostics, dedicated setup theme/colors, and recovery-project links. The official Shizuku download URL and Sathvik-Rao product URLs were absent.
 
-- Binder-request action and targeted reprobe markers;
-- compatible-manager diagnostics;
-- dedicated setup theme/color resources;
-- recovery repository markers;
-- no official Shizuku download URL;
-- no Sathvik-Rao product URL.
+### Windows
 
-## Latest same-head desktop verification
+- Workflow: `30276012794`
+- Artifact ID: `8656885168`
+- File: `ClipCascade-Windows-stability.exe`
+- Size: `57,456,040` bytes
+- SHA-256: `97f567ccc59ec98b3bc148f026201d3ec1887853ea133c34370070888157ba5b`
+- Format: PE32+ GUI x86-64
+- Embedded checksum: matched independent recalculation
 
-- Workflow: `30276012794` — success
+### Linux
 
-The Android-focused product changes did not alter desktop transport semantics. Prior independently inspected Windows/Linux artifact details remain in `docs/EXPERIMENT_LOG_2026-07-27_DESKTOP_RECOVERY.md` and the PR body.
+- Workflow: `30276012794`
+- Artifact ID: `8656828720`
+- File: `ClipCascade-Linux-stability.tar.gz`
+- Size: `60,409` bytes
+- SHA-256: `b717489dba07894d69a31615b5f86dada7612c0e51d25dbb3f25872f1b235c3f`
+- Format: gzip-compressed Unix tar
+- Entries: `59`
+- Integrity and embedded checksum: passed
 
 ## Real-device facts now established
 
