@@ -25,6 +25,7 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
 
     private val clipboardManager: ClipboardManager =
         reactContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    private val emissionGate = ClipboardEmissionGate()
     private var listener: ClipboardManager.OnPrimaryClipChangedListener? = null
     private var isListening = false
     private var lastEmittedTime: Long = 0
@@ -51,14 +52,15 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
         }
 
         listener = ClipboardManager.OnPrimaryClipChangedListener {
-            emitClip(clipboardManager.primaryClip)
+            emitClip(clipboardManager.primaryClip, "ordinary_listener")
         }
         clipboardManager.addPrimaryClipChangedListener(listener)
         isListening = true
         runtimeActive = true
         ShizukuClipboardBridge.ensureBound()
 
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P &&
+        if (
+            Build.VERSION.SDK_INT > Build.VERSION_CODES.P &&
             ContextCompat.checkSelfPermission(
                 reactApplicationContext,
                 Manifest.permission.READ_LOGS
@@ -91,6 +93,7 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
                         }
                     }
                 } catch (error: Exception) {
+                    CaptureDiagnostics.recordFailure("read_logs", "logcat_failed", error)
                     error.printStackTrace()
                 } finally {
                     try {
@@ -130,30 +133,41 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
         logcatProcess = null
     }
 
-    private fun emitClip(clip: android.content.ClipData?) {
-        if (clip == null || clip.itemCount == 0) return
+    private fun emitClip(clip: android.content.ClipData?, source: String) {
+        if (clip == null || clip.itemCount == 0) {
+            CaptureDiagnostics.recordIgnored(source, "clipboard_empty")
+            return
+        }
         val description = clip.description
         val mimeType = if (description.mimeTypeCount > 0) description.getMimeType(0) else ""
         val item = clip.getItemAt(0)
 
         when {
             item.text != null && mimeType.startsWith("text/") ->
-                emitContent(item.text.toString(), "text")
+                emitContent(item.text.toString(), "text", source)
             item.uri != null && mimeType.startsWith("image/") ->
-                emitContent(item.uri.toString(), "image")
+                emitContent(item.uri.toString(), "image", source)
             item.uri != null ->
-                emitContent(item.uri.toString(), "files")
+                emitContent(item.uri.toString(), "files", source)
             item.text != null ->
-                emitContent(item.text.toString(), "text")
+                emitContent(item.text.toString(), "text", source)
+            else -> CaptureDiagnostics.recordIgnored(source, "clipboard_type_unsupported")
         }
     }
 
-    private fun emitContent(content: String, type: String) {
+    private fun emitContent(content: String, type: String, source: String): Boolean {
+        if (!emissionGate.shouldEmit(content, type)) {
+            CaptureDiagnostics.recordDuplicate(source)
+            return false
+        }
+
         val params: WritableMap = Arguments.createMap().apply {
             putString("content", content)
             putString("type", type)
         }
         sendEventToJS(params)
+        CaptureDiagnostics.recordEmission(source)
+        return true
     }
 
     private fun sendEventToJS(params: WritableMap) {
@@ -187,15 +201,34 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
         fun isRuntimeActive(): Boolean = runtimeActive
 
         @JvmStatic
-        fun emitExternalClipboard(content: String, type: String): Boolean {
-            if (!runtimeActive) return false
-            val module = currentInstance?.get() ?: return false
-            module.reactApplicationContext.runOnJSQueueThread {
-                if (runtimeActive) {
-                    module.emitContent(content, type)
-                }
+        fun emitExternalClipboard(content: String, type: String): Boolean =
+            emitExternalClipboard(content, type, "external")
+
+        @JvmStatic
+        fun emitExternalClipboard(content: String, type: String, source: String): Boolean {
+            if (!runtimeActive) {
+                CaptureDiagnostics.recordIgnored(source, "runtime_inactive")
+                return false
             }
-            return true
+            val module = currentInstance?.get()
+            if (module == null) {
+                CaptureDiagnostics.recordIgnored(source, "module_unavailable")
+                return false
+            }
+
+            return try {
+                module.reactApplicationContext.runOnJSQueueThread {
+                    if (runtimeActive) {
+                        module.emitContent(content, type, source)
+                    } else {
+                        CaptureDiagnostics.recordIgnored(source, "runtime_stopped_before_emit")
+                    }
+                }
+                true
+            } catch (error: Throwable) {
+                CaptureDiagnostics.recordFailure(source, "react_emit_schedule_failed", error)
+                false
+            }
         }
     }
 }
