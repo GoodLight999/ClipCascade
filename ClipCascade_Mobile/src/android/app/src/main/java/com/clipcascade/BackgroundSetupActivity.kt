@@ -21,10 +21,14 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Native setup screen available even when React Native is not active.
- * It configures capture paths but never owns network transport.
+ * It configures capture paths and exposes payload-free diagnostics, but never
+ * owns network transport.
  */
 class BackgroundSetupActivity : AppCompatActivity() {
     private lateinit var statusView: TextView
@@ -93,6 +97,11 @@ class BackgroundSetupActivity : AppCompatActivity() {
             refreshStatus()
         }, blockLayoutParams())
 
+        content.addView(actionButton(R.string.reset_capture_diagnostics) {
+            CaptureDiagnostics.reset()
+            refreshStatus()
+        }, blockLayoutParams())
+
         content.addView(actionButton(R.string.open_clipcascade) {
             startActivity(
                 Intent(this, MainActivity::class.java).apply {
@@ -132,8 +141,9 @@ class BackgroundSetupActivity : AppCompatActivity() {
         val batteryExempt = powerManager.isIgnoringBatteryOptimizations(packageName)
         val runtimeActive = ClipboardListenerModule.isRuntimeActive()
         val shizuku = ShizukuClipboardBridge.status()
+        val diagnostics = CaptureDiagnostics.snapshot()
 
-        statusView.text = getString(
+        val capabilityStatus = getString(
             R.string.background_setup_status,
             enabledLabel(shizuku.installed),
             enabledLabel(shizuku.binderAlive),
@@ -150,18 +160,48 @@ class BackgroundSetupActivity : AppCompatActivity() {
             enabledLabel(runtimeActive),
             shizuku.lastError ?: getString(R.string.status_none)
         )
+
+        val lastEvent = diagnostics.lastEventAt?.let { timestamp ->
+            SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
+                .format(Date(timestamp))
+        } ?: getString(R.string.status_none)
+        val diagnosticsStatus = getString(
+            R.string.capture_diagnostics_status,
+            diagnostics.triggerCount,
+            diagnostics.coalescedTriggerCount,
+            diagnostics.shizukuAttemptCount,
+            diagnostics.shizukuSuccessCount,
+            diagnostics.overlayFallbackCount,
+            diagnostics.emittedCount,
+            diagnostics.duplicateSuppressedCount,
+            diagnostics.ignoredCount,
+            diagnostics.lastSource ?: getString(R.string.status_none),
+            diagnostics.lastStage ?: getString(R.string.status_none),
+            diagnostics.lastError ?: getString(R.string.status_none),
+            lastEvent
+        )
+
+        statusView.text = "$capabilityStatus\n\n$diagnosticsStatus"
     }
 
     private fun testShizukuRead() {
+        val source = "manual_shizuku_test"
+        CaptureDiagnostics.recordTrigger(source)
+        CaptureDiagnostics.recordShizukuAttempt(source)
         Toast.makeText(this, R.string.shizuku_test_started, Toast.LENGTH_SHORT).show()
         ShizukuClipboardBridge.readClipboard { result ->
             val message = if (result.success && result.content != null) {
+                CaptureDiagnostics.recordShizukuSuccess(source)
                 getString(
                     R.string.shizuku_test_success,
                     result.type ?: "unknown",
                     result.content.length
                 )
             } else {
+                CaptureDiagnostics.recordIgnored(
+                    source,
+                    result.error ?: result.status
+                )
                 getString(
                     R.string.shizuku_test_failure,
                     result.error ?: result.status
