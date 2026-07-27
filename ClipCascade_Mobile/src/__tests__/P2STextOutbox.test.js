@@ -153,7 +153,6 @@ describe('P2STextOutbox', () => {
     expect(await outbox.markAttempt(item.id, 30_000)).toBe(true);
     expect((await outbox.snapshot()).headNextAttemptAt).toBe(32_000);
     expect(storage.current()[0].nextAttemptAt).toBe(32_000);
-    await expect(outbox.markAttempt(item.id, -1)).resolves.toBe(false);
   });
 
   test('rejects an invalid retry delay before mutating a queued item', async () => {
