@@ -1,11 +1,16 @@
 'use strict';
 
-const { formatP2SOutboxStatus } = require('../P2SOutboxStatus');
+const {
+  formatP2SOutboxStatus,
+  normalizeStatus,
+} = require('../P2SOutboxStatus');
 
 describe('formatP2SOutboxStatus', () => {
-  test('hides absent or unloaded state', () => {
+  test('hides absent, malformed, or unloaded state', () => {
     expect(formatP2SOutboxStatus(null)).toBe('');
     expect(formatP2SOutboxStatus({ loaded: false })).toBe('');
+    expect(formatP2SOutboxStatus('{not json')).toBe('');
+    expect(normalizeStatus('null')).toBeNull();
   });
 
   test('shows an empty queue without payload data', () => {
@@ -17,6 +22,21 @@ describe('formatP2SOutboxStatus', () => {
         dropped: 0,
       }),
     ).toBe('📦 Text queue: empty');
+  });
+
+  test('accepts the serialized object returned by NativeBridge polling', () => {
+    expect(
+      formatP2SOutboxStatus(
+        JSON.stringify({
+          loaded: true,
+          count: 2,
+          totalBytes: 128,
+          headState: 'queued',
+          headAttempts: 0,
+          dropped: 0,
+        }),
+      ),
+    ).toBe('📦 Text queue: 2 | State: queued | Size: 128 B');
   });
 
   test('shows queued count, bytes, attempts, and drops', () => {
