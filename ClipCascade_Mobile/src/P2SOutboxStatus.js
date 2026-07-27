@@ -24,7 +24,7 @@ function normalizeStatus(rawStatus) {
  * NativeBridgeModule.getFlagsSync returns AsyncStorage objects as serialized JSON
  * strings, so this boundary accepts either the direct object or that exact string.
  */
-function formatP2SOutboxStatus(rawStatus) {
+function formatP2SOutboxStatus(rawStatus, now = Date.now()) {
   const status = normalizeStatus(rawStatus);
   if (!status || typeof status !== 'object' || status.loaded !== true) {
     return '';
@@ -52,6 +52,15 @@ function formatP2SOutboxStatus(rawStatus) {
   if (attempts > 0) {
     parts.push(`Attempts: ${attempts}`);
   }
+
+  if (
+    Number.isFinite(status.headNextAttemptAt) &&
+    Number.isFinite(now) &&
+    status.headNextAttemptAt > now
+  ) {
+    parts.push(`Retry in: ${Math.ceil((status.headNextAttemptAt - now) / 1000)}s`);
+  }
+
   if (dropped > 0) {
     parts.push(`Dropped: ${dropped}`);
   }
