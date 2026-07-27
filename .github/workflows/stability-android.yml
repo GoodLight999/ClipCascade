@@ -53,7 +53,10 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
-      - name: Generate app code, run app tests, and build standalone APK
+      - name: Run JavaScript reliability tests
+        run: npm test -- --runInBand
+
+      - name: Generate app code, run Android tests, and build standalone APK
         run: |
           mkdir -p ci-logs/android
           chmod +x android/gradlew
