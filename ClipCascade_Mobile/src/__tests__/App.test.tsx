@@ -41,4 +41,15 @@ describe('App canonical product contract', () => {
       "import StartForegroundService from './StartForegroundService';",
     );
   });
+
+  test('projects persistent P2S outbox metadata through the existing UI poller', () => {
+    expect(appSource).toContain(
+      "const { formatP2SOutboxStatus } = require('./P2SOutboxStatus');",
+    );
+    expect(appSource).toContain("'p2sTextOutboxStatus'");
+    expect(appSource).toContain(
+      'formatP2SOutboxStatus(latest.p2sTextOutboxStatus)',
+    );
+    expect(appSource).toContain('{p2sOutboxMessage !== \'\' && (');
+  });
 });
