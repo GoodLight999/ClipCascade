@@ -4,11 +4,28 @@ function finiteNonNegativeInteger(value, fallback = 0) {
   return Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
 }
 
+function normalizeStatus(rawStatus) {
+  if (typeof rawStatus !== 'string') {
+    return rawStatus;
+  }
+
+  try {
+    const parsed = JSON.parse(rawStatus);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
 /**
  * Formats only non-payload outbox metadata for the existing connection page.
  * Clipboard contents, hashes, server URLs, and account identifiers are never shown.
+ *
+ * NativeBridgeModule.getFlagsSync returns AsyncStorage objects as serialized JSON
+ * strings, so this boundary accepts either the direct object or that exact string.
  */
-function formatP2SOutboxStatus(status) {
+function formatP2SOutboxStatus(rawStatus) {
+  const status = normalizeStatus(rawStatus);
   if (!status || typeof status !== 'object' || status.loaded !== true) {
     return '';
   }
@@ -42,4 +59,4 @@ function formatP2SOutboxStatus(status) {
   return parts.join(' | ');
 }
 
-module.exports = { formatP2SOutboxStatus };
+module.exports = { formatP2SOutboxStatus, normalizeStatus };
