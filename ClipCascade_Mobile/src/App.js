@@ -33,6 +33,7 @@ import {
   clearAsyncStorage,
 } from './AsyncStorageManagement';
 import StartForegroundService from './StartForegroundService';
+const { formatP2SOutboxStatus } = require('./P2SOutboxStatus');
 
 /*
  * These files are part of the ClipCascade project.
@@ -666,6 +667,7 @@ export default function App() {
       'wsStatusMessage',
       'server_mode',
       'p2pStatusMessage',
+      'p2sTextOutboxStatus',
       'filesAvailableToDownload',
     ];
 
@@ -685,6 +687,15 @@ export default function App() {
           if (msg2 !== null) {
             setWsPageP2PMessage(msg2);
           }
+          setP2SOutboxMessage('');
+        } else if (latest.server_mode === 'P2S') {
+          setWsPageP2PMessage('');
+          setP2SOutboxMessage(
+            formatP2SOutboxStatus(latest.p2sTextOutboxStatus),
+          );
+        } else {
+          setWsPageP2PMessage('');
+          setP2SOutboxMessage('');
         }
 
         // Files available to download
@@ -705,6 +716,7 @@ export default function App() {
         await setDataInAsyncStorage('enableWSButton', 'false');
         setWsPageMessage('');
         setWsPageP2PMessage('');
+        setP2SOutboxMessage('');
         await clearFiles();
         wsIsRunning_s = wsIsRunning === 'true' ? 'false' : 'true'; // toggle
         await setDataInAsyncStorage('wsForegroundServiceTerminated', 'false');
@@ -854,6 +866,9 @@ export default function App() {
 
   // State to manage websocket page p2p message
   const [wsPageP2PMessage, setWsPageP2PMessage] = useState('');
+
+  // Non-payload status for the persistent P2S text outbox.
+  const [p2sOutboxMessage, setP2SOutboxMessage] = useState('');
 
   // files download button
   const [enableFilesDownloadButton, setEnableFilesDownloadButton] =
@@ -1156,6 +1171,10 @@ export default function App() {
             {/* Display p2p status message */}
             {wsPageP2PMessage !== '' && (
               <Text style={styles.message}>{wsPageP2PMessage}</Text>
+            )}
+            {/* Display persistent P2S text outbox metadata only. */}
+            {p2sOutboxMessage !== '' && (
+              <Text style={styles.message}>{p2sOutboxMessage}</Text>
             )}
             {/* File download button */}
             {enableFilesDownloadButton &&
