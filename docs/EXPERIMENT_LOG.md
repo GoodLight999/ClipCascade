@@ -315,3 +315,41 @@ Result:
 
 Sharesheet/runtime readability and an active guided end-to-end test remain unproven.
 
+---
+
+## 2026-07-27 — P2S-RETRY-001: bounded missing-echo retry and observability
+
+Detailed record: `docs/EXPERIMENT_LOG_2026-07-27_P2S_RETRY_BACKOFF.md`.
+
+Result:
+
+- replaced the fixed repeated 30-second missing-echo retry with a bounded exponential policy;
+- deterministic no-jitter sequence is `30s → 60s → 120s → 240s → 480s → 600s`, capped thereafter;
+- default symmetric jitter is plus or minus 20 percent;
+- the existing outbox persists `nextAttemptAt` and preserves it through disconnect, release, process restart, and reconnect;
+- reconnect waits for a persisted future deadline rather than immediately retrying;
+- no second transport, server endpoint, retry poller, queue owner, or acknowledgement protocol was introduced;
+- the existing P2S queue line now shows `Retry in: <seconds>s` for a valid future deadline;
+- the native diagnostic report now includes the same payload-free `headNextAttemptAt` state;
+- the one-use write workflow was removed in commit `6e61d35073a49bff6f4970a664b50c159a1cafc3` and no temporary write workflow remains.
+
+Latest product-code verification:
+
+- product-code head: `829f872c684c59f16a78bbe283b9e1260e20fce9`;
+- Android workflow: `30257268532` — success;
+- desktop workflow: `30257268751` — success;
+- JavaScript: 5 suites / 36 tests passed;
+- Gradle: `BUILD SUCCESSFUL in 3m 41s`, 505 tasks executed;
+- APK artifact ID: `8649504009`;
+- APK size: `93,617,791` bytes;
+- APK SHA-256: `9f8fefd4d32892e891e763590a443d4dbcc20534b7cba4260fabe8489589f106`;
+- Windows artifact ID: `8649445837`;
+- Windows size: `57,456,040` bytes;
+- Windows SHA-256: `871fac5fe6c4bade7fc58b65deb7301805c91078f3699d6d8a987e5a6c8b5c0f`;
+- Linux artifact ID: `8649406597`;
+- Linux size: `60,405` bytes;
+- Linux SHA-256: `7c6f780d170b4058430dd474b61514e69328b17ae2ee44c25745d5a41ddcaef7`.
+
+Independent inspection confirmed APK ZIP integrity, 538 APK entries, exact bundled JavaScript, retry/protocol markers, PE32+ x86-64 EXE format, 59-entry Linux tar integrity, and embedded checksum agreement.
+
+Real-device/public-server timing, restart preservation, countdown rendering, battery impact, and actual missing-echo behavior remain unproven.
