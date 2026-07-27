@@ -13,6 +13,13 @@
 
     <queries>
       <package android:name="moe.shizuku.privileged.api" />
+      <intent>
+        <action android:name="rikka.shizuku.intent.action.REQUEST_BINDER" />
+      </intent>
+      <intent>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent>
     </queries>
 
     <application
@@ -68,7 +75,8 @@
       <activity
         android:name=".BackgroundSetupActivity"
         android:exported="true"
-        android:label="@string/background_setup_title" />
+        android:label="@string/background_setup_title"
+        android:theme="@style/Theme.ClipCascade.BackgroundSetup" />
 
       <service
         android:name="app.notifee.core.ForegroundService"
