@@ -13,8 +13,9 @@ A new thread must read, in order:
 4. `docs/EXPERIMENT_LOG_2026-07-27_SHIZUKU.md`
 5. `docs/EXPERIMENT_LOG_2026-07-27_SHIZUKU_BUILD.md`
 6. `docs/EXPERIMENT_LOG_2026-07-27_P2S_OUTBOX.md`
-7. `docs/EXPERIMENT_LOG_2026-07-27_DESKTOP_RECOVERY.md`
-8. Draft PR `#4`
+7. `docs/EXPERIMENT_LOG_2026-07-27_OUTBOX_STATUS_UI.md`
+8. `docs/EXPERIMENT_LOG_2026-07-27_DESKTOP_RECOVERY.md`
+9. Draft PR `#4`
 
 ## Canonical repository state
 
@@ -24,9 +25,9 @@ A new thread must read, in order:
 - Mirror branch: `main`
 - Active development branch: `stability-recovery`
 - Active draft PR: `#4`
-- Latest green branch head: `f35ebffba8b99f783b20b0bec2e4bc16a0421f1b`
-- Latest green Android workflow: `30248168083`
-- Latest green desktop workflow on the same head: `30248168084`
+- Latest green branch head: `60c71a7d77e2980d2f2e35c8f325c4c22d37c4cf`
+- Latest green Android workflow: `30249557589`
+- Latest green desktop workflow on the same head: `30249557577`
 
 The repository reset is already complete. **Do not reset, reconstruct, re-baseline, or start another clean-rebuild project.**
 
@@ -184,20 +185,41 @@ Verification:
 
 Runtime semantics are at-least-once relative to the unchanged server echo, not a new application-level delivery acknowledgement. Real-device disconnect/reconnect ordering still requires acceptance testing.
 
+## Android milestone OUTBOX-UI-001
+
+Implemented and build-verified:
+
+- reused the existing `App.js` 300 ms status poller; no additional loop or service;
+- added `p2sTextOutboxStatus` to the existing polled key set;
+- P2S connection page displays queue count, queued/sending state, total wire bytes, head attempts, and dropped count;
+- P2P and unknown modes clear the P2S queue display;
+- service toggles clear stale display state;
+- formatter excludes payloads, hashes, storage scope, server/account identifiers, and password material;
+- native synchronous polling returns AsyncStorage objects as JSON strings, so the formatter safely accepts either serialized JSON or a direct object;
+- malformed, non-object, or unloaded values fail closed to an empty display.
+
+A desk review caught the serialized-native-value issue before device testing. The first UI implementation would have built successfully but displayed nothing. This correction is covered by tests.
+
+Verification:
+
+- JavaScript reliability gate: 4 suites, 26 tests, all passed;
+- Android JVM tests, AIDL/Shizuku compilation, Kotlin/resources, standalone build, JS bundle, ZIP integrity, checksum, and upload passed;
+- independent bundle inspection found the outbox status key, formatter, persistent outbox, and recovery-repository markers.
+
 ## Latest verified Android artifact
 
-- Workflow: `30248168083`
-- Branch head: `f35ebffba8b99f783b20b0bec2e4bc16a0421f1b`
-- APK artifact ID: `8645964331`
-- Build-log artifact ID: `8645962581`
+- Workflow: `30249557589`
+- Branch head: `60c71a7d77e2980d2f2e35c8f325c4c22d37c4cf`
+- APK artifact ID: `8646500843`
+- Build-log artifact ID: `8646499050`
 - Artifact file: `ClipCascade-Android-stability-standalone.apk`
-- User-facing file: `ClipCascade-Android-stability-outbox.apk`
-- Size: `93,613,211` bytes
-- SHA-256: `9810be35788fbcad32cf34986f0b19bcb324db1f40a9766024c298aec8e32b2d`
+- User-facing file: `ClipCascade-Android-stability-outbox-status.apk`
+- Size: `93,614,299` bytes
+- SHA-256: `614f6fd7d2bcecc96ceba331601ae9d84f6c475047d4301fa5f099286ad0893b`
 - Exact `assets/index.android.bundle`: present
 - APK ZIP integrity: passed
 - APK entry count: `538`
-- JavaScript tests: `19/19` passed
+- JavaScript tests: `26/26` passed across 4 suites
 - Status: debug-signed engineering artifact, not a production release
 
 ## Android build failures retained as evidence
@@ -244,26 +266,26 @@ The STOMP destinations, cookie handling, encryption payload format, and server p
 
 ## Verified desktop artifacts
 
-Latest same-head desktop workflow: `30248168084` at `f35ebffba8b99f783b20b0bec2e4bc16a0421f1b`.
+Latest same-head desktop workflow: `30249557577` at `60c71a7d77e2980d2f2e35c8f325c4c22d37c4cf`.
 
 The workflow passed Ubuntu and Windows tests, Windows EXE generation, Linux packaging, checksum creation, and artifact upload.
 
 ### Windows
 
-- Artifact ID: `8645900812`
+- Artifact ID: `8646440413`
 - File: `ClipCascade-Windows-stability.exe`
 - Size: `57,456,040` bytes
-- SHA-256: `e83390cffca570224ae47d8144313062564e7886eace44dc04a28701c7855128`
+- SHA-256: `199f5ab18413255bbee4c2efac2b5694a0a69c68a6d1273292dfe16eff35926e`
 - PE32+ GUI x86-64
 - Artifact ZIP integrity: passed
 - Embedded checksum matched independent recalculation
 
 ### Linux
 
-- Artifact ID: `8645865478`
+- Artifact ID: `8646405080`
 - File: `ClipCascade-Linux-stability.tar.gz`
-- Size: `60,415` bytes
-- SHA-256: `6bde0b175cf12ef3e26224efd04ee8449720d34f46735f39e1520fd7599cfc57`
+- Size: `60,413` bytes
+- SHA-256: `12e6cc5f2b9937d08801ea8a9a2d4e93682a74bdd8d6b87543f73f7f14900c5a`
 - gzip-compressed Unix tar
 - Archive integrity: passed
 - Entry count: `59`
@@ -283,6 +305,7 @@ The workflow passed Ubuntu and Windows tests, Windows EXE generation, Linux pack
 - duplicate-send behavior on the real device;
 - battery/wakeup behavior;
 - Shizuku-only clipboard-change monitoring;
+- queue-status rendering and live count/state changes on the user's device;
 - offline queue survival, ordering, retry, and self-echo suppression on the real device/public server;
 - image/file durability;
 - true server or remote-application acknowledgement beyond the unchanged server echo;
@@ -313,7 +336,8 @@ The workflow passed Ubuntu and Windows tests, Windows EXE generation, Linux pack
 11. Test launcher drawer, Amazon, browser, selection toolbar, and search fields for focus/input regressions.
 12. Record missed sends, duplicate sends, queue state, UI changes, wakeups, and battery behavior.
 13. Run `ClipCascade-Windows-stability.exe` against the existing server and force network loss/restoration.
-14. Connect `p2sTextOutboxStatus` to the existing mobile status page, then expand diagnostics only around stages proven useful by acceptance evidence.
+14. Verify the P2S queue status line changes from empty to queued/sending and back to empty during the A/B/C test.
+15. Add a payload-free diagnostic report export that combines capability state, capture counters, connection status, and outbox metadata without creating another diagnostics runtime.
 
 ## Continuation checklist
 

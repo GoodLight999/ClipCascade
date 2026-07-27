@@ -281,3 +281,20 @@ Result:
 
 Runtime/device acceptance remains required. Image/file durability is not implemented.
 
+---
+
+## 2026-07-27 — OUTBOX-UI-001: queue status on the existing connection page
+
+Detailed record: `docs/EXPERIMENT_LOG_2026-07-27_OUTBOX_STATUS_UI.md`.
+
+Result:
+
+- existing 300 ms UI poller reused;
+- payload-free count/state/bytes/attempt/drop display added for P2S;
+- native bridge JSON-string shape identified and handled safely;
+- 4 JavaScript suites / 26 tests passed;
+- Android workflow `30249557589` and desktop workflow `30249557577` passed on head `60c71a7d77e2980d2f2e35c8f325c4c22d37c4cf`;
+- latest APK SHA-256: `614f6fd7d2bcecc96ceba331601ae9d84f6c475047d4301fa5f099286ad0893b`.
+
+Real-device rendering and live state changes remain unproven.
+
