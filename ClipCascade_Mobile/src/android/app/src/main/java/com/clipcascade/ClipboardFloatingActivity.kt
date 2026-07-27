@@ -13,18 +13,17 @@ import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
-import com.facebook.react.modules.core.DeviceEventManagerModule
-import com.facebook.react.ReactInstanceManager
-import com.facebook.react.bridge.ReactContext
-import com.facebook.react.bridge.Arguments
-import com.facebook.react.bridge.WritableMap
 
+/**
+ * Existing overlay fallback used only when direct Shizuku reading is unavailable.
+ * All content now returns through ClipboardListenerModule so ordinary listener,
+ * Shizuku, and overlay reads share one duplicate gate and diagnostics path.
+ */
 class ClipboardFloatingActivity : AppCompatActivity() {
 
     private lateinit var windowManager: WindowManager
     private lateinit var floatingView: View
     private lateinit var clipboardManager: ClipboardManager
-    private var reactContext: ReactContext? = null
     private var isViewAttached = false
     private var globalLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
 
@@ -34,19 +33,20 @@ class ClipboardFloatingActivity : AppCompatActivity() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
             Log.w(TAG, "Overlay permission is not available; skipping background clipboard read")
+            CaptureDiagnostics.recordIgnored("overlay", "overlay_permission_missing")
+            finishWithoutAnimation()
+            return
+        }
+
+        if (!ClipboardListenerModule.isRuntimeActive()) {
+            Log.w(TAG, "React Native clipboard runtime is inactive; skipping background clipboard read")
+            CaptureDiagnostics.recordIgnored("overlay", "runtime_inactive")
             finishWithoutAnimation()
             return
         }
 
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        reactContext = getReactContext()
-
-        if (reactContext == null || !ClipboardListenerModule.isRuntimeActive()) {
-            Log.w(TAG, "React Native clipboard runtime is inactive; skipping background clipboard read")
-            finishWithoutAnimation()
-            return
-        }
 
         try {
             createFloatingView()
@@ -58,8 +58,9 @@ class ClipboardFloatingActivity : AppCompatActivity() {
                         floatingView.viewTreeObserver.removeOnGlobalLayoutListener(it)
                     }
                     getClipboardContent()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Unable to read clipboard from overlay activity", e)
+                } catch (error: Exception) {
+                    Log.e(TAG, "Unable to read clipboard from overlay activity", error)
+                    CaptureDiagnostics.recordFailure("overlay", "overlay_read_failed", error)
                 } finally {
                     makeFloatingViewOutOfFocus()
                     removeFloatingView(finishActivity = true)
@@ -69,8 +70,9 @@ class ClipboardFloatingActivity : AppCompatActivity() {
             globalLayoutListener?.let {
                 floatingView.viewTreeObserver.addOnGlobalLayoutListener(it)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Unable to create clipboard overlay", e)
+        } catch (error: Exception) {
+            Log.e(TAG, "Unable to create clipboard overlay", error)
+            CaptureDiagnostics.recordFailure("overlay", "overlay_create_failed", error)
             removeFloatingView(finishActivity = false)
             finishWithoutAnimation()
         }
@@ -83,7 +85,8 @@ class ClipboardFloatingActivity : AppCompatActivity() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             android.graphics.PixelFormat.TRANSLUCENT
         ).apply {
             x = 0
@@ -95,32 +98,41 @@ class ClipboardFloatingActivity : AppCompatActivity() {
 
     private fun getClipboardContent() {
         val clip = clipboardManager.primaryClip
-        if (clip != null && clip.itemCount > 0) {
-            val description = clip.description ?: return
-            val mimeType = description.getMimeType(0) ?: return
-            val item = clip.getItemAt(0)
-            val params: WritableMap = Arguments.createMap()
+        if (clip == null || clip.itemCount == 0) {
+            CaptureDiagnostics.recordIgnored("overlay", "clipboard_empty")
+            return
+        }
 
-            if (mimeType.startsWith("text/") && item.text != null) {
-                params.putString("content", item.text.toString())
-                params.putString("type", "text")
+        val description = clip.description
+        val mimeType = if (description.mimeTypeCount > 0) description.getMimeType(0) else ""
+        val item = clip.getItemAt(0)
+
+        val content: String
+        val type: String
+        when {
+            item.text != null && mimeType.startsWith("text/") -> {
+                content = item.text.toString()
+                type = "text"
             }
-            else if (mimeType.startsWith("image/") && item.uri != null) {
-                params.putString("content", item.uri.toString())
-                params.putString("type", "image")
+            item.uri != null && mimeType.startsWith("image/") -> {
+                content = item.uri.toString()
+                type = "image"
             }
-            else if (item.uri != null) {
-                params.putString("content", item.uri.toString())
-                params.putString("type", "files")
+            item.uri != null -> {
+                content = item.uri.toString()
+                type = "files"
             }
-            else {
+            item.text != null -> {
+                content = item.text.toString()
+                type = "text"
+            }
+            else -> {
+                CaptureDiagnostics.recordIgnored("overlay", "clipboard_type_unsupported")
                 return
             }
-
-            reactContext
-                ?.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                ?.emit("onClipboardChange", params)
         }
+
+        ClipboardListenerModule.emitExternalClipboard(content, type, "overlay")
     }
 
     private fun makeFloatingViewInFocus() {
@@ -139,24 +151,20 @@ class ClipboardFloatingActivity : AppCompatActivity() {
         }
     }
 
-    private fun getReactContext(): ReactContext? {
-        val reactInstanceManager: ReactInstanceManager =
-            (applicationContext as MainApplication).reactNativeHost.reactInstanceManager
-        return reactInstanceManager.currentReactContext
-    }
-
     private fun removeFloatingView(finishActivity: Boolean) {
         if (isViewAttached) {
             try {
                 globalLayoutListener?.let {
                     floatingView.viewTreeObserver.removeOnGlobalLayoutListener(it)
                 }
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
 
             try {
                 windowManager.removeViewImmediate(floatingView)
-            } catch (e: Exception) {
-                Log.w(TAG, "Unable to remove clipboard overlay", e)
+            } catch (error: Exception) {
+                Log.w(TAG, "Unable to remove clipboard overlay", error)
+                CaptureDiagnostics.recordFailure("overlay", "overlay_remove_failed", error)
             }
             isViewAttached = false
         }
@@ -182,9 +190,9 @@ class ClipboardFloatingActivity : AppCompatActivity() {
         fun getIntent(context: Context): Intent {
             return Intent(context.applicationContext, ClipboardFloatingActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_NO_ANIMATION or
-                        Intent.FLAG_ACTIVITY_NO_HISTORY or
-                        Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+                    Intent.FLAG_ACTIVITY_NO_ANIMATION or
+                    Intent.FLAG_ACTIVITY_NO_HISTORY or
+                    Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
             }
         }
     }
