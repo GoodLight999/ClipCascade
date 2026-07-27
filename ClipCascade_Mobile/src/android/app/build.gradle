@@ -81,4 +81,6 @@ dependencies {
     // reads; existing React Native transport remains authoritative.
     implementation "dev.rikka.shizuku:api:$shizukuVersion"
     implementation "dev.rikka.shizuku:provider:$shizukuVersion"
+
+    testImplementation "junit:junit:4.13.2"
 }
