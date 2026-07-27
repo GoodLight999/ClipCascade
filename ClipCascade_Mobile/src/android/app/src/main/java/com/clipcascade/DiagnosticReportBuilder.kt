@@ -36,7 +36,8 @@ object DiagnosticReportBuilder {
         val oldestCreatedAt: Long?,
         val headState: String?,
         val headAttempts: Int,
-        val headLastAttemptAt: Long?
+        val headLastAttemptAt: Long?,
+        val headNextAttemptAt: Long?
     )
 
     data class CaptureState(
@@ -126,6 +127,7 @@ object DiagnosticReportBuilder {
             appendLine("Head state: ${safeOrNone(outbox.headState)}")
             appendLine("Head attempts: ${outbox.headAttempts.coerceAtLeast(0)}")
             appendLine("Head last attempt epoch ms: ${outbox.headLastAttemptAt ?: "none"}")
+            appendLine("Head next attempt epoch ms: ${outbox.headNextAttemptAt ?: "none"}")
         }
         appendLine()
 
