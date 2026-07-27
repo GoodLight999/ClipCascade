@@ -5,7 +5,7 @@ package com.clipcascade
  *
  * Inputs intentionally exclude clipboard content, content hashes, server URLs,
  * usernames, passwords, cookies, and encryption keys. Free-form status/error
- * strings are normalized and bounded before inclusion.
+ * strings are normalized, redacted, and bounded before inclusion.
  */
 object DiagnosticReportBuilder {
     data class CapabilityState(
@@ -129,7 +129,7 @@ object DiagnosticReportBuilder {
         }
         appendLine()
 
-        appendLine("Privacy: clipboard payloads, hashes, credentials, cookies, server URLs, and keys are not included.")
+        appendLine("Privacy: clipboard payloads, hashes, credentials, cookies, server URLs, email addresses, and keys are not included.")
     }.trimEnd()
 
     private fun flag(value: Boolean): String = if (value) "enabled" else "disabled"
@@ -139,6 +139,8 @@ object DiagnosticReportBuilder {
 
     internal fun safe(value: String, maxLength: Int = 300): String {
         val normalized = value
+            .replace(URL_PATTERN, "[redacted-url]")
+            .replace(EMAIL_PATTERN, "[redacted-email]")
             .replace(Regex("[\\p{Cc}\\p{Cf}]+"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
@@ -149,4 +151,11 @@ object DiagnosticReportBuilder {
             normalized.take(maxLength) + "…"
         }
     }
+
+    private val URL_PATTERN = Regex(
+        "(?i)\\b(?:https?|wss?)://[^\\s]+"
+    )
+    private val EMAIL_PATTERN = Regex(
+        "(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b"
+    )
 }
