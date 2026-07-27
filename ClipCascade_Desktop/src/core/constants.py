@@ -204,12 +204,12 @@ WEBSOCKET_ENDPOINT = "/clipsocket"
 WEBSOCKET_ENDPOINT_P2P = "/p2psignaling"
 STUN_URL = "/stun-url"
 
-VERSION_URL = "https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/version.json"
-RELEASE_URL = "https://github.com/Sathvik-Rao/ClipCascade/releases/latest"
-GITHUB_URL = "https://github.com/Sathvik-Rao/ClipCascade"
+VERSION_URL = "https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/version.json"
+RELEASE_URL = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/releases/latest"
+GITHUB_URL = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade"
 APP_NAME = "ClipCascade"
-HELP_URL = f"{GITHUB_URL}/blob/main/README.md"
-METADATA_URL = "https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/metadata.json"
+HELP_URL = f"{GITHUB_URL}/blob/stability-recovery/README.md"
+METADATA_URL = "https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/metadata.json"
 
 if PLATFORM == WINDOWS:
     MUTEX_NAME = "Global\\ClipCascade_Mutex_PSSR"

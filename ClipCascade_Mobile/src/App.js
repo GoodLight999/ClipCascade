@@ -84,14 +84,14 @@ export default function App() {
   const WEBSOCKET_ENDPOINT_P2P = '/p2psignaling';
   const STUN_URL = '/stun-url';
   const VERSION_URL =
-    'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/version.json';
-  const GITHUB_URL = 'https://github.com/Sathvik-Rao/ClipCascade';
+    'https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/version.json';
+  const GITHUB_URL = 'https://github.com/GoodLight999/Trial-and-Error-ClipCascade';
   const RELEASE_URL =
-    'https://github.com/Sathvik-Rao/ClipCascade/releases/latest';
+    'https://github.com/GoodLight999/Trial-and-Error-ClipCascade/releases/latest';
   const APP_NAME = 'ClipCascade';
-  const HELP_URL = `${GITHUB_URL}/blob/main/README.md`;
+  const HELP_URL = `${GITHUB_URL}/blob/stability-recovery/docs/ANDROID_SETUP.md`;
   const METADATA_URL =
-    'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/metadata.json';
+    'https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/metadata.json';
 
   // Request permissions for notifications
   PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
