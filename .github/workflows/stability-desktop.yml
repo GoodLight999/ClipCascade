@@ -6,6 +6,7 @@ on:
       - stability-recovery
     paths:
       - 'ClipCascade_Desktop/**'
+      - '.github/scripts/**'
       - '.github/workflows/stability-desktop.yml'
   pull_request:
     branches:
@@ -16,13 +17,38 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: stability-desktop-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  apply-p2s-outbox:
+    name: Apply validated P2S outbox patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out recovery branch
+        uses: actions/checkout@v4
+        with:
+          ref: stability-recovery
+      - name: Apply and syntax-check focused mobile patch
+        run: |
+          python .github/scripts/apply_p2s_outbox.py
+          node --check ClipCascade_Mobile/src/StartForegroundService.js
+      - name: Commit product change only
+        run: |
+          if git diff --quiet; then
+            echo 'P2S outbox integration is already applied.'
+            exit 0
+          fi
+          git config user.name 'ClipCascade recovery automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add ClipCascade_Mobile/src/StartForegroundService.js
+          git commit -m 'mobile: connect persistent P2S text outbox'
+          git push origin HEAD:stability-recovery
+
   desktop-tests:
     name: Desktop tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
