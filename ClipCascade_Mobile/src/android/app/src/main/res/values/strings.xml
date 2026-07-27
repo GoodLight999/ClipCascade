@@ -5,6 +5,7 @@
     <string name="background_setup_long_label">ClipCascade バックグラウンド取得を設定</string>
     <string name="background_setup_intro">推奨順はShizuku → ユーザー補助 → オーバーレイ/ADBです。Shizukuが使える場合は画面を奪わず直接読み、通信と重複排除は既存のClipCascade前景サービスが担当します。</string>
     <string name="background_setup_status">Shizukuインストール: %1$s\nShizuku起動: %2$s\nShizuku権限: %3$s\nShizuku読取サービス: %4$s\nユーザー補助: %5$s\n他のアプリの上に表示（予備経路）: %6$s\nREAD_LOGS（ADBトリガー）: %7$s\nバッテリー最適化の除外: %8$s\nClipCascade前景サービス: %9$s\n直近のShizukuエラー: %10$s</string>
+    <string name="capture_diagnostics_status">取得診断（内容は保存しません）\nトリガー: %1$d\n並行・連続トリガー抑制: %2$d\nShizuku試行: %3$d\nShizuku成功: %4$d\nオーバーレイ移行: %5$d\nJS送出: %6$d\n短時間重複抑制: %7$d\n無視・利用不能: %8$d\n直近ソース: %9$s\n直近段階: %10$s\n直近エラー: %11$s\n直近時刻: %12$s</string>
     <string name="status_enabled">有効</string>
     <string name="status_disabled">無効</string>
     <string name="status_bound_uid">接続済み（UID %1$d）</string>
@@ -18,6 +19,7 @@
     <string name="open_battery_settings">6. バッテリー最適化の設定を開く</string>
     <string name="copy_adb_fallback">ADBフォールバック用コマンドをコピー</string>
     <string name="refresh_status">状態を再確認</string>
+    <string name="reset_capture_diagnostics">取得診断カウンターをリセット</string>
     <string name="open_clipcascade">ClipCascadeを開く</string>
     <string name="background_setup_safety_note">安全設計: ユーザー補助は通常のクリックや文字選択だけでは反応しません。コピー操作を高い確度で検出した場合だけ、Shizuku読取を一度要求します。Shizukuが利用できない場合に限り、既存オーバーレイへ自動フォールバックします。クリップボード内容は診断表示やログへ保存しません。</string>
     <string name="shizuku_test_started">Shizuku読み取りを確認しています…</string>
