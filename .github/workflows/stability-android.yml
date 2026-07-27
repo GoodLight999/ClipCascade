@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: stability-android-${{ github.workflow }}-${{ github.ref }}
@@ -33,94 +33,8 @@ jobs:
         working-directory: ClipCascade_Mobile/src
 
     steps:
-      - name: Check out source branch
+      - name: Check out source
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
-
-      - name: Apply validated canonical product links once
-        working-directory: .
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          def replace_exact(path, old, new, expected):
-              text = path.read_text(encoding='utf-8')
-              count = text.count(old)
-              if count == expected:
-                  path.write_text(text.replace(old, new), encoding='utf-8')
-                  return
-              if count == 0 and text.count(new) >= expected:
-                  return
-              raise SystemExit(
-                  f'{path}: expected {expected} old occurrences or an already-patched file; found {count}'
-              )
-
-          mobile = Path('ClipCascade_Mobile/src/App.js')
-          replace_exact(
-              mobile,
-              'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/version.json',
-              'https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/version.json',
-              1,
-          )
-          replace_exact(
-              mobile,
-              'https://github.com/Sathvik-Rao/ClipCascade',
-              'https://github.com/GoodLight999/Trial-and-Error-ClipCascade',
-              2,
-          )
-          replace_exact(
-              mobile,
-              '${GITHUB_URL}/blob/main/README.md',
-              '${GITHUB_URL}/blob/stability-recovery/docs/ANDROID_SETUP.md',
-              1,
-          )
-          replace_exact(
-              mobile,
-              'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/metadata.json',
-              'https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/metadata.json',
-              1,
-          )
-
-          desktop = Path('ClipCascade_Desktop/src/core/constants.py')
-          replace_exact(
-              desktop,
-              'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/version.json',
-              'https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/version.json',
-              1,
-          )
-          replace_exact(
-              desktop,
-              'https://github.com/Sathvik-Rao/ClipCascade',
-              'https://github.com/GoodLight999/Trial-and-Error-ClipCascade',
-              2,
-          )
-          replace_exact(
-              desktop,
-              'f"{GITHUB_URL}/blob/main/README.md"',
-              'f"{GITHUB_URL}/blob/stability-recovery/README.md"',
-              1,
-          )
-          replace_exact(
-              desktop,
-              'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/metadata.json',
-              'https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/metadata.json',
-              1,
-          )
-          PY
-
-          ! grep -n 'Sathvik-Rao/ClipCascade' ClipCascade_Mobile/src/App.js
-          ! grep -n 'Sathvik-Rao/ClipCascade' ClipCascade_Desktop/src/core/constants.py
-          python -m py_compile ClipCascade_Desktop/src/core/constants.py
-
-          if ! git diff --quiet; then
-            git config user.name 'ClipCascade recovery automation'
-            git config user.email 'actions@users.noreply.github.com'
-            git add ClipCascade_Mobile/src/App.js ClipCascade_Desktop/src/core/constants.py
-            git commit -m 'meta: point product links at recovery canonical sources'
-            git push origin HEAD:stability-recovery
-          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
