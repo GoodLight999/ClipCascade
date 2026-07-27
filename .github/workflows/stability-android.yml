@@ -54,7 +54,10 @@ jobs:
         run: npm ci
 
       - name: Run JavaScript reliability tests
-        run: npm test -- --runInBand
+        run: |
+          mkdir -p ci-logs/android
+          set -o pipefail
+          npm test -- --runInBand 2>&1 | tee ci-logs/android/jest.log
 
       - name: Generate app code, run Android tests, and build standalone APK
         run: |
@@ -63,12 +66,12 @@ jobs:
           set -o pipefail
           (cd android && ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleStandalone) 2>&1 | tee ci-logs/android/gradle-build.log
 
-      - name: Upload build log
+      - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ClipCascade-stability-android-build-log
-          path: ClipCascade_Mobile/src/ci-logs/android/gradle-build.log
+          path: ClipCascade_Mobile/src/ci-logs/android/
           if-no-files-found: warn
           retention-days: 30
 
