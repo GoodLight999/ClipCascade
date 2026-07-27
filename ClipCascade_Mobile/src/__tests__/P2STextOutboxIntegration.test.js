@@ -36,6 +36,18 @@ describe('P2S text outbox integration contract', () => {
     expect(source).toContain('await p2sTextOutbox.releaseInFlight(head.id);');
   });
 
+  test('uses a persisted bounded retry delay instead of a fixed 30-second loop', () => {
+    expect(source).toContain("require('./P2SRetryPolicy')");
+    expect(source).toContain('getP2SRetryDelayMs(attemptNumber)');
+    expect(source).toContain('head.nextAttemptAt - now');
+    expect(source).toContain(
+      'await p2sTextOutbox.markAttempt(head.id, retryDelayMs)',
+    );
+    expect(source).toContain('scheduleP2STextDrain(retryWaitMs)');
+    expect(source).toContain('}, retryDelayMs);');
+    expect(source).not.toContain('}, 30000);');
+  });
+
   test('does not retain patch artifacts in the product source', () => {
     expect(source).not.toContain(
       '// start websocket stomp connection          // start websocket stomp connection',
