@@ -280,7 +280,8 @@ class BackgroundSetupActivity : AppCompatActivity() {
                 oldestCreatedAt = data.optNullableLong("oldestCreatedAt"),
                 headState = data.optNullableString("headState"),
                 headAttempts = data.optInt("headAttempts", 0),
-                headLastAttemptAt = data.optNullableLong("headLastAttemptAt")
+                headLastAttemptAt = data.optNullableLong("headLastAttemptAt"),
+                headNextAttemptAt = data.optNullableLong("headNextAttemptAt")
             )
         } catch (_: Exception) {
             null
