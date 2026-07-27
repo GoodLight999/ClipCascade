@@ -9,10 +9,12 @@ A new thread must read, in order:
 
 1. `docs/HANDOFF.md`
 2. `docs/EXPERIMENT_LOG.md`
-3. `docs/EXPERIMENT_LOG_2026-07-27_SHIZUKU.md`
-4. `docs/EXPERIMENT_LOG_2026-07-27_SHIZUKU_BUILD.md`
-5. `docs/EXPERIMENT_LOG_2026-07-27_DESKTOP_RECOVERY.md`
-6. Draft PR `#4`
+3. `docs/EXPERIMENT_LOG_2026-07-27_CAPTURE_PIPELINE.md`
+4. `docs/EXPERIMENT_LOG_2026-07-27_SHIZUKU.md`
+5. `docs/EXPERIMENT_LOG_2026-07-27_SHIZUKU_BUILD.md`
+6. `docs/EXPERIMENT_LOG_2026-07-27_P2S_OUTBOX.md`
+7. `docs/EXPERIMENT_LOG_2026-07-27_DESKTOP_RECOVERY.md`
+8. Draft PR `#4`
 
 ## Canonical repository state
 
@@ -22,9 +24,9 @@ A new thread must read, in order:
 - Mirror branch: `main`
 - Active development branch: `stability-recovery`
 - Active draft PR: `#4`
-- Latest green product-code head: `6dc93e08b10db5f3f138cce6b6d867548f9f89c4`
-- Latest green Android workflow: `30211592338`
-- Latest green desktop workflow on the same product head: `30211592333`
+- Latest green branch head: `f35ebffba8b99f783b20b0bec2e4bc16a0421f1b`
+- Latest green Android workflow: `30248168083`
+- Latest green desktop workflow on the same head: `30248168084`
 
 The repository reset is already complete. **Do not reset, reconstruct, re-baseline, or start another clean-rebuild project.**
 
@@ -138,7 +140,7 @@ Implemented and build-verified:
 - Accessibility and READ_LOGS triggers try Shizuku first;
 - successful Shizuku text reads return to the existing React Native `onClipboardChange -> sendClipBoard` path;
 - Shizuku absence, stop, denial, binding state, error, or non-text clip falls back to the existing overlay path;
-- no new transport, network client, polling loop, outbound queue, or payload history;
+- no new transport, network client, or polling loop was introduced by SHIZUKU-001; the later OUTBOX-001 milestone extends the existing P2S send path separately;
 - guided setup shows installation, running state, permission, UserService binding, service UID, Accessibility, overlay, READ_LOGS, battery exemption, foreground runtime, and last non-payload error;
 - setup can open/install Shizuku, request permission, bind, and run a privacy-safe read test;
 - the read test reports only type and length, never clipboard content.
@@ -153,19 +155,49 @@ Direct Shizuku output is text-only. Image/file content URIs may be readable by t
 - It still needs an event trigger: ordinary listener in foreground, conservative Accessibility, or READ_LOGS/ADB.
 - A Shizuku-side clipboard-change listener will be considered only if real-device evidence shows it is needed and safe.
 
+## Android milestone OUTBOX-001
+
+Implemented and build-verified for P2S text:
+
+- persistent bounded `P2STextOutbox` using the existing AsyncStorage adapter;
+- exact existing `/app/cliptext` publish and `/user/queue/cliptext` subscription destinations retained;
+- no second network client and no server change;
+- queue scoped by server URL, username, cipher mode, and hashed-password fingerprint;
+- text prepared by the existing validation and encryption code before persistence;
+- when encryption is enabled, persisted wire payload is ciphertext;
+- FIFO, maximum 20 items, bounded bytes, 24-hour default expiry, and serialized storage mutations;
+- one in-flight item at a time;
+- STOMP connect plus successful subscription starts draining;
+- matching plaintext server echo acknowledges and removes only the in-flight head;
+- 30-second missing-echo timeout releases the head for retry;
+- disconnect, STOMP error, WebSocket error/close, and service shutdown release in-flight text back to queued state;
+- restart recovery converts persisted in-flight state back to queued;
+- acknowledged own echoes are not written back to the Android clipboard, preventing A/B/C rollback during offline replay;
+- queue count, bytes, oldest time, head state, attempts, and last-attempt time are stored as non-payload status;
+- image/file sending remains unchanged and is not claimed durable.
+
+Verification:
+
+- JavaScript reliability gate: 3 suites, 19 tests, all passed;
+- Android JVM tests, AIDL/Shizuku compilation, Kotlin/resources, standalone build, JS bundle, ZIP integrity, checksum, and upload passed;
+- bundle inspection found outbox storage and echo-acknowledgement markers.
+
+Runtime semantics are at-least-once relative to the unchanged server echo, not a new application-level delivery acknowledgement. Real-device disconnect/reconnect ordering still requires acceptance testing.
+
 ## Latest verified Android artifact
 
-- Workflow: `30211592338`
-- Product head: `6dc93e08b10db5f3f138cce6b6d867548f9f89c4`
-- APK artifact ID: `8634676818`
-- Build-log artifact ID: `8634676151`
+- Workflow: `30248168083`
+- Branch head: `f35ebffba8b99f783b20b0bec2e4bc16a0421f1b`
+- APK artifact ID: `8645964331`
+- Build-log artifact ID: `8645962581`
 - Artifact file: `ClipCascade-Android-stability-standalone.apk`
-- User-facing file: `ClipCascade-Android-stability-shizuku.apk`
-- Size: `93,585,807` bytes
-- SHA-256: `d28da7716e5069ab2ae63926bc0e8b6495adaacdead69ec4590dea69bedf274b`
+- User-facing file: `ClipCascade-Android-stability-outbox.apk`
+- Size: `93,613,211` bytes
+- SHA-256: `9810be35788fbcad32cf34986f0b19bcb324db1f40a9766024c298aec8e32b2d`
 - Exact `assets/index.android.bundle`: present
 - APK ZIP integrity: passed
 - APK entry count: `538`
+- JavaScript tests: `19/19` passed
 - Status: debug-signed engineering artifact, not a production release
 
 ## Android build failures retained as evidence
@@ -212,25 +244,26 @@ The STOMP destinations, cookie handling, encryption payload format, and server p
 
 ## Verified desktop artifacts
 
-Original independently checked desktop artifact run: `30210415035`.
-The same desktop tests and package jobs also passed on Shizuku product head in workflow `30211592333`.
+Latest same-head desktop workflow: `30248168084` at `f35ebffba8b99f783b20b0bec2e4bc16a0421f1b`.
+
+The workflow passed Ubuntu and Windows tests, Windows EXE generation, Linux packaging, checksum creation, and artifact upload.
 
 ### Windows
 
-- Artifact ID: `8634309346`
+- Artifact ID: `8645900812`
 - File: `ClipCascade-Windows-stability.exe`
-- Size: `57,456,012` bytes
-- SHA-256: `4dc7aa89917ae3f0779428327013745dc2c64e33809ee4633fcb2308598e0b69`
+- Size: `57,456,040` bytes
+- SHA-256: `e83390cffca570224ae47d8144313062564e7886eace44dc04a28701c7855128`
 - PE32+ GUI x86-64
 - Artifact ZIP integrity: passed
 - Embedded checksum matched independent recalculation
 
 ### Linux
 
-- Artifact ID: `8634293452`
+- Artifact ID: `8645865478`
 - File: `ClipCascade-Linux-stability.tar.gz`
-- Size: `60,389` bytes
-- SHA-256: `8e3421abf268cd9a6488ec9a8353ae92c5bd88207529324ae83eabdd390640d6`
+- Size: `60,415` bytes
+- SHA-256: `6bde0b175cf12ef3e26224efd04ee8449720d34f46735f39e1520fd7599cfc57`
 - gzip-compressed Unix tar
 - Archive integrity: passed
 - Entry count: `59`
@@ -247,10 +280,12 @@ The same desktop tests and package jobs also passed on Shizuku product head in w
 - foreground/background clipboard delivery to the server and remote Windows device;
 - automatic overlay fallback after Shizuku stop or denial;
 - Amazon, launcher drawer, browser, selection toolbar, and search-field safety;
-- duplicate-send behavior;
+- duplicate-send behavior on the real device;
 - battery/wakeup behavior;
 - Shizuku-only clipboard-change monitoring;
-- durable outbound queue or server-level delivery acknowledgement;
+- offline queue survival, ordering, retry, and self-echo suppression on the real device/public server;
+- image/file durability;
+- true server or remote-application acknowledgement beyond the unchanged server echo;
 - full end-to-end automatic diagnostic flow.
 
 ### Desktop
@@ -265,19 +300,20 @@ The same desktop tests and package jobs also passed on Shizuku product head in w
 
 ## Exact next actions
 
-1. Install `ClipCascade-Android-stability-shizuku.apk`.
+1. Install `ClipCascade-Android-stability-outbox.apk`.
 2. Start Shizuku using its normal wireless-debugging or computer-assisted setup.
 3. Long-press ClipCascade and open `バックグラウンド設定`.
-4. Confirm readable light/dark rendering.
-5. Confirm Shizuku installed/running, grant ClipCascade permission, and wait for UserService connection.
-6. Confirm the displayed service UID is a shell UID rather than the ClipCascade app UID.
-7. Copy text and run the privacy-safe Shizuku read test.
-8. Start the existing ClipCascade foreground service and test background text copies through Accessibility.
-9. Stop Shizuku and repeat to verify overlay fallback.
-10. Test launcher drawer, Amazon, browser, selection toolbar, and search fields for focus/input regressions.
-11. Record missed sends, duplicate sends, UI changes, wakeups, and battery behavior.
-12. Run `ClipCascade-Windows-stability.exe` against the existing server and force network loss/restoration.
-13. Decide from evidence whether a Shizuku-side change listener, durable queue, or expanded diagnostics are the next bottleneck.
+4. Confirm readable light/dark rendering and Shizuku installation/running/permission/UserService state.
+5. Confirm the service UID is a shell UID and run the privacy-safe Shizuku read test.
+6. Start the existing ClipCascade foreground service and verify one normal Android-to-Windows text copy.
+7. Disable Android networking without stopping the foreground service; copy A, B, and C; reconnect; verify ordered A/B/C delivery without duplicates.
+8. Confirm Android's clipboard does not roll back to A or B when queued self-echoes return.
+9. Repeat with process termination/relaunch between enqueue and reconnect to test persisted recovery.
+10. Stop Shizuku and repeat a copy to verify overlay fallback.
+11. Test launcher drawer, Amazon, browser, selection toolbar, and search fields for focus/input regressions.
+12. Record missed sends, duplicate sends, queue state, UI changes, wakeups, and battery behavior.
+13. Run `ClipCascade-Windows-stability.exe` against the existing server and force network loss/restoration.
+14. Connect `p2sTextOutboxStatus` to the existing mobile status page, then expand diagnostics only around stages proven useful by acceptance evidence.
 
 ## Continuation checklist
 
@@ -287,7 +323,7 @@ A new thread must recover without archived patchwork:
 - original requirements;
 - no-wheel-reinvention rule;
 - required references;
-- A11Y, Shizuku, and desktop implementation boundaries;
+- A11Y, Shizuku, P2S outbox, and desktop implementation boundaries;
 - build-verified versus runtime/device-verified claims;
 - latest workflows, artifacts, sizes, and hashes;
 - retained failures and corrections;

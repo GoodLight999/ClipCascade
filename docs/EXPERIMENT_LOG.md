@@ -262,3 +262,22 @@ No claim is made yet about:
 3. `DEVICE-003`: record duplicate-send and battery/wakeup behavior.
 4. `SHIZUKU-001`: use official Shizuku source/API/demo and OctoClip's documented flow to design the preferred stable path without changing transport.
 5. `DESKTOP-001`: selectively recover and retest the Windows connection controller; do not restore archived PR #3 wholesale.
+
+---
+
+## 2026-07-27 — OUTBOX-001: persistent P2S text outbox
+
+Detailed record: `docs/EXPERIMENT_LOG_2026-07-27_P2S_OUTBOX.md`.
+
+Result:
+
+- existing server protocol and STOMP destinations retained;
+- offline P2S text is now persisted, bounded, replayed after subscription, and removed after matching server echo;
+- connection loss and shutdown release in-flight text for retry;
+- own queued echoes do not roll the Android clipboard backward;
+- 3 JavaScript suites / 19 tests passed;
+- Android workflow `30248168083` and desktop workflow `30248168084` passed on head `f35ebffba8b99f783b20b0bec2e4bc16a0421f1b`;
+- latest APK SHA-256: `9810be35788fbcad32cf34986f0b19bcb324db1f40a9766024c298aec8e32b2d`.
+
+Runtime/device acceptance remains required. Image/file durability is not implemented.
+
