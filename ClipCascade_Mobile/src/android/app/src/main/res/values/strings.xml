@@ -19,6 +19,9 @@
     <string name="open_battery_settings">6. バッテリー最適化の設定を開く</string>
     <string name="copy_adb_fallback">ADBフォールバック用コマンドをコピー</string>
     <string name="refresh_status">状態を再確認</string>
+    <string name="share_diagnostic_report">診断レポートを共有</string>
+    <string name="diagnostic_report_chooser">ClipCascade診断レポートを共有</string>
+    <string name="diagnostic_report_share_unavailable">診断レポートの共有先を開けませんでした</string>
     <string name="reset_capture_diagnostics">取得診断カウンターをリセット</string>
     <string name="open_clipcascade">ClipCascadeを開く</string>
     <string name="background_setup_safety_note">安全設計: ユーザー補助は通常のクリックや文字選択だけでは反応しません。コピー操作を高い確度で検出した場合だけ、Shizuku読取を一度要求します。Shizukuが利用できない場合に限り、既存オーバーレイへ自動フォールバックします。クリップボード内容は診断表示やログへ保存しません。</string>
