@@ -1,12 +1,7 @@
 {
   "name": "ClipCascade Stability Recovery",
   "version": "https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/version.json",
-  "description": "An upstream-compatible ClipCascade stability recovery focused on reliable Android background capture and desktop reconnect behavior.",
-  "upstream": {
-    "name": "Sathvik-Rao/ClipCascade",
-    "url": "https://github.com/Sathvik-Rao/ClipCascade",
-    "license": "GPL-3.0"
-  },
+  "description": "A ClipCascade-compatible stability recovery focused on reliable Android background capture and desktop reconnect behavior.",
   "maintainer": {
     "name": "GoodLight999",
     "website": "https://github.com/GoodLight999/Trial-and-Error-ClipCascade"
@@ -40,12 +35,12 @@
   },
   "platforms": {
     "server": {
-      "compatibility": "Sathvik-Rao ClipCascade protocol and existing public server"
+      "compatibility": "Existing ClipCascade P2S/P2P protocol and public server"
     },
     "mobile": {
       "android": {
         "languages": ["Kotlin", "JavaScript"],
-        "frameworks": ["React Native", "Shizuku"],
+        "frameworks": ["React Native", "Shizuku-compatible API"],
         "builds": ["apk"]
       }
     },
