@@ -526,7 +526,7 @@ module.exports = async (inputData = null) => {
                         await updateP2STextOutboxStatus();
                       }
 
-                      if (await newCB(hcb)) {
+                      if (!acknowledgedQueuedText && (await newCB(hcb))) {
                         previous_clipboard_content_hash = hcb;
 
                         if (await validateClipboardSize(cb, type_, 'Inbound')) {
@@ -627,7 +627,7 @@ module.exports = async (inputData = null) => {
             },
           });
 
-          // start websocket stomp connection          // start websocket stomp connection
+          // start websocket stomp connection
           stompClient.activate();
 
           // send clipboard content P2S
