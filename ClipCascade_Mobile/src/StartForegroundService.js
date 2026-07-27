@@ -25,6 +25,10 @@ import {
   clearAsyncStorage,
 } from './AsyncStorageManagement';
 const { P2STextOutbox } = require('./P2STextOutbox');
+const {
+  getP2SRetryDelayMs,
+  DEFAULT_MAX_DELAY_MS,
+} = require('./P2SRetryPolicy');
 
 function cleanupClipboardListeners() {
   DeviceEventEmitter.removeAllListeners('SHARED_TEXT');
@@ -416,6 +420,21 @@ module.exports = async (inputData = null) => {
             }
           };
 
+          const reportP2STextRetryError = async error => {
+            await setDataInAsyncStorage(
+              'wsStatusMessage',
+              '❌ Text outbox retry error: ' + error,
+            );
+          };
+
+          const scheduleP2STextDrain = delayMs => {
+            clearP2STextEchoTimer();
+            p2sTextEchoTimer = setTimeout(() => {
+              p2sTextEchoTimer = null;
+              drainP2STextOutbox().catch(reportP2STextRetryError);
+            }, Math.max(1, delayMs));
+          };
+
           const releaseP2STextInFlight = async () => {
             clearP2STextEchoTimer();
             const head = await p2sTextOutbox.peek();
@@ -435,7 +454,27 @@ module.exports = async (inputData = null) => {
 
               const head = await p2sTextOutbox.peek();
               if (!head || head.state === 'inflight') return;
-              if (!(await p2sTextOutbox.markAttempt(head.id))) return;
+
+              const now = Date.now();
+              const retryWaitMs = Number.isFinite(head.nextAttemptAt)
+                ? Math.max(
+                    0,
+                    Math.min(DEFAULT_MAX_DELAY_MS, head.nextAttemptAt - now),
+                  )
+                : 0;
+              if (retryWaitMs > 0) {
+                scheduleP2STextDrain(retryWaitMs);
+                await setDataInAsyncStorage(
+                  'wsStatusMessage',
+                  `⏳ Queued text retry in ${Math.ceil(retryWaitMs / 1000)}s`,
+                );
+                await updateP2STextOutboxStatus();
+                return;
+              }
+
+              const attemptNumber = head.attempts + 1;
+              const retryDelayMs = getP2SRetryDelayMs(attemptNumber);
+              if (!(await p2sTextOutbox.markAttempt(head.id, retryDelayMs))) return;
 
               try {
                 stompClient.publish({
@@ -453,20 +492,16 @@ module.exports = async (inputData = null) => {
                     .releaseInFlight(head.id)
                     .then(updateP2STextOutboxStatus)
                     .then(drainP2STextOutbox)
-                    .catch(async error => {
-                      await setDataInAsyncStorage(
-                        'wsStatusMessage',
-                        '❌ Text outbox retry error: ' + error,
-                      );
-                    });
-                }, 30000);
+                    .catch(reportP2STextRetryError);
+                }, retryDelayMs);
 
                 await setDataInAsyncStorage(
                   'wsStatusMessage',
-                  `📤 Sending queued text (attempt ${head.attempts + 1})`,
+                  `📤 Sending queued text (attempt ${attemptNumber}; retry timeout ${Math.ceil(retryDelayMs / 1000)}s)`,
                 );
               } catch (error) {
                 await p2sTextOutbox.releaseInFlight(head.id);
+                scheduleP2STextDrain(retryDelayMs);
                 throw error;
               } finally {
                 await updateP2STextOutboxStatus();
