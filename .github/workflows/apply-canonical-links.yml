@@ -1,0 +1,91 @@
+name: Apply canonical recovery links
+
+on:
+  push:
+    branches:
+      - stability-recovery
+    paths:
+      - '.github/workflows/apply-canonical-links.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out recovery branch
+        uses: actions/checkout@v4
+        with:
+          ref: stability-recovery
+
+      - name: Replace only the validated upstream-link blocks
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path('ClipCascade_Mobile/src/App.js'): (
+                  """  const VERSION_URL =
+            'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/version.json';
+          const GITHUB_URL = 'https://github.com/Sathvik-Rao/ClipCascade';
+          const RELEASE_URL =
+            'https://github.com/Sathvik-Rao/ClipCascade/releases/latest';
+          const APP_NAME = 'ClipCascade';
+          const HELP_URL = `${GITHUB_URL}/blob/main/README.md`;
+          const METADATA_URL =
+            'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/metadata.json';""",
+                  """  const VERSION_URL =
+            'https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/version.json';
+          const GITHUB_URL =
+            'https://github.com/GoodLight999/Trial-and-Error-ClipCascade';
+          const RELEASE_URL = `${GITHUB_URL}/releases/latest`;
+          const APP_NAME = 'ClipCascade';
+          const HELP_URL = `${GITHUB_URL}/blob/stability-recovery/docs/ANDROID_SETUP.md`;
+          const METADATA_URL =
+            'https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/metadata.json';""",
+              ),
+              Path('ClipCascade_Desktop/src/core/constants.py'): (
+                  """VERSION_URL = \"https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/version.json\"
+          RELEASE_URL = \"https://github.com/Sathvik-Rao/ClipCascade/releases/latest\"
+          GITHUB_URL = \"https://github.com/Sathvik-Rao/ClipCascade\"
+          APP_NAME = \"ClipCascade\"
+          HELP_URL = f\"{GITHUB_URL}/blob/main/README.md\"
+          METADATA_URL = \"https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/metadata.json\"""",
+                  """VERSION_URL = \"https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/version.json\"
+          GITHUB_URL = \"https://github.com/GoodLight999/Trial-and-Error-ClipCascade\"
+          RELEASE_URL = f\"{GITHUB_URL}/releases/latest\"
+          APP_NAME = \"ClipCascade\"
+          HELP_URL = f\"{GITHUB_URL}/blob/stability-recovery/README.md\"
+          METADATA_URL = \"https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/metadata.json\"""",
+              ),
+          }
+
+          for path, (old, new) in replacements.items():
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one validated block, found {count}')
+              path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
+      - name: Verify no product constants point at upstream UI resources
+        shell: bash
+        run: |
+          ! grep -n "Sathvik-Rao/ClipCascade" ClipCascade_Mobile/src/App.js
+          ! grep -n "Sathvik-Rao/ClipCascade" ClipCascade_Desktop/src/core/constants.py
+          python -m py_compile ClipCascade_Desktop/src/core/constants.py
+
+      - name: Commit validated link replacement
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'No changes required.'
+            exit 0
+          fi
+          git config user.name 'ClipCascade recovery automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add ClipCascade_Mobile/src/App.js ClipCascade_Desktop/src/core/constants.py
+          git commit -m 'meta: point product links at recovery canonical sources'
+          git push origin HEAD:stability-recovery
