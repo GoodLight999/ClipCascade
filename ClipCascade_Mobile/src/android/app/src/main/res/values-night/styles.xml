@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.ClipCascade.BackgroundSetup" parent="Theme.AppCompat.DayNight.DarkActionBar">
+        <item name="android:windowBackground">@color/background_setup_surface</item>
+        <item name="android:colorBackground">@color/background_setup_surface</item>
+        <item name="android:textColorPrimary">@color/background_setup_text_primary</item>
+        <item name="android:textColorSecondary">@color/background_setup_text_secondary</item>
+        <item name="colorAccent">@color/background_setup_accent</item>
+        <item name="colorButtonNormal">@color/background_setup_button</item>
+        <item name="android:statusBarColor">@color/background_setup_chrome</item>
+        <item name="android:navigationBarColor">@color/background_setup_surface</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>
