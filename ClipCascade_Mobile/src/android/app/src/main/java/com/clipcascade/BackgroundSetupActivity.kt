@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -21,6 +22,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,6 +35,7 @@ import java.util.Locale
 class BackgroundSetupActivity : AppCompatActivity() {
     private lateinit var statusView: TextView
     private val handler = Handler(Looper.getMainLooper())
+    private val asyncBridge by lazy { AsyncStorageBridge(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,6 +100,10 @@ class BackgroundSetupActivity : AppCompatActivity() {
             refreshStatus()
         }, blockLayoutParams())
 
+        content.addView(actionButton(R.string.share_diagnostic_report) {
+            shareDiagnosticReport()
+        }, blockLayoutParams())
+
         content.addView(actionButton(R.string.reset_capture_diagnostics) {
             CaptureDiagnostics.reset()
             refreshStatus()
@@ -133,12 +140,8 @@ class BackgroundSetupActivity : AppCompatActivity() {
     private fun refreshStatus() {
         val accessibilityEnabled = isAccessibilityServiceEnabled()
         val overlayEnabled = Settings.canDrawOverlays(this)
-        val readLogsEnabled = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.READ_LOGS
-        ) == PackageManager.PERMISSION_GRANTED
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        val batteryExempt = powerManager.isIgnoringBatteryOptimizations(packageName)
+        val readLogsEnabled = hasReadLogsPermission()
+        val batteryExempt = isBatteryOptimizationExempt()
         val runtimeActive = ClipboardListenerModule.isRuntimeActive()
         val shizuku = ShizukuClipboardBridge.status()
         val diagnostics = CaptureDiagnostics.snapshot()
@@ -184,6 +187,116 @@ class BackgroundSetupActivity : AppCompatActivity() {
         statusView.text = "$capabilityStatus\n\n$diagnosticsStatus"
     }
 
+    private fun shareDiagnosticReport() {
+        val report = DiagnosticReportBuilder.build(buildDiagnosticInput())
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "ClipCascade diagnostic report")
+            putExtra(Intent.EXTRA_TEXT, report)
+        }
+
+        try {
+            startActivity(
+                Intent.createChooser(
+                    shareIntent,
+                    getString(R.string.diagnostic_report_chooser)
+                )
+            )
+        } catch (_: Exception) {
+            Toast.makeText(
+                this,
+                R.string.diagnostic_report_share_unavailable,
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private fun buildDiagnosticInput(): DiagnosticReportBuilder.Input {
+        val shizuku = ShizukuClipboardBridge.status()
+        val capture = CaptureDiagnostics.snapshot()
+        val packageVersion = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+                ?: BuildConfig.VERSION_NAME
+        } catch (_: Exception) {
+            BuildConfig.VERSION_NAME
+        }
+
+        return DiagnosticReportBuilder.Input(
+            generatedAt = SimpleDateFormat(
+                "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+                Locale.US
+            ).format(Date()),
+            appVersion = packageVersion,
+            buildType = BuildConfig.BUILD_TYPE,
+            manufacturer = Build.MANUFACTURER,
+            model = Build.MODEL,
+            androidRelease = Build.VERSION.RELEASE,
+            apiLevel = Build.VERSION.SDK_INT,
+            capabilities = DiagnosticReportBuilder.CapabilityState(
+                shizukuInstalled = shizuku.installed,
+                shizukuRunning = shizuku.binderAlive,
+                shizukuPermission = shizuku.permissionGranted,
+                shizukuServiceBound = shizuku.serviceBound,
+                shizukuServiceUid = shizuku.serviceUid,
+                shizukuError = shizuku.lastError,
+                accessibilityEnabled = isAccessibilityServiceEnabled(),
+                overlayEnabled = Settings.canDrawOverlays(this),
+                readLogsEnabled = hasReadLogsPermission(),
+                batteryExempt = isBatteryOptimizationExempt(),
+                runtimeActive = ClipboardListenerModule.isRuntimeActive()
+            ),
+            connection = DiagnosticReportBuilder.ConnectionState(
+                serverMode = asyncBridge.getValue("server_mode"),
+                websocketRunning = asyncBridge.getValue("wsIsRunning"),
+                websocketStatus = asyncBridge.getValue("wsStatusMessage")
+            ),
+            outbox = parseOutboxState(asyncBridge.getValue("p2sTextOutboxStatus")),
+            capture = DiagnosticReportBuilder.CaptureState(
+                triggerCount = capture.triggerCount,
+                coalescedTriggerCount = capture.coalescedTriggerCount,
+                shizukuAttemptCount = capture.shizukuAttemptCount,
+                shizukuSuccessCount = capture.shizukuSuccessCount,
+                overlayFallbackCount = capture.overlayFallbackCount,
+                emittedCount = capture.emittedCount,
+                duplicateSuppressedCount = capture.duplicateSuppressedCount,
+                ignoredCount = capture.ignoredCount,
+                lastSource = capture.lastSource,
+                lastStage = capture.lastStage,
+                lastError = capture.lastError,
+                lastEventAt = capture.lastEventAt
+            )
+        )
+    }
+
+    private fun parseOutboxState(raw: String?): DiagnosticReportBuilder.OutboxState? {
+        if (raw.isNullOrBlank()) return null
+        return try {
+            val data = JSONObject(raw)
+            DiagnosticReportBuilder.OutboxState(
+                loaded = data.optBoolean("loaded", false),
+                count = data.optInt("count", 0),
+                totalBytes = data.optLong("totalBytes", 0L),
+                dropped = data.optInt("dropped", 0),
+                oldestCreatedAt = data.optNullableLong("oldestCreatedAt"),
+                headState = data.optNullableString("headState"),
+                headAttempts = data.optInt("headAttempts", 0),
+                headLastAttemptAt = data.optNullableLong("headLastAttemptAt")
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun JSONObject.optNullableLong(name: String): Long? =
+        if (has(name) && !isNull(name)) optLong(name) else null
+
+    private fun JSONObject.optNullableString(name: String): String? =
+        if (has(name) && !isNull(name)) {
+            optString(name).takeIf { it.isNotBlank() }
+        } else {
+            null
+        }
+
     private fun testShizukuRead() {
         val source = "manual_shizuku_test"
         CaptureDiagnostics.recordTrigger(source)
@@ -223,6 +336,17 @@ class BackgroundSetupActivity : AppCompatActivity() {
             .split(':')
             .mapNotNull(ComponentName::unflattenFromString)
             .any { it == expected }
+    }
+
+    private fun hasReadLogsPermission(): Boolean =
+        ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.READ_LOGS
+        ) == PackageManager.PERMISSION_GRANTED
+
+    private fun isBatteryOptimizationExempt(): Boolean {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        return powerManager.isIgnoringBatteryOptimizations(packageName)
     }
 
     private fun enabledLabel(enabled: Boolean): String =
