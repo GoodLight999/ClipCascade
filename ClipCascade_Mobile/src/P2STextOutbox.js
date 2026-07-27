@@ -102,6 +102,7 @@ class P2STextOutbox {
         createdAt: this.now(),
         attempts: 0,
         lastAttemptAt: null,
+        nextAttemptAt: null,
         state: 'queued',
       };
       this.items.push(item);
@@ -137,15 +138,21 @@ class P2STextOutbox {
     });
   }
 
-  markAttempt(id) {
+  markAttempt(id, retryDelayMs = 0) {
     return this._run(async () => {
       this._requireLoaded();
+      if (!Number.isFinite(retryDelayMs) || retryDelayMs < 0) {
+        throw new RangeError('retryDelayMs must be non-negative');
+      }
+
       const head = this.items[0];
       if (!head || head.id !== id || head.state === 'inflight') return false;
 
+      const attemptedAt = this.now();
       head.state = 'inflight';
       head.attempts += 1;
-      head.lastAttemptAt = this.now();
+      head.lastAttemptAt = attemptedAt;
+      head.nextAttemptAt = attemptedAt + retryDelayMs;
       await this._persist();
       return true;
     });
@@ -158,6 +165,7 @@ class P2STextOutbox {
       if (!head || head.state !== 'inflight') return false;
       if (id !== null && head.id !== id) return false;
 
+      // Keep nextAttemptAt so reconnects/process restarts respect the backoff.
       head.state = 'queued';
       await this._persist();
       return true;
@@ -208,6 +216,7 @@ class P2STextOutbox {
       headState: head ? head.state : null,
       headAttempts: head ? head.attempts : 0,
       headLastAttemptAt: head ? head.lastAttemptAt : null,
+      headNextAttemptAt: head ? head.nextAttemptAt : null,
     };
   }
 
@@ -269,6 +278,7 @@ function sanitizeItem(item) {
     createdAt: item.createdAt,
     attempts: Number.isInteger(item.attempts) && item.attempts >= 0 ? item.attempts : 0,
     lastAttemptAt: Number.isFinite(item.lastAttemptAt) ? item.lastAttemptAt : null,
+    nextAttemptAt: Number.isFinite(item.nextAttemptAt) ? item.nextAttemptAt : null,
     state: item.state === 'inflight' ? 'inflight' : 'queued',
   };
 }
