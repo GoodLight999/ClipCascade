@@ -6,7 +6,6 @@ on:
       - stability-recovery
     paths:
       - 'ClipCascade_Desktop/**'
-      - '.github/scripts/**'
       - '.github/workflows/stability-desktop.yml'
   pull_request:
     branches:
@@ -17,38 +16,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: stability-desktop-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  apply-p2s-review-fixes:
-    name: Apply P2S review corrections
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Check out recovery branch
-        uses: actions/checkout@v4
-        with:
-          ref: stability-recovery
-      - name: Apply and syntax-check focused mobile corrections
-        run: |
-          python .github/scripts/fix_p2s_outbox_review.py
-          node --check ClipCascade_Mobile/src/StartForegroundService.js
-      - name: Commit product correction only
-        run: |
-          if git diff --quiet; then
-            echo 'P2S review corrections are already applied.'
-            exit 0
-          fi
-          git config user.name 'ClipCascade recovery automation'
-          git config user.email 'actions@users.noreply.github.com'
-          git add ClipCascade_Mobile/src/StartForegroundService.js
-          git commit -m 'mobile: prevent queued self-echo clipboard rollback'
-          git push origin HEAD:stability-recovery
-
   desktop-tests:
     name: Desktop tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
