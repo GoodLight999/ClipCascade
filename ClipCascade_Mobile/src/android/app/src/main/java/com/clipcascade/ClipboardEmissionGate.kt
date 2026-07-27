@@ -42,9 +42,11 @@ internal class ClipboardEmissionGate(
         fun fingerprint(content: String, type: String): String {
             val digest = MessageDigest.getInstance("SHA-256")
             digest.update(type.toByteArray(Charsets.UTF_8))
-            digest.update(0)
+            digest.update(0.toByte())
             digest.update(content.toByteArray(Charsets.UTF_8))
-            return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+            return digest.digest().joinToString("") { byte ->
+                "%02x".format(byte.toInt() and 0xff)
+            }
         }
     }
 }
