@@ -23,8 +23,10 @@ class DiagnosticReportBuilderTest {
     }
 
     @Test
-    fun freeFormValuesAreSingleLineAndBounded() {
-        val unsafe = "first\nsecond\tthird" + "x".repeat(500)
+    fun freeFormValuesAreSingleLineBoundedAndRedacted() {
+        val unsafe =
+            "first\nsecond\tthird https://private.example/socket alice@example.com " +
+                "x".repeat(500)
         val report = DiagnosticReportBuilder.build(
             sampleInput().copy(
                 connection = sampleInput().connection.copy(websocketStatus = unsafe),
@@ -34,6 +36,10 @@ class DiagnosticReportBuilderTest {
 
         assertFalse(report.contains("first\nsecond"))
         assertTrue(report.contains("first second third"))
+        assertTrue(report.contains("[redacted-url]"))
+        assertTrue(report.contains("[redacted-email]"))
+        assertFalse(report.contains("https://private.example"))
+        assertFalse(report.contains("alice@example.com"))
         assertTrue(report.contains("…"))
         report.lineSequence().forEach { line ->
             assertTrue("unexpectedly long line: ${line.length}", line.length <= 340)
