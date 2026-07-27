@@ -121,3 +121,37 @@ After installing the latest APK:
 4. share the report into the ChatGPT conversation;
 5. verify no clipboard payload, server URL, account name, password, cookie, or key appears;
 6. use the stage counts and connection/outbox state to choose the next focused fix.
+
+---
+
+## 2026-07-27 follow-up — persisted retry deadline
+
+The bounded P2S retry implementation added `headNextAttemptAt` to the real outbox snapshot. The initial diagnostic report still stopped at `headLastAttemptAt`, so it could not distinguish “queued and immediately eligible” from “queued but deliberately waiting for backoff.”
+
+Focused correction:
+
+- `DiagnosticReportBuilder.OutboxState` now includes `headNextAttemptAt`;
+- `BackgroundSetupActivity` parses that field from the existing `p2sTextOutboxStatus` JSON;
+- the report prints `Head next attempt epoch ms: <value-or-none>`;
+- JVM tests assert both a real value and the `none` case;
+- no payload, hash, server/account identifier, credential, cookie, or key field was added.
+
+Commits:
+
+- `50596dc525bbba274473c07cb5d44a83c49398de`
+- `73b618842ce288641f8f934a76132c1ca88342c2`
+- `829f872c684c59f16a78bbe283b9e1260e20fce9`
+
+Latest superseding verification:
+
+- product-code head: `829f872c684c59f16a78bbe283b9e1260e20fce9`
+- Android workflow: `30257268532` — success
+- desktop workflow: `30257268751` — success
+- JavaScript: 5 suites / 36 tests passed
+- Gradle: `BUILD SUCCESSFUL in 3m 41s`
+- APK artifact ID: `8649504009`
+- APK size: `93,617,791` bytes
+- APK SHA-256: `9f8fefd4d32892e891e763590a443d4dbcc20534b7cba4260fabe8489589f106`
+- independent DEX scan found the new `Head next attempt epoch ms` marker
+
+Detailed retry/backoff evidence is recorded in `docs/EXPERIMENT_LOG_2026-07-27_P2S_RETRY_BACKOFF.md`.
