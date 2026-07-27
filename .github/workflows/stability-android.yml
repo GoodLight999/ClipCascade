@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: stability-android-${{ github.workflow }}-${{ github.ref }}
@@ -33,30 +33,8 @@ jobs:
         working-directory: ClipCascade_Mobile/src
 
     steps:
-      - name: Check out recovery branch
+      - name: Check out source
         uses: actions/checkout@v4
-        with:
-          ref: stability-recovery
-
-      - name: Apply validated P2S text outbox integration once
-        working-directory: .
-        shell: bash
-        run: |
-          mkdir -p ClipCascade_Mobile/src/ci-logs/android
-          set -o pipefail
-          python - <<'PY' 2>&1 | tee ClipCascade_Mobile/src/ci-logs/android/p2s-patch.log
-          import base64, zlib
-          exec(zlib.decompress(base64.b64decode('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'))).decode())
-          PY
-          node --check ClipCascade_Mobile/src/StartForegroundService.js 2>&1 | tee -a ClipCascade_Mobile/src/ci-logs/android/p2s-patch.log
-
-          if ! git diff --quiet; then
-            git config user.name 'ClipCascade recovery automation'
-            git config user.email 'actions@users.noreply.github.com'
-            git add ClipCascade_Mobile/src/StartForegroundService.js
-            git commit -m 'mobile: connect persistent P2S text outbox'
-            git push origin HEAD:stability-recovery
-          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
