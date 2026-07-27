@@ -14,6 +14,7 @@ class DiagnosticReportBuilderTest {
         assertTrue(report.contains("Server mode: P2S"))
         assertTrue(report.contains("Count: 3"))
         assertTrue(report.contains("Head state: inflight"))
+        assertTrue(report.contains("Head next attempt epoch ms: 6789"))
         assertTrue(report.contains("Privacy: clipboard payloads"))
 
         assertFalse(report.contains("secret clipboard payload"))
@@ -66,7 +67,8 @@ class DiagnosticReportBuilderTest {
                     oldestCreatedAt = null,
                     headState = null,
                     headAttempts = -8,
-                    headLastAttemptAt = null
+                    headLastAttemptAt = null,
+                    headNextAttemptAt = null
                 )
             )
         )
@@ -75,6 +77,7 @@ class DiagnosticReportBuilderTest {
         assertTrue(report.contains("Total wire bytes: 0"))
         assertTrue(report.contains("Dropped: 0"))
         assertTrue(report.contains("Head attempts: 0"))
+        assertTrue(report.contains("Head next attempt epoch ms: none"))
     }
 
     private fun sampleInput(): DiagnosticReportBuilder.Input = DiagnosticReportBuilder.Input(
@@ -111,7 +114,8 @@ class DiagnosticReportBuilderTest {
             oldestCreatedAt = 1234,
             headState = "inflight",
             headAttempts = 2,
-            headLastAttemptAt = 5678
+            headLastAttemptAt = 5678,
+            headNextAttemptAt = 6789
         ),
         capture = DiagnosticReportBuilder.CaptureState(
             triggerCount = 10,
