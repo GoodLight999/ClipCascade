@@ -14,8 +14,9 @@ A new thread must read, in order:
 5. `docs/EXPERIMENT_LOG_2026-07-27_SHIZUKU_BUILD.md`
 6. `docs/EXPERIMENT_LOG_2026-07-27_P2S_OUTBOX.md`
 7. `docs/EXPERIMENT_LOG_2026-07-27_OUTBOX_STATUS_UI.md`
-8. `docs/EXPERIMENT_LOG_2026-07-27_DESKTOP_RECOVERY.md`
-9. Draft PR `#4`
+8. `docs/EXPERIMENT_LOG_2026-07-27_DIAGNOSTIC_REPORT.md`
+9. `docs/EXPERIMENT_LOG_2026-07-27_DESKTOP_RECOVERY.md`
+10. Draft PR `#4`
 
 ## Canonical repository state
 
@@ -25,9 +26,9 @@ A new thread must read, in order:
 - Mirror branch: `main`
 - Active development branch: `stability-recovery`
 - Active draft PR: `#4`
-- Latest green branch head: `60c71a7d77e2980d2f2e35c8f325c4c22d37c4cf`
-- Latest green Android workflow: `30249557589`
-- Latest green desktop workflow on the same head: `30249557577`
+- Latest green product-code head: `9277b67d8c0797014e17489a59d3c4aca64e97eb`
+- Latest green Android workflow: `30250829837`
+- Latest green desktop workflow on the same product head: `30250829830`
 
 The repository reset is already complete. **Do not reset, reconstruct, re-baseline, or start another clean-rebuild project.**
 
@@ -206,20 +207,43 @@ Verification:
 - Android JVM tests, AIDL/Shizuku compilation, Kotlin/resources, standalone build, JS bundle, ZIP integrity, checksum, and upload passed;
 - independent bundle inspection found the outbox status key, formatter, persistent outbox, and recovery-repository markers.
 
+## Android milestone DIAGNOSTIC-REPORT-001
+
+Implemented and build-verified using existing real state owners:
+
+- added `診断レポートを共有` to the existing native background setup screen;
+- report combines device/build, Shizuku capability, Accessibility/overlay/READ_LOGS/battery/runtime, real capture counters, connection state, and bounded P2S outbox metadata;
+- no second React Native runtime, transport, capture backend, timer, or diagnostic state owner;
+- uses Android `ACTION_SEND` Sharesheet instead of clipboard copy, preventing the report from synchronizing itself;
+- report input types exclude clipboard payloads, content hashes, server URLs, usernames, passwords, cookies, and encryption keys;
+- free-form status/error text is one-line, bounded to 300 characters, and redacts HTTP/WebSocket URLs plus email addresses;
+- malformed/missing outbox state fails closed to unavailable;
+- report-builder JVM tests cover stage visibility, sensitive-data exclusion, URL/email redaction, control-character normalization, bounds, missing state, and negative counters.
+
+This is a real-state passive diagnostic report, not the archived synthetic native-to-React-Native roundtrip. A guided active capture → queue → server echo → remote-apply test is still not implemented.
+
+Verification:
+
+- JavaScript reliability gate remained green: 4 suites / 26 tests;
+- new JVM diagnostic tests and existing Android tests passed;
+- AIDL/Shizuku, Kotlin/resources, standalone build, JS bundle, ZIP integrity, checksum, and upload passed;
+- DEX/resource inspection found the diagnostic builder, report marker, URL redaction marker, Shizuku state label, and share resource.
+
 ## Latest verified Android artifact
 
-- Workflow: `30249557589`
-- Branch head: `60c71a7d77e2980d2f2e35c8f325c4c22d37c4cf`
-- APK artifact ID: `8646500843`
-- Build-log artifact ID: `8646499050`
+- Workflow: `30250829837`
+- Product-code head: `9277b67d8c0797014e17489a59d3c4aca64e97eb`
+- APK artifact ID: `8647003886`
+- Build-log artifact ID: `8647002070`
 - Artifact file: `ClipCascade-Android-stability-standalone.apk`
-- User-facing file: `ClipCascade-Android-stability-outbox-status.apk`
-- Size: `93,614,299` bytes
-- SHA-256: `614f6fd7d2bcecc96ceba331601ae9d84f6c475047d4301fa5f099286ad0893b`
+- User-facing file: `ClipCascade-Android-stability-diagnostics.apk`
+- Size: `93,615,651` bytes
+- SHA-256: `2af9f94dff4f8447001378da780591b970d8adfe0698357f42ef6eb826fbd785`
 - Exact `assets/index.android.bundle`: present
 - APK ZIP integrity: passed
 - APK entry count: `538`
 - JavaScript tests: `26/26` passed across 4 suites
+- Gradle result: `BUILD SUCCESSFUL in 3m 55s`
 - Status: debug-signed engineering artifact, not a production release
 
 ## Android build failures retained as evidence
@@ -266,26 +290,26 @@ The STOMP destinations, cookie handling, encryption payload format, and server p
 
 ## Verified desktop artifacts
 
-Latest same-head desktop workflow: `30249557577` at `60c71a7d77e2980d2f2e35c8f325c4c22d37c4cf`.
+Latest same-product-head desktop workflow: `30250829830` at `9277b67d8c0797014e17489a59d3c4aca64e97eb`.
 
 The workflow passed Ubuntu and Windows tests, Windows EXE generation, Linux packaging, checksum creation, and artifact upload.
 
 ### Windows
 
-- Artifact ID: `8646440413`
+- Artifact ID: `8646940303`
 - File: `ClipCascade-Windows-stability.exe`
 - Size: `57,456,040` bytes
-- SHA-256: `199f5ab18413255bbee4c2efac2b5694a0a69c68a6d1273292dfe16eff35926e`
+- SHA-256: `45eedcd94b3d6f953639716002e63218d2b2f5d6e304f1c0f9f4b72ca502b39f`
 - PE32+ GUI x86-64
 - Artifact ZIP integrity: passed
 - Embedded checksum matched independent recalculation
 
 ### Linux
 
-- Artifact ID: `8646405080`
+- Artifact ID: `8646901511`
 - File: `ClipCascade-Linux-stability.tar.gz`
-- Size: `60,413` bytes
-- SHA-256: `12e6cc5f2b9937d08801ea8a9a2d4e93682a74bdd8d6b87543f73f7f14900c5a`
+- Size: `60,409` bytes
+- SHA-256: `7f61bcbfa4073ed7af20391fe2a3b0d3ff9ba65c52a3d578553c5f15efd39908`
 - gzip-compressed Unix tar
 - Archive integrity: passed
 - Entry count: `59`
@@ -309,7 +333,8 @@ The workflow passed Ubuntu and Windows tests, Windows EXE generation, Linux pack
 - offline queue survival, ordering, retry, and self-echo suppression on the real device/public server;
 - image/file durability;
 - true server or remote-application acknowledgement beyond the unchanged server echo;
-- full end-to-end automatic diagnostic flow.
+- diagnostic Sharesheet behavior and report readability on the user's device;
+- active guided capture → queue → server echo → remote-apply diagnostic flow.
 
 ### Desktop
 
@@ -323,21 +348,23 @@ The workflow passed Ubuntu and Windows tests, Windows EXE generation, Linux pack
 
 ## Exact next actions
 
-1. Install `ClipCascade-Android-stability-outbox.apk`.
+1. Install `ClipCascade-Android-stability-diagnostics.apk`.
 2. Start Shizuku using its normal wireless-debugging or computer-assisted setup.
 3. Long-press ClipCascade and open `バックグラウンド設定`.
 4. Confirm readable light/dark rendering and Shizuku installation/running/permission/UserService state.
 5. Confirm the service UID is a shell UID and run the privacy-safe Shizuku read test.
 6. Start the existing ClipCascade foreground service and verify one normal Android-to-Windows text copy.
-7. Disable Android networking without stopping the foreground service; copy A, B, and C; reconnect; verify ordered A/B/C delivery without duplicates.
-8. Confirm Android's clipboard does not roll back to A or B when queued self-echoes return.
-9. Repeat with process termination/relaunch between enqueue and reconnect to test persisted recovery.
-10. Stop Shizuku and repeat a copy to verify overlay fallback.
-11. Test launcher drawer, Amazon, browser, selection toolbar, and search fields for focus/input regressions.
-12. Record missed sends, duplicate sends, queue state, UI changes, wakeups, and battery behavior.
-13. Run `ClipCascade-Windows-stability.exe` against the existing server and force network loss/restoration.
-14. Verify the P2S queue status line changes from empty to queued/sending and back to empty during the A/B/C test.
-15. Add a payload-free diagnostic report export that combines capability state, capture counters, connection status, and outbox metadata without creating another diagnostics runtime.
+7. Tap `診断レポートを共有`, share it into the working conversation, and verify payloads, URLs, accounts, credentials, cookies, and keys are absent.
+8. Disable Android networking without stopping the foreground service; copy A, B, and C; reconnect; verify ordered A/B/C delivery without duplicates.
+9. Confirm Android's clipboard does not roll back to A or B when queued self-echoes return.
+10. Repeat with process termination/relaunch between enqueue and reconnect to test persisted recovery.
+11. Stop Shizuku and repeat a copy to verify overlay fallback.
+12. Test launcher drawer, Amazon, browser, selection toolbar, and search fields for focus/input regressions.
+13. Verify the P2S queue line changes from empty to queued/sending and back to empty.
+14. Record missed sends, duplicate sends, report stages, queue state, UI changes, wakeups, and battery behavior.
+15. Run `ClipCascade-Windows-stability.exe` against the existing server and force network loss/restoration.
+16. Replace the fixed 30-second missing-echo retry with a tested bounded exponential delay to reduce outage battery/network load without changing protocol semantics.
+17. Add an active guided end-to-end diagnostic only by invoking the real existing capture/queue/echo stages, never a synthetic parallel runtime.
 
 ## Continuation checklist
 
@@ -347,7 +374,7 @@ A new thread must recover without archived patchwork:
 - original requirements;
 - no-wheel-reinvention rule;
 - required references;
-- A11Y, Shizuku, P2S outbox, and desktop implementation boundaries;
+- A11Y, Shizuku, P2S outbox, passive diagnostic report, and desktop implementation boundaries;
 - build-verified versus runtime/device-verified claims;
 - latest workflows, artifacts, sizes, and hashes;
 - retained failures and corrections;

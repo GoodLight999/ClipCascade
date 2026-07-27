@@ -298,3 +298,20 @@ Result:
 
 Real-device rendering and live state changes remain unproven.
 
+---
+
+## 2026-07-27 — DIAGNOSTIC-REPORT-001: shareable real-state report
+
+Detailed record: `docs/EXPERIMENT_LOG_2026-07-27_DIAGNOSTIC_REPORT.md`.
+
+Result:
+
+- existing setup screen now shares a real-state diagnostic report through Android Sharesheet;
+- report combines capability, capture, connection, and P2S outbox metadata without payload fields;
+- URLs and email addresses in free-form errors are redacted;
+- JVM diagnostic tests, existing Android tests, standalone APK, bundle, ZIP integrity, and artifact upload passed;
+- Android workflow `30250829837` and desktop workflow `30250829830` passed on product head `9277b67d8c0797014e17489a59d3c4aca64e97eb`;
+- latest APK SHA-256: `2af9f94dff4f8447001378da780591b970d8adfe0698357f42ef6eb826fbd785`.
+
+Sharesheet/runtime readability and an active guided end-to-end test remain unproven.
+
