@@ -1,0 +1,38 @@
+name: Apply outbox status UI once
+
+on:
+  push:
+    branches:
+      - stability-recovery
+    paths:
+      - '.github/workflows/apply-outbox-status-ui.yml'
+      - '.github/scripts/apply_outbox_status_ui.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out recovery branch
+        uses: actions/checkout@v4
+        with:
+          ref: stability-recovery
+      - name: Apply exact UI patch
+        run: |
+          python .github/scripts/apply_outbox_status_ui.py
+          node --check ClipCascade_Mobile/src/App.js
+      - name: Commit product change only
+        run: |
+          if git diff --quiet; then
+            echo 'Outbox status UI is already applied.'
+            exit 0
+          fi
+          git config user.name 'ClipCascade recovery automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add ClipCascade_Mobile/src/App.js
+          git commit -m 'mobile: show persistent text queue status'
+          git push origin HEAD:stability-recovery
