@@ -39,18 +39,22 @@ describe('formatP2SOutboxStatus', () => {
     ).toBe('📦 Text queue: 2 | State: queued | Size: 128 B');
   });
 
-  test('shows queued count, bytes, attempts, and drops', () => {
+  test('shows queued count, bytes, attempts, retry countdown, and drops', () => {
     expect(
-      formatP2SOutboxStatus({
-        loaded: true,
-        count: 3,
-        totalBytes: 512,
-        headState: 'queued',
-        headAttempts: 2,
-        dropped: 1,
-      }),
+      formatP2SOutboxStatus(
+        {
+          loaded: true,
+          count: 3,
+          totalBytes: 512,
+          headState: 'queued',
+          headAttempts: 2,
+          headNextAttemptAt: 62_000,
+          dropped: 1,
+        },
+        1_000,
+      ),
     ).toBe(
-      '📦 Text queue: 3 | State: queued | Size: 512 B | Attempts: 2 | Dropped: 1',
+      '📦 Text queue: 3 | State: queued | Size: 512 B | Attempts: 2 | Retry in: 61s | Dropped: 1',
     );
   });
 
@@ -65,6 +69,27 @@ describe('formatP2SOutboxStatus', () => {
         dropped: 0,
       }),
     ).toBe('📦 Text queue: 1 | State: sending | Size: 42 B | Attempts: 1');
+  });
+
+  test('does not show expired or invalid retry timestamps', () => {
+    const base = {
+      loaded: true,
+      count: 1,
+      totalBytes: 42,
+      headState: 'queued',
+      headAttempts: 1,
+      dropped: 0,
+    };
+
+    expect(
+      formatP2SOutboxStatus({ ...base, headNextAttemptAt: 999 }, 1_000),
+    ).not.toContain('Retry in:');
+    expect(
+      formatP2SOutboxStatus({ ...base, headNextAttemptAt: 'soon' }, 1_000),
+    ).not.toContain('Retry in:');
+    expect(
+      formatP2SOutboxStatus({ ...base, headNextAttemptAt: 2_000 }, Number.NaN),
+    ).not.toContain('Retry in:');
   });
 
   test('does not expose unknown object fields', () => {
