@@ -54,37 +54,41 @@ jobs:
         run: npm ci
 
       - name: Audit production JavaScript dependencies
-        run: npm audit --omit=dev --audit-level=high
+        id: dependency_audit
+        continue-on-error: true
+        run: |
+          mkdir -p ci-logs/android
+          set -o pipefail
+          npm audit --omit=dev --audit-level=high 2>&1 | tee ci-logs/android/npm-audit.log
 
       - name: Run JavaScript static analysis
+        id: eslint
+        continue-on-error: true
         run: |
           mkdir -p ci-logs/android
           set -o pipefail
           npm run lint -- --max-warnings=0 2>&1 | tee ci-logs/android/eslint.log
 
       - name: Run JavaScript reliability tests
+        id: jest
+        continue-on-error: true
         run: |
           mkdir -p ci-logs/android
           set -o pipefail
           npm test -- --runInBand 2>&1 | tee ci-logs/android/jest.log
 
       - name: Run Android lint and tests, then build standalone APK
+        id: gradle
+        continue-on-error: true
         run: |
           mkdir -p ci-logs/android
           chmod +x android/gradlew
           set -o pipefail
           (cd android && ./gradlew --no-daemon --stacktrace :app:lintStandalone :app:testDebugUnitTest :app:assembleStandalone) 2>&1 | tee ci-logs/android/gradle-build.log
 
-      - name: Upload build logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClipCascade-stability-android-build-log
-          path: ClipCascade_Mobile/src/ci-logs/android/
-          if-no-files-found: warn
-          retention-days: 30
-
       - name: Verify bundled JavaScript and stage APK
+        id: package_verify
+        if: steps.gradle.outcome == 'success'
         run: |
           set -euo pipefail
           APK_PATH=android/app/build/outputs/apk/standalone/app-standalone.apk
@@ -98,10 +102,36 @@ jobs:
           sha256sum -c SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-stability-android-build-log
+          path: ClipCascade_Mobile/src/ci-logs/android/
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Upload installable engineering APK
+        if: steps.package_verify.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ClipCascade-Android-stability-standalone
           path: ClipCascade_Mobile/src/ci-artifacts/android/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Enforce every verification gate
+        if: always()
+        run: |
+          set -euo pipefail
+          printf '%-22s %s\n' \
+            dependency-audit '${{ steps.dependency_audit.outcome }}' \
+            eslint '${{ steps.eslint.outcome }}' \
+            jest '${{ steps.jest.outcome }}' \
+            android-gradle '${{ steps.gradle.outcome }}' \
+            package-verify '${{ steps.package_verify.outcome }}'
+          test '${{ steps.dependency_audit.outcome }}' = success
+          test '${{ steps.eslint.outcome }}' = success
+          test '${{ steps.jest.outcome }}' = success
+          test '${{ steps.gradle.outcome }}' = success
+          test '${{ steps.package_verify.outcome }}' = success
