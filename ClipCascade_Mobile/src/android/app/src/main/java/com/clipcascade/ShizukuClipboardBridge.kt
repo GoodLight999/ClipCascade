@@ -2,18 +2,17 @@ package com.clipcascade
 
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.provider.Settings
+import android.os.Process
 import com.clipcascade.shizuku.IShizukuClipboardService
 import com.clipcascade.shizuku.ShizukuClipboardUserService
 import org.json.JSONObject
 import rikka.shizuku.Shizuku
+import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -22,10 +21,11 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Binder acquisition is handled by rikka.shizuku.ShizukuProvider, registered
  * in AndroidManifest.xml as required by the official Shizuku API guide. This
- * class does not discover manager packages or send private manager broadcasts.
+ * class does not discover manager packages or send manager-specific broadcasts.
  */
 object ShizukuClipboardBridge {
     private const val REQUEST_PERMISSION_CODE = 5107
+    private const val PER_USER_RANGE = 100_000
 
     private val initialized = AtomicBoolean(false)
     private val binding = AtomicBoolean(false)
@@ -33,9 +33,13 @@ object ShizukuClipboardBridge {
         Thread(runnable, "clipcascade-shizuku-read").apply { isDaemon = true }
     }
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val statusListeners = CopyOnWriteArraySet<() -> Unit>()
 
     @Volatile
     private var appContext: Context? = null
+
+    @Volatile
+    private var clientUserId: Int = 0
 
     @Volatile
     private var remoteService: IShizukuClipboardService? = null
@@ -44,8 +48,7 @@ object ShizukuClipboardBridge {
     private var lastError: String? = null
 
     data class Status(
-        val installed: Boolean,
-        val binderAlive: Boolean,
+        val binderAvailable: Boolean,
         val permissionGranted: Boolean,
         val serviceBound: Boolean,
         val serviceUid: Int?,
@@ -65,24 +68,28 @@ object ShizukuClipboardBridge {
             remoteService = IShizukuClipboardService.Stub.asInterface(binder)
             binding.set(false)
             lastError = null
+            notifyStatusChanged()
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
             remoteService = null
             binding.set(false)
             lastError = "Shizuku UserService disconnected"
+            notifyStatusChanged()
         }
     }
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         lastError = null
         ensureBound()
+        notifyStatusChanged()
     }
 
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
         remoteService = null
         binding.set(false)
         lastError = "Shizuku Binder stopped"
+        notifyStatusChanged()
     }
 
     private val permissionResultListener =
@@ -96,28 +103,45 @@ object ShizukuClipboardBridge {
             } else {
                 lastError = "Shizuku permission denied"
             }
+            notifyStatusChanged()
         }
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
+        // AOSP UserHandle.getUserId(uid) is uid / PER_USER_RANGE. This must be
+        // captured in the client process; the UserService itself runs as shell
+        // or root and therefore has a different process UID.
+        clientUserId = Process.myUid() / PER_USER_RANGE
         if (!initialized.compareAndSet(false, true)) return
 
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
         Shizuku.addBinderDeadListener(binderDeadListener)
         Shizuku.addRequestPermissionResultListener(permissionResultListener)
 
-        if (binderAlive()) {
+        if (binderAvailable()) {
             ensureBound()
         }
+        notifyStatusChanged()
+    }
+
+    fun addStatusListener(listener: () -> Unit) {
+        statusListeners.add(listener)
+        mainHandler.post(listener)
+    }
+
+    fun removeStatusListener(listener: () -> Unit) {
+        statusListeners.remove(listener)
     }
 
     fun requestPermission(): Boolean {
-        if (!binderAlive()) {
+        if (!binderAvailable()) {
             lastError = binderUnavailableMessage()
+            notifyStatusChanged()
             return false
         }
         if (Shizuku.isPreV11()) {
             lastError = "Shizuku API 11 or newer is required"
+            notifyStatusChanged()
             return false
         }
 
@@ -125,10 +149,12 @@ object ShizukuClipboardBridge {
             when {
                 Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED -> {
                     ensureBound()
+                    notifyStatusChanged()
                     true
                 }
                 Shizuku.shouldShowRequestPermissionRationale() -> {
                     lastError = "Shizuku permission was denied with 'don't ask again'"
+                    notifyStatusChanged()
                     false
                 }
                 else -> {
@@ -138,19 +164,28 @@ object ShizukuClipboardBridge {
             }
         } catch (error: Throwable) {
             lastError = "${error.javaClass.simpleName}: ${error.message ?: "permission request failed"}"
+            notifyStatusChanged()
             false
         }
     }
 
     fun ensureBound(): Boolean {
-        val context = appContext ?: return false
+        val context = appContext
+        if (context == null) {
+            lastError = "Shizuku bridge is not initialized"
+            notifyStatusChanged()
+            return false
+        }
         if (remoteService?.asBinder()?.pingBinder() == true) return true
-        if (!binderAlive()) {
+        if (binding.get()) return true
+        if (!binderAvailable()) {
             lastError = binderUnavailableMessage()
+            notifyStatusChanged()
             return false
         }
         if (Shizuku.isPreV11()) {
             lastError = "Shizuku API 11 or newer is required"
+            notifyStatusChanged()
             return false
         }
 
@@ -162,16 +197,19 @@ object ShizukuClipboardBridge {
         }
         if (!permissionGranted) {
             if (lastError == null) lastError = "Shizuku permission is not granted"
+            notifyStatusChanged()
             return false
         }
-        if (!binding.compareAndSet(false, true)) return false
+        if (!binding.compareAndSet(false, true)) return true
 
         return try {
             Shizuku.bindUserService(userServiceArgs(context), userServiceConnection)
+            notifyStatusChanged()
             true
         } catch (error: Throwable) {
             binding.set(false)
             lastError = "${error.javaClass.simpleName}: ${error.message ?: "UserService bind failed"}"
+            notifyStatusChanged()
             false
         }
     }
@@ -204,36 +242,24 @@ object ShizukuClipboardBridge {
             return
         }
 
+        val requestedUserId = clientUserId
         executor.execute {
             val result = try {
-                decodeResult(service.readClipboard())
+                decodeResult(service.readClipboard(requestedUserId))
             } catch (error: Throwable) {
                 remoteService = null
                 binding.set(false)
                 lastError = "${error.javaClass.simpleName}: ${error.message ?: "clipboard read failed"}"
+                notifyStatusChanged()
                 CaptureResult(false, status = "error", error = lastError)
             }
             mainHandler.post { callback(result) }
         }
     }
 
-    fun openShizuku(context: Context): Boolean {
-        return try {
-            context.startActivity(
-                Intent(Settings.ACTION_APPLICATION_SETTINGS)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-            lastError = "Open the installed Shizuku-compatible manager and start its server"
-            true
-        } catch (error: Throwable) {
-            lastError = "${error.javaClass.simpleName}: ${error.message ?: "application settings unavailable"}"
-            false
-        }
-    }
-
     fun status(): Status {
-        val binderAlive = binderAlive()
-        val permissionGranted = if (binderAlive) {
+        val binderAvailable = binderAvailable()
+        val permissionGranted = if (binderAvailable) {
             try {
                 Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
             } catch (_: Throwable) {
@@ -255,17 +281,14 @@ object ShizukuClipboardBridge {
         }
 
         val effectiveError = when {
-            !binderAlive -> lastError ?: binderUnavailableMessage()
+            !binderAvailable -> lastError ?: binderUnavailableMessage()
             !permissionGranted -> lastError ?: "Shizuku permission is not granted"
             binding.get() && !serviceBound -> lastError ?: "Shizuku UserService is binding"
             else -> lastError
         }
 
         return Status(
-            // There is no official package-discovery API. Binder availability is
-            // the only manager-independent capability signal, including forks.
-            installed = binderAlive,
-            binderAlive = binderAlive,
+            binderAvailable = binderAvailable,
             permissionGranted = permissionGranted,
             serviceBound = serviceBound,
             serviceUid = serviceUid,
@@ -273,21 +296,33 @@ object ShizukuClipboardBridge {
         )
     }
 
-    private fun binderAlive(): Boolean = try {
+    private fun binderAvailable(): Boolean = try {
         Shizuku.pingBinder()
     } catch (_: Throwable) {
         false
     }
 
     private fun binderUnavailableMessage(): String =
-        "Shizuku Binder is unavailable. Start the Shizuku-compatible server, then reopen or refresh ClipCascade."
+        "Shizuku Binder is unavailable. Start the installed compatible Shizuku server, then reopen or refresh ClipCascade."
+
+    private fun notifyStatusChanged() {
+        statusListeners.forEach { listener ->
+            mainHandler.post {
+                try {
+                    listener()
+                } catch (_: Throwable) {
+                    // A UI observer must not break the Shizuku lifecycle.
+                }
+            }
+        }
+    }
 
     private fun userServiceArgs(context: Context): Shizuku.UserServiceArgs =
         Shizuku.UserServiceArgs(
             ComponentName(context.packageName, ShizukuClipboardUserService::class.java.name)
         )
             .daemon(false)
-            .tag("clipcascade-clipboard-read-v2")
+            .tag("clipcascade-clipboard-read-v3")
             .processNameSuffix("shizuku_clipboard")
             .debuggable(BuildConfig.DEBUG)
             .version(BuildConfig.VERSION_CODE)
