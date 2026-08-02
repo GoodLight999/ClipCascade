@@ -2,7 +2,6 @@
 package com.clipcascade
 
 import android.Manifest
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -12,7 +11,6 @@ import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
-import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -28,10 +26,6 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
         reactContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     private var listener: ClipboardManager.OnPrimaryClipChangedListener? = null
     private var isListening = false
-    private var lastEmittedTime: Long = 0
-    private var lastActivityStartTime: Long = 0
-    private val debounceTime: Long = 0
-    private val activityDebounceTime: Long = 1000
 
     private var stopLogcat = false
     private var logcatThread: Thread? = null
@@ -51,11 +45,15 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
             return
         }
 
-        // Preserve the upstream foreground listener path. It emits directly to
-        // the existing React Native event and does not depend on Shizuku,
-        // Accessibility, overlay state, or a second native duplicate gate.
+        // The platform listener is a trigger only. Foreground and background
+        // automatic copies use the same Shizuku-first coordinator and the same
+        // overlay fallback. This prevents foreground success from hiding a
+        // broken background acquisition path.
         listener = ClipboardManager.OnPrimaryClipChangedListener {
-            emitOrdinaryClipboard(clipboardManager.primaryClip)
+            BackgroundClipboardCapture.request(
+                reactApplicationContext,
+                "clipboard_listener"
+            )
         }
         clipboardManager.addPrimaryClipChangedListener(listener)
         isListening = true
@@ -69,47 +67,49 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
                 Manifest.permission.READ_LOGS
             ) == PackageManager.PERMISSION_GRANTED
         ) {
-            stopLogcat = false
-            logcatThread = Thread {
-                try {
-                    val timeStamp = SimpleDateFormat(
-                        "yyyy-MM-dd HH:mm:ss.SSS",
-                        Locale.getDefault()
-                    ).format(Date())
-                    logcatProcess = Runtime.getRuntime().exec(
-                        arrayOf("logcat", "-T", timeStamp, "ClipboardService:E", "*:S")
-                    )
-                    val reader = BufferedReader(InputStreamReader(logcatProcess!!.inputStream))
-                    var line: String? = null
-                    reader.use { br ->
-                        while (!stopLogcat && br.readLine().also { line = it } != null) {
-                            if (line!!.contains(BuildConfig.APPLICATION_ID)) {
-                                val currentTime = System.currentTimeMillis()
-                                if (currentTime - lastActivityStartTime > activityDebounceTime) {
-                                    lastActivityStartTime = currentTime
-                                    BackgroundClipboardCapture.request(
-                                        reactApplicationContext,
-                                        "read_logs"
-                                    )
-                                }
-                            }
+            startReadLogsTrigger()
+        }
+    }
+
+    private fun startReadLogsTrigger() {
+        stopLogcat = false
+        logcatThread = Thread {
+            try {
+                val timeStamp = SimpleDateFormat(
+                    "yyyy-MM-dd HH:mm:ss.SSS",
+                    Locale.getDefault()
+                ).format(Date())
+                logcatProcess = Runtime.getRuntime().exec(
+                    arrayOf("logcat", "-T", timeStamp, "ClipboardService:E", "*:S")
+                )
+                BufferedReader(InputStreamReader(logcatProcess!!.inputStream)).use { reader ->
+                    while (!stopLogcat) {
+                        val line = reader.readLine() ?: break
+                        if (line.contains(BuildConfig.APPLICATION_ID)) {
+                            BackgroundClipboardCapture.request(
+                                reactApplicationContext,
+                                "read_logs"
+                            )
                         }
                     }
-                } catch (error: Exception) {
+                }
+            } catch (error: Exception) {
+                if (!stopLogcat) {
                     CaptureDiagnostics.recordFailure("read_logs", "logcat_failed", error)
                     error.printStackTrace()
-                } finally {
-                    try {
-                        logcatProcess?.destroy()
-                    } catch (_: Exception) {
-                    }
-                    stopLogcat = false
                 }
-            }.apply {
-                isDaemon = true
-                name = "clipcascade-logcat"
-                start()
+            } finally {
+                try {
+                    logcatProcess?.destroy()
+                } catch (_: Exception) {
+                }
+                logcatProcess = null
+                stopLogcat = false
             }
+        }.apply {
+            isDaemon = true
+            name = "clipcascade-logcat"
+            start()
         }
     }
 
@@ -125,66 +125,26 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
 
         stopLogcat = true
         try {
-            logcatThread?.interrupt()
+            logcatProcess?.destroy()
         } catch (_: Exception) {
         }
         try {
-            logcatProcess?.destroy()
+            logcatThread?.interrupt()
         } catch (_: Exception) {
         }
         logcatThread = null
         logcatProcess = null
     }
 
-    private fun emitOrdinaryClipboard(clip: ClipData?) {
-        if (clip == null || clip.itemCount <= 0) return
-
-        val description = clip.description ?: return
-        if (description.mimeTypeCount <= 0) return
-        val mimeType = description.getMimeType(0) ?: return
-        val item = clip.getItemAt(0)
-        val params: WritableMap = Arguments.createMap()
-
-        when {
-            mimeType.startsWith("text/") && item.text != null -> {
-                params.putString("content", item.text.toString())
-                params.putString("type", "text")
-            }
-            mimeType.startsWith("image/") && item.uri != null -> {
-                params.putString("content", item.uri.toString())
-                params.putString("type", "image")
-            }
-            item.uri != null -> {
-                params.putString("content", item.uri.toString())
-                params.putString("type", "files")
-            }
-            item.text != null -> {
-                params.putString("content", item.text.toString())
-                params.putString("type", "text")
-            }
-            else -> return
-        }
-
-        sendEventToJS(params)
-    }
-
     private fun emitExternalContent(content: String, type: String, source: String) {
-        val params: WritableMap = Arguments.createMap().apply {
+        val params = Arguments.createMap().apply {
             putString("content", content)
             putString("type", type)
         }
-        sendEventToJS(params)
+        reactApplicationContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit("onClipboardChange", params)
         CaptureDiagnostics.recordEmission(source)
-    }
-
-    private fun sendEventToJS(params: WritableMap) {
-        val currentTime = System.currentTimeMillis()
-        if (currentTime - lastEmittedTime > debounceTime) {
-            lastEmittedTime = currentTime
-            reactApplicationContext
-                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                .emit("onClipboardChange", params)
-        }
     }
 
     @ReactMethod
