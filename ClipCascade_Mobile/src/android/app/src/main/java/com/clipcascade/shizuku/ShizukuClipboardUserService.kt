@@ -7,15 +7,16 @@ import android.os.Process
 import androidx.annotation.Keep
 import org.json.JSONObject
 import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.Method
 
 /**
- * Runs with Shizuku's shell identity and performs one clipboard read on demand.
- * It owns no network connection, queue, or clipboard-change polling.
+ * Runs with Shizuku's shell/root identity and performs one clipboard read on
+ * demand. It owns no network connection, queue, or clipboard polling.
  *
- * The first implementation intentionally returns text only. URI grants obtained
- * by the shell process do not automatically belong to the app process, so image
- * and file clips are reported as fallback-required instead of emitting a URI
- * that the existing sender might be unable to open.
+ * Shizuku's official UserService documentation states that non-SDK APIs are
+ * available in this process. The Binder call signatures below are limited to
+ * the IClipboard#getPrimaryClip signatures present in AOSP releases supported
+ * by this application; unknown signatures fail closed instead of guessing.
  */
 class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
     constructor() : super()
@@ -77,6 +78,7 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
 
     private object HiddenClipboardReader {
         private const val SHELL_PACKAGE = "com.android.shell"
+        private const val DEFAULT_DEVICE_ID = 0
 
         fun readPrimaryClip(): ClipData? {
             val serviceManager = Class.forName("android.os.ServiceManager")
@@ -92,37 +94,70 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
                 ?: error("Clipboard service interface is unavailable")
 
             val interfaceClass = Class.forName("android.content.IClipboard")
-            val method = interfaceClass.methods
-                .filter { it.name == "getPrimaryClip" }
-                .maxByOrNull { it.parameterCount }
-                ?: error("getPrimaryClip is unavailable on this Android build")
-
+            val method = findSupportedGetPrimaryClip(interfaceClass.methods)
             method.isAccessible = true
-            val arguments = buildArguments(method.parameterTypes)
-            return method.invoke(service, *arguments) as? ClipData
+            return method.invoke(service, *argumentsFor(method)) as? ClipData
         }
 
-        private fun buildArguments(types: Array<Class<*>>): Array<Any?> {
-            var stringIndex = 0
-            var intIndex = 0
-            val userId = Process.myUid() / 100000
+        private fun findSupportedGetPrimaryClip(methods: Array<Method>): Method {
+            val candidates = methods.filter { it.name == "getPrimaryClip" }
+            return candidates.firstOrNull(::isAndroid14PlusSignature)
+                ?: candidates.firstOrNull(::isAndroid12Signature)
+                ?: candidates.firstOrNull(::isAndroid10Signature)
+                ?: candidates.firstOrNull(::isLegacySignature)
+                ?: error(
+                    "Unsupported IClipboard#getPrimaryClip signature: " +
+                        candidates.joinToString { method ->
+                            method.parameterTypes.joinToString(
+                                prefix = "(",
+                                postfix = ")"
+                            ) { it.simpleName }
+                        }
+                )
+        }
 
-            return Array(types.size) { index ->
-                when (types[index]) {
-                    String::class.java -> {
-                        val value = if (stringIndex == 0) SHELL_PACKAGE else null
-                        stringIndex += 1
-                        value
-                    }
-                    Int::class.javaPrimitiveType, Int::class.javaObjectType -> {
-                        val value = if (intIndex == 0) userId else 0
-                        intIndex += 1
-                        value
-                    }
-                    Long::class.javaPrimitiveType, Long::class.javaObjectType -> 0L
-                    Boolean::class.javaPrimitiveType, Boolean::class.javaObjectType -> false
-                    else -> error("Unsupported getPrimaryClip parameter: ${types[index].name}")
-                }
+        private fun isAndroid14PlusSignature(method: Method): Boolean =
+            method.parameterTypes.contentEquals(
+                arrayOf(
+                    String::class.java,
+                    String::class.java,
+                    Integer.TYPE,
+                    Integer.TYPE
+                )
+            )
+
+        private fun isAndroid12Signature(method: Method): Boolean =
+            method.parameterTypes.contentEquals(
+                arrayOf(
+                    String::class.java,
+                    String::class.java,
+                    Integer.TYPE
+                )
+            )
+
+        private fun isAndroid10Signature(method: Method): Boolean =
+            method.parameterTypes.contentEquals(
+                arrayOf(
+                    String::class.java,
+                    Integer.TYPE
+                )
+            )
+
+        private fun isLegacySignature(method: Method): Boolean =
+            method.parameterTypes.contentEquals(arrayOf(String::class.java))
+
+        private fun argumentsFor(method: Method): Array<Any?> {
+            val userId = Process.myUserHandle().identifier
+            return when {
+                isAndroid14PlusSignature(method) ->
+                    arrayOf(SHELL_PACKAGE, null, userId, DEFAULT_DEVICE_ID)
+                isAndroid12Signature(method) ->
+                    arrayOf(SHELL_PACKAGE, null, userId)
+                isAndroid10Signature(method) ->
+                    arrayOf(SHELL_PACKAGE, userId)
+                isLegacySignature(method) ->
+                    arrayOf(SHELL_PACKAGE)
+                else -> error("Unsupported IClipboard#getPrimaryClip signature")
             }
         }
     }
