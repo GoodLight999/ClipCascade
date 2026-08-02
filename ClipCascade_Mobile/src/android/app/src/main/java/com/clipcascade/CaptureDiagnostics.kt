@@ -13,7 +13,6 @@ object CaptureDiagnostics {
         val shizukuSuccessCount: Long,
         val overlayFallbackCount: Long,
         val emittedCount: Long,
-        val duplicateSuppressedCount: Long,
         val ignoredCount: Long,
         val lastSource: String?,
         val lastStage: String?,
@@ -28,7 +27,6 @@ object CaptureDiagnostics {
     private var shizukuSuccessCount = 0L
     private var overlayFallbackCount = 0L
     private var emittedCount = 0L
-    private var duplicateSuppressedCount = 0L
     private var ignoredCount = 0L
     private var lastSource: String? = null
     private var lastStage: String? = null
@@ -54,10 +52,6 @@ object CaptureDiagnostics {
 
     fun recordEmission(source: String) = mutate(source, "emitted") { emittedCount += 1 }
 
-    fun recordDuplicate(source: String) = mutate(source, "duplicate_suppressed") {
-        duplicateSuppressedCount += 1
-    }
-
     fun recordIgnored(source: String, reason: String) = mutate(source, "ignored", reason) {
         ignoredCount += 1
     }
@@ -73,7 +67,6 @@ object CaptureDiagnostics {
             shizukuSuccessCount = shizukuSuccessCount,
             overlayFallbackCount = overlayFallbackCount,
             emittedCount = emittedCount,
-            duplicateSuppressedCount = duplicateSuppressedCount,
             ignoredCount = ignoredCount,
             lastSource = lastSource,
             lastStage = lastStage,
@@ -90,7 +83,6 @@ object CaptureDiagnostics {
             shizukuSuccessCount = 0L
             overlayFallbackCount = 0L
             emittedCount = 0L
-            duplicateSuppressedCount = 0L
             ignoredCount = 0L
             lastSource = null
             lastStage = null
