@@ -1,0 +1,70 @@
+name: One-shot mobile link cleanup
+
+on:
+  push:
+    branches:
+      - stability-recovery
+    paths:
+      - '.github/workflows/one-shot-remove-upstream-links.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-remove-self:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stability-recovery
+      - name: Remove server-supplied donation links from product UI
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('ClipCascade_Mobile/src/App.js')
+          source = path.read_text(encoding='utf-8')
+
+          donation_block = re.compile(
+              r"\n\s*\{donateUrl && \(\n"
+              r"\s*<TouchableOpacity\n"
+              r"\s*style=\{styles\.spacing\}\n"
+              r"\s*onPress=\{\(\) => Linking\.openURL\(donateUrl\)\}\n"
+              r"\s*>\n"
+              r"\s*<Text style=\{styles\.footerText\}>DONATE</Text>\n"
+              r"\s*</TouchableOpacity>\n"
+              r"\s*\)\}",
+          )
+          source, count = donation_block.subn('', source)
+          if count != 2:
+              raise SystemExit(f'expected 2 donation blocks, found {count}')
+
+          source = source.replace(
+              '<Text style={styles.footerText}>GITHUB</Text>',
+              '<Text style={styles.footerText}>PROJECT</Text>',
+          )
+          source = source.replace(
+              '<Text style={styles.footerText}>HELP</Text>',
+              '<Text style={styles.footerText}>SETUP</Text>',
+          )
+          source = source.replace(
+              '<Text style={styles.footerText}>HOMEPAGE</Text>',
+              '<Text style={styles.footerText}>SERVER</Text>',
+          )
+
+          if 'Linking.openURL(donateUrl)' in source or '>DONATE<' in source:
+              raise SystemExit('donation link remains')
+          if source.count('>PROJECT<') != 2 or source.count('>SETUP<') != 2:
+              raise SystemExit('footer replacement count mismatch')
+
+          path.write_text(source, encoding='utf-8')
+          PY
+          rm .github/workflows/one-shot-remove-upstream-links.yml
+      - name: Commit product patch and workflow removal
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add ClipCascade_Mobile/src/App.js .github/workflows/one-shot-remove-upstream-links.yml
+          git commit -m 'fix(mobile): remove server-supplied upstream links'
+          git push origin HEAD:stability-recovery
