@@ -26,6 +26,37 @@ const shizukuBridgeSource = fs.readFileSync(
   ),
   'utf8',
 );
+const clipboardListenerSource = fs.readFileSync(
+  path.resolve(
+    __dirname,
+    '..',
+    'android',
+    'app',
+    'src',
+    'main',
+    'java',
+    'com',
+    'clipcascade',
+    'ClipboardListenerModule.kt',
+  ),
+  'utf8',
+);
+const shizukuUserServiceSource = fs.readFileSync(
+  path.resolve(
+    __dirname,
+    '..',
+    'android',
+    'app',
+    'src',
+    'main',
+    'java',
+    'com',
+    'clipcascade',
+    'shizuku',
+    'ShizukuClipboardUserService.kt',
+  ),
+  'utf8',
+);
 const androidManifestSource = fs.readFileSync(
   path.resolve(__dirname, '..', 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
   'utf8',
@@ -79,30 +110,66 @@ describe('App canonical product contract', () => {
     expect(shizukuBridgeSource).not.toContain('shizuku.rikka.app/download');
   });
 
-  test('actively requests the binder from official or forked Shizuku managers', () => {
+  test('uses the official ShizukuProvider binder acquisition path', () => {
+    expect(androidManifestSource).toContain(
+      'android:name="rikka.shizuku.ShizukuProvider"',
+    );
+    expect(androidManifestSource).toContain(
+      'android:authorities="${applicationId}.shizuku"',
+    );
+    expect(androidManifestSource).toContain(
+      'android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"',
+    );
     expect(shizukuBridgeSource).toContain(
+      'Shizuku.addBinderReceivedListenerSticky',
+    );
+    expect(shizukuBridgeSource).toContain('Shizuku.bindUserService');
+    expect(shizukuBridgeSource).not.toContain(
       'rikka.shizuku.intent.action.REQUEST_BINDER',
     );
-    expect(shizukuBridgeSource).toContain('queryBroadcastReceivers');
-    expect(shizukuBridgeSource).toContain('context.sendBroadcast(');
-    expect(shizukuBridgeSource).toContain('.setPackage(manager.packageName)');
-    expect(androidManifestSource).toContain(
-      '<action android:name="rikka.shizuku.intent.action.REQUEST_BINDER" />',
+    expect(shizukuBridgeSource).not.toContain('sendBroadcast(');
+    expect(shizukuBridgeSource).not.toContain('queryBroadcastReceivers');
+  });
+
+  test('limits hidden clipboard calls to explicit AOSP IClipboard signatures', () => {
+    expect(shizukuUserServiceSource).toContain(
+      'private fun isAndroid14PlusSignature',
+    );
+    expect(shizukuUserServiceSource).toContain(
+      'arrayOf(SHELL_PACKAGE, null, userId, DEFAULT_DEVICE_ID)',
+    );
+    expect(shizukuUserServiceSource).not.toContain('maxByOrNull');
+    expect(shizukuUserServiceSource).not.toContain(
+      'Unsupported getPrimaryClip parameter',
     );
   });
 
-  test('assigns an explicit high-contrast theme to the native setup screen', () => {
+  test('preserves the upstream ordinary listener independently of background capture', () => {
+    expect(clipboardListenerSource).toContain(
+      'emitOrdinaryClipboard(clipboardManager.primaryClip)',
+    );
+    expect(clipboardListenerSource).toContain(
+      '.emit("onClipboardChange", params)',
+    );
+    expect(clipboardListenerSource).not.toContain(
+      'private val emissionGate = ClipboardEmissionGate()',
+    );
+    expect(clipboardListenerSource).toContain('emitExternalClipboard');
+  });
+
+  test('assigns explicit high-contrast defaults to the app and setup screen', () => {
     expect(androidManifestSource).toContain(
       'android:theme="@style/Theme.ClipCascade.BackgroundSetup"',
     );
-    expect(setupStylesSource).toContain(
-      '<style name="Theme.ClipCascade.BackgroundSetup"',
-    );
+    expect(setupStylesSource).toContain('<style name="AppTheme"');
     expect(setupStylesSource).toContain(
       '<item name="android:textColorPrimary">@color/background_setup_text_primary</item>',
     );
     expect(setupStylesSource).toContain(
       '<item name="android:windowBackground">@color/background_setup_surface</item>',
+    );
+    expect(setupStylesSource).toContain(
+      '<style name="Theme.ClipCascade.BackgroundSetup" parent="AppTheme" />',
     );
   });
 
