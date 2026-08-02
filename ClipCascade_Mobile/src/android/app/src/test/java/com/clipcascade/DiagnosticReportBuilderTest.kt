@@ -9,8 +9,10 @@ class DiagnosticReportBuilderTest {
     fun reportContainsOperationalStagesWithoutSensitiveFields() {
         val report = DiagnosticReportBuilder.build(sampleInput())
 
-        assertTrue(report.contains("Shizuku running: enabled"))
-        assertTrue(report.contains("Duplicates suppressed: 7"))
+        assertTrue(report.contains("Shizuku Binder available: enabled"))
+        assertFalse(report.contains("Shizuku running:"))
+        assertTrue(report.contains("[Unified capture pipeline]"))
+        assertFalse(report.contains("Duplicates suppressed:"))
         assertTrue(report.contains("Server mode: P2S"))
         assertTrue(report.contains("Count: 3"))
         assertTrue(report.contains("Head state: inflight"))
@@ -81,16 +83,15 @@ class DiagnosticReportBuilderTest {
     }
 
     private fun sampleInput(): DiagnosticReportBuilder.Input = DiagnosticReportBuilder.Input(
-        generatedAt = "2026-07-27T17:30:00.000+09:00",
+        generatedAt = "2026-08-02T23:00:00.000+09:00",
         appVersion = "3.2.0",
         buildType = "standalone",
         manufacturer = "HONOR",
-        model = "ELP-AN00",
+        model = "DNP-NX9",
         androidRelease = "16",
         apiLevel = 36,
         capabilities = DiagnosticReportBuilder.CapabilityState(
-            shizukuInstalled = true,
-            shizukuRunning = true,
+            shizukuBinderAvailable = true,
             shizukuPermission = true,
             shizukuServiceBound = true,
             shizukuServiceUid = 2000,
@@ -124,9 +125,8 @@ class DiagnosticReportBuilderTest {
             shizukuSuccessCount = 6,
             overlayFallbackCount = 2,
             emittedCount = 6,
-            duplicateSuppressedCount = 7,
             ignoredCount = 1,
-            lastSource = "accessibility",
+            lastSource = "clipboard_listener",
             lastStage = "emitted",
             lastError = null,
             lastEventAt = 9999
