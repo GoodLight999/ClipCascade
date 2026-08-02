@@ -1,6 +1,7 @@
 package com.clipcascade
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
@@ -10,11 +11,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -34,8 +34,8 @@ import java.util.Locale
  */
 class BackgroundSetupActivity : AppCompatActivity() {
     private lateinit var statusView: TextView
-    private val handler = Handler(Looper.getMainLooper())
     private val asyncBridge by lazy { AsyncStorageBridge(applicationContext) }
+    private val shizukuStatusListener: () -> Unit = { refreshStatus() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,21 +54,20 @@ class BackgroundSetupActivity : AppCompatActivity() {
             textSize = 16f
         }, blockLayoutParams())
 
+        content.addView(TextView(this).apply {
+            text = getString(R.string.shizuku_manager_instruction)
+            textSize = 14f
+        }, blockLayoutParams())
+
         statusView = TextView(this).apply {
             textSize = 16f
             setTextIsSelectable(true)
         }
         content.addView(statusView, blockLayoutParams())
 
-        content.addView(actionButton(R.string.open_shizuku) {
-            if (!ShizukuClipboardBridge.openShizuku(this)) {
-                Toast.makeText(this, R.string.settings_unavailable, Toast.LENGTH_LONG).show()
-            }
-        }, blockLayoutParams())
-
         content.addView(actionButton(R.string.request_shizuku_permission) {
             ShizukuClipboardBridge.requestPermission()
-            handler.postDelayed(::refreshStatus, 750)
+            refreshStatus()
         }, blockLayoutParams())
 
         content.addView(actionButton(R.string.test_shizuku_read) {
@@ -126,15 +125,20 @@ class BackgroundSetupActivity : AppCompatActivity() {
         setContentView(scrollView)
     }
 
+    override fun onStart() {
+        super.onStart()
+        ShizukuClipboardBridge.addStatusListener(shizukuStatusListener)
+    }
+
     override fun onResume() {
         super.onResume()
         ShizukuClipboardBridge.ensureBound()
         refreshStatus()
     }
 
-    override fun onDestroy() {
-        handler.removeCallbacksAndMessages(null)
-        super.onDestroy()
+    override fun onStop() {
+        ShizukuClipboardBridge.removeStatusListener(shizukuStatusListener)
+        super.onStop()
     }
 
     private fun refreshStatus() {
@@ -148,8 +152,7 @@ class BackgroundSetupActivity : AppCompatActivity() {
 
         val capabilityStatus = getString(
             R.string.background_setup_status,
-            enabledLabel(shizuku.installed),
-            enabledLabel(shizuku.binderAlive),
+            enabledLabel(shizuku.binderAvailable),
             enabledLabel(shizuku.permissionGranted),
             if (shizuku.serviceBound) {
                 getString(R.string.status_bound_uid, shizuku.serviceUid ?: -1)
@@ -176,7 +179,6 @@ class BackgroundSetupActivity : AppCompatActivity() {
             diagnostics.shizukuSuccessCount,
             diagnostics.overlayFallbackCount,
             diagnostics.emittedCount,
-            diagnostics.duplicateSuppressedCount,
             diagnostics.ignoredCount,
             diagnostics.lastSource ?: getString(R.string.status_none),
             diagnostics.lastStage ?: getString(R.string.status_none),
@@ -233,8 +235,7 @@ class BackgroundSetupActivity : AppCompatActivity() {
             androidRelease = Build.VERSION.RELEASE,
             apiLevel = Build.VERSION.SDK_INT,
             capabilities = DiagnosticReportBuilder.CapabilityState(
-                shizukuInstalled = shizuku.installed,
-                shizukuRunning = shizuku.binderAlive,
+                shizukuBinderAvailable = shizuku.binderAvailable,
                 shizukuPermission = shizuku.permissionGranted,
                 shizukuServiceBound = shizuku.serviceBound,
                 shizukuServiceUid = shizuku.serviceUid,
@@ -258,7 +259,6 @@ class BackgroundSetupActivity : AppCompatActivity() {
                 shizukuSuccessCount = capture.shizukuSuccessCount,
                 overlayFallbackCount = capture.overlayFallbackCount,
                 emittedCount = capture.emittedCount,
-                duplicateSuppressedCount = capture.duplicateSuppressedCount,
                 ignoredCount = capture.ignoredCount,
                 lastSource = capture.lastSource,
                 lastStage = capture.lastStage,
@@ -328,15 +328,13 @@ class BackgroundSetupActivity : AppCompatActivity() {
 
     private fun isAccessibilityServiceEnabled(): Boolean {
         val expected = ComponentName(this, ClipCascadeAccessibilityService::class.java)
-        val enabledServices = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ).orEmpty()
-
-        return enabledServices
-            .split(':')
-            .mapNotNull(ComponentName::unflattenFromString)
-            .any { it == expected }
+        val manager = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        return manager
+            .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { info ->
+                val serviceInfo = info.resolveInfo.serviceInfo
+                ComponentName(serviceInfo.packageName, serviceInfo.name) == expected
+            }
     }
 
     private fun hasReadLogsPermission(): Boolean =
@@ -357,6 +355,7 @@ class BackgroundSetupActivity : AppCompatActivity() {
         val commands = """adb -d shell pm grant $packageName android.permission.READ_LOGS
 adb -d shell appops set $packageName SYSTEM_ALERT_WINDOW allow
 adb -d shell am force-stop $packageName"""
+        BackgroundClipboardCapture.ignoreNextClipboardListenerEvent()
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("ClipCascade ADB fallback", commands))
         Toast.makeText(this, R.string.adb_commands_copied, Toast.LENGTH_SHORT).show()
