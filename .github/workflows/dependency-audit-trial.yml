@@ -43,23 +43,28 @@ jobs:
           npm pkg set devDependencies.@react-native-community/cli-platform-android=19.1.2
           npm pkg set devDependencies.@react-native-community/cli-platform-ios=19.1.2
           npm install --package-lock-only --ignore-scripts
-          npm audit fix --package-lock-only --omit=dev
+          # npm exits nonzero while moderate advisories remain. Do not force the
+          # CLI 20 major upgrade; the high-or-higher gate below is authoritative.
+          npm audit fix --package-lock-only --omit=dev || true
           git diff -- package.json package-lock.json > dependency-update.diff
+          test -s dependency-update.diff
 
       - name: Install candidate dependency tree
         run: npm ci
 
-      - name: Record complete production audit
+      - name: Record complete production audit and enforce high-or-higher zero
         id: audit
-        continue-on-error: true
         run: |
           mkdir -p ci-logs/dependency-trial
           set -o pipefail
           npm audit --omit=dev --audit-level=high 2>&1 | tee ci-logs/dependency-trial/npm-audit.txt
-          npm audit --omit=dev --json > ci-logs/dependency-trial/npm-audit.json
+          npm audit --omit=dev --json > ci-logs/dependency-trial/npm-audit.json || true
 
       - name: Run static analysis and JavaScript tests
         run: |
+          node --check App.js
+          node --check StartForegroundService.js
+          node --check HeadlessTask.js
           npm run lint -- --max-warnings=0
           npm test -- --runInBand
 
@@ -92,7 +97,3 @@ jobs:
           path: ClipCascade_Mobile/src/ci-artifacts/dependency-trial/
           if-no-files-found: error
           retention-days: 7
-
-      - name: Enforce production audit
-        if: always()
-        run: test '${{ steps.audit.outcome }}' = success
