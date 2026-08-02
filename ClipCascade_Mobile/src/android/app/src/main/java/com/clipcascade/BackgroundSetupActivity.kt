@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.os.PersistableBundle
 import android.provider.Settings
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityManager
@@ -355,9 +356,13 @@ class BackgroundSetupActivity : AppCompatActivity() {
         val commands = """adb -d shell pm grant $packageName android.permission.READ_LOGS
 adb -d shell appops set $packageName SYSTEM_ALERT_WINDOW allow
 adb -d shell am force-stop $packageName"""
-        BackgroundClipboardCapture.ignoreNextClipboardListenerEvent()
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("ClipCascade ADB fallback", commands))
+        val clip = ClipData.newPlainText("ClipCascade ADB fallback", commands).apply {
+            description.extras = PersistableBundle().apply {
+                putBoolean(ClipboardListenerModule.APP_OWNED_CLIP_MARKER, true)
+            }
+        }
+        clipboard.setPrimaryClip(clip)
         Toast.makeText(this, R.string.adb_commands_copied, Toast.LENGTH_SHORT).show()
     }
 
