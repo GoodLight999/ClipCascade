@@ -5,7 +5,6 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -23,27 +22,10 @@ object BackgroundClipboardCapture {
     private const val TAG = "ClipboardCapture"
     private val inFlight = AtomicBoolean(false)
     private val pendingSource = AtomicReference<String?>(null)
-    private val ignoredClipboardListenerEvents = AtomicInteger(0)
-
-    /**
-     * Marks an application-owned clipboard write that must not be synchronized.
-     * This is used only when ClipCascade itself copies setup commands.
-     */
-    fun ignoreNextClipboardListenerEvent() {
-        ignoredClipboardListenerEvents.incrementAndGet()
-    }
 
     fun request(context: Context, source: String) {
         val appContext = context.applicationContext
         CaptureDiagnostics.recordTrigger(source)
-
-        if (
-            source == "clipboard_listener" &&
-            consumeIgnoredClipboardListenerEvent()
-        ) {
-            CaptureDiagnostics.recordIgnored(source, "application_owned_clipboard_write")
-            return
-        }
 
         if (!ClipboardListenerModule.isRuntimeActive()) {
             Log.d(TAG, "Ignoring $source trigger because the ClipCascade runtime is inactive")
@@ -97,16 +79,6 @@ object BackgroundClipboardCapture {
                 }
             } finally {
                 finishRequest(appContext)
-            }
-        }
-    }
-
-    private fun consumeIgnoredClipboardListenerEvent(): Boolean {
-        while (true) {
-            val current = ignoredClipboardListenerEvents.get()
-            if (current <= 0) return false
-            if (ignoredClipboardListenerEvents.compareAndSet(current, current - 1)) {
-                return true
             }
         }
     }
