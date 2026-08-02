@@ -80,7 +80,7 @@ object DiagnosticReportBuilder {
         appendLine()
 
         appendLine("[Capabilities]")
-        appendLine("Shizuku installed: ${flag(input.capabilities.shizukuInstalled)}")
+        appendLine("Shizuku Binder available: ${flag(input.capabilities.shizukuInstalled)}")
         appendLine("Shizuku running: ${flag(input.capabilities.shizukuRunning)}")
         appendLine("Shizuku permission: ${flag(input.capabilities.shizukuPermission)}")
         appendLine("Shizuku UserService: ${flag(input.capabilities.shizukuServiceBound)}")
