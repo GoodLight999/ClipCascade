@@ -1,0 +1,98 @@
+name: Dependency audit trial
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/dependency-audit-trial.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compatible-update-trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: ClipCascade_Mobile/src
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stability-recovery
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Apply only compatible patch-line updates in the trial workspace
+        run: |
+          set -euo pipefail
+          npm pkg set dependencies.react-native=0.80.3
+          npm pkg set devDependencies.@react-native-community/cli=19.1.2
+          npm pkg set devDependencies.@react-native-community/cli-platform-android=19.1.2
+          npm pkg set devDependencies.@react-native-community/cli-platform-ios=19.1.2
+          npm install --package-lock-only --ignore-scripts
+          npm audit fix --package-lock-only --omit=dev
+          git diff -- package.json package-lock.json > dependency-update.diff
+
+      - name: Install candidate dependency tree
+        run: npm ci
+
+      - name: Record complete production audit
+        id: audit
+        continue-on-error: true
+        run: |
+          mkdir -p ci-logs/dependency-trial
+          set -o pipefail
+          npm audit --omit=dev --audit-level=high 2>&1 | tee ci-logs/dependency-trial/npm-audit.txt
+          npm audit --omit=dev --json > ci-logs/dependency-trial/npm-audit.json
+
+      - name: Run static analysis and JavaScript tests
+        run: |
+          npm run lint -- --max-warnings=0
+          npm test -- --runInBand
+
+      - name: Run Android lint, JVM tests, and standalone build
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew --no-daemon --stacktrace \
+            :app:lintStandalone \
+            :app:testDebugUnitTest \
+            :app:assembleStandalone
+
+      - name: Stage trial evidence
+        if: always()
+        run: |
+          mkdir -p ci-artifacts/dependency-trial
+          cp package.json package-lock.json dependency-update.diff \
+            ci-artifacts/dependency-trial/
+          if [ -d ci-logs/dependency-trial ]; then
+            cp -a ci-logs/dependency-trial/. ci-artifacts/dependency-trial/
+          fi
+          printf 'audit-outcome=%s\n' '${{ steps.audit.outcome }}' \
+            > ci-artifacts/dependency-trial/outcomes.txt
+
+      - name: Upload trial evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-dependency-audit-trial
+          path: ClipCascade_Mobile/src/ci-artifacts/dependency-trial/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce production audit
+        if: always()
+        run: test '${{ steps.audit.outcome }}' = success
