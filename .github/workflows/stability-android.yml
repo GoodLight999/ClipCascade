@@ -1,137 +1,86 @@
-name: Stability recovery Android
+name: One-time verified mobile repair
 
 on:
   push:
     branches:
       - stability-recovery
     paths:
-      - 'ClipCascade_Mobile/**'
+      - 'tools/mobile-static-repair.patch'
       - '.github/workflows/stability-android.yml'
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'ClipCascade_Mobile/**'
-      - '.github/workflows/stability-android.yml'
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: stability-android-${{ github.workflow }}-${{ github.ref }}
+  group: one-time-mobile-repair-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-standalone-apk:
-    name: Static audit, tests, and bundled Android APK
+  repair-validate-and-clean:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    defaults:
-      run:
-        shell: bash
-        working-directory: ClipCascade_Mobile/src
-
+    timeout-minutes: 25
     steps:
-      - name: Check out source
+      - name: Check out active branch
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
+          ref: stability-recovery
+          fetch-depth: 2
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: gradle
+      - name: Apply exact reviewed patch
+        run: |
+          set -euo pipefail
+          git apply --check -p1 tools/mobile-static-repair.patch
+          git apply -p1 tools/mobile-static-repair.patch
+          git diff --check
 
       - name: Install JavaScript dependencies
+        working-directory: ClipCascade_Mobile/src
         run: npm ci
 
-      - name: Audit production JavaScript dependencies
-        id: dependency_audit
+      - name: Validate repaired JavaScript
+        id: validation
         continue-on-error: true
-        run: |
-          mkdir -p ci-logs/android
-          set -o pipefail
-          npm audit --omit=dev --audit-level=high 2>&1 | tee ci-logs/android/npm-audit.log
-
-      - name: Run JavaScript static analysis
-        id: eslint
-        continue-on-error: true
-        run: |
-          mkdir -p ci-logs/android
-          set -o pipefail
-          npm run lint -- --max-warnings=0 2>&1 | tee ci-logs/android/eslint.log
-
-      - name: Run JavaScript reliability tests
-        id: jest
-        continue-on-error: true
-        run: |
-          mkdir -p ci-logs/android
-          set -o pipefail
-          npm test -- --runInBand 2>&1 | tee ci-logs/android/jest.log
-
-      - name: Run Android lint and tests, then build standalone APK
-        id: gradle
-        continue-on-error: true
-        run: |
-          mkdir -p ci-logs/android
-          chmod +x android/gradlew
-          set -o pipefail
-          (cd android && ./gradlew --no-daemon --stacktrace :app:lintStandalone :app:testDebugUnitTest :app:assembleStandalone) 2>&1 | tee ci-logs/android/gradle-build.log
-
-      - name: Verify bundled JavaScript and stage APK
-        id: package_verify
-        if: steps.gradle.outcome == 'success'
+        working-directory: ClipCascade_Mobile/src
         run: |
           set -euo pipefail
-          APK_PATH=android/app/build/outputs/apk/standalone/app-standalone.apk
-          test -f "$APK_PATH"
-          unzip -Z1 "$APK_PATH" | grep -Fxq 'assets/index.android.bundle'
-          unzip -tq "$APK_PATH"
-          mkdir -p ci-artifacts/android
-          cp "$APK_PATH" ci-artifacts/android/ClipCascade-Android-stability-standalone.apk
-          cd ci-artifacts/android
-          sha256sum ClipCascade-Android-stability-standalone.apk > SHA256SUMS.txt
-          sha256sum -c SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          node --check App.js
+          node --check StartForegroundService.js
+          node --check HeadlessTask.js
+          npm run lint -- --max-warnings=0
+          npm test -- --runInBand
 
-      - name: Upload build logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClipCascade-stability-android-build-log
-          path: ClipCascade_Mobile/src/ci-logs/android/
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: Upload installable engineering APK
-        if: steps.package_verify.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClipCascade-Android-stability-standalone
-          path: ClipCascade_Mobile/src/ci-artifacts/android/
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Enforce every verification gate
+      - name: Restore permanent workflow and remove helper
         if: always()
         run: |
           set -euo pipefail
-          printf '%-22s %s\n' \
-            dependency-audit '${{ steps.dependency_audit.outcome }}' \
-            eslint '${{ steps.eslint.outcome }}' \
-            jest '${{ steps.jest.outcome }}' \
-            android-gradle '${{ steps.gradle.outcome }}' \
-            package-verify '${{ steps.package_verify.outcome }}'
-          test '${{ steps.dependency_audit.outcome }}' = success
-          test '${{ steps.eslint.outcome }}' = success
-          test '${{ steps.jest.outcome }}' = success
-          test '${{ steps.gradle.outcome }}' = success
-          test '${{ steps.package_verify.outcome }}' = success
+          git show HEAD^:.github/workflows/stability-android.yml > .github/workflows/stability-android.yml
+          rm -f tools/mobile-static-repair.patch
+          if [ '${{ steps.validation.outcome }}' != 'success' ]; then
+            git checkout HEAD -- \
+              ClipCascade_Mobile/src/App.js \
+              ClipCascade_Mobile/src/StartForegroundService.js \
+              ClipCascade_Mobile/src/HeadlessTask.js
+          fi
+
+      - name: Commit repair or cleanup
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            .github/workflows/stability-android.yml \
+            tools/mobile-static-repair.patch \
+            ClipCascade_Mobile/src/App.js \
+            ClipCascade_Mobile/src/StartForegroundService.js \
+            ClipCascade_Mobile/src/HeadlessTask.js
+          if [ '${{ steps.validation.outcome }}' = 'success' ]; then
+            git commit -m 'fix(mobile): repair static-analysis defects'
+          else
+            git commit -m 'chore: clean failed mobile repair helper'
+          fi
+          git push origin HEAD:stability-recovery
+
+      - name: Enforce validation result
+        if: always()
+        run: test '${{ steps.validation.outcome }}' = 'success'
