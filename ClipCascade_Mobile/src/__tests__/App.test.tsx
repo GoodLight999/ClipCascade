@@ -80,9 +80,6 @@ describe('App canonical product contract', () => {
     expect(appSource).toContain(
       '${GITHUB_URL}/blob/stability-recovery/docs/ANDROID_SETUP.md',
     );
-    expect(appSource).toContain(
-      'https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/metadata.json',
-    );
   });
 
   test('does not expose upstream or server-supplied donation links in product UI', () => {
@@ -92,6 +89,8 @@ describe('App canonical product contract', () => {
     expect(appSource).not.toContain(
       'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade',
     );
+    expect(appSource).not.toContain('METADATA_URL');
+    expect(appSource).not.toContain('setDonateUrl');
     expect(appSource).not.toContain('Linking.openURL(donateUrl)');
     expect(appSource).not.toContain('>DONATE<');
     expect(appSource).toContain('>PROJECT<');
