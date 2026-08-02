@@ -1120,22 +1120,14 @@ export default function App() {
               style={styles.spacing}
               onPress={() => Linking.openURL(GITHUB_URL)}
             >
-              <Text style={styles.footerText}>GITHUB</Text>
+              <Text style={styles.footerText}>PROJECT</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.spacing}
               onPress={() => Linking.openURL(HELP_URL)}
             >
-              <Text style={styles.footerText}>HELP</Text>
+              <Text style={styles.footerText}>SETUP</Text>
             </TouchableOpacity>
-            {donateUrl && (
-              <TouchableOpacity
-                style={styles.spacing}
-                onPress={() => Linking.openURL(donateUrl)}
-              >
-                <Text style={styles.footerText}>DONATE</Text>
-              </TouchableOpacity>
-            )}
           </View>
         </ScrollView>
       )}
@@ -1367,27 +1359,19 @@ export default function App() {
               style={styles.spacing}
               onPress={() => Linking.openURL(GITHUB_URL)}
             >
-              <Text style={styles.footerText}>GITHUB</Text>
+              <Text style={styles.footerText}>PROJECT</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.spacing}
               onPress={() => Linking.openURL(HELP_URL)}
             >
-              <Text style={styles.footerText}>HELP</Text>
+              <Text style={styles.footerText}>SETUP</Text>
             </TouchableOpacity>
-            {donateUrl && (
-              <TouchableOpacity
-                style={styles.spacing}
-                onPress={() => Linking.openURL(donateUrl)}
-              >
-                <Text style={styles.footerText}>DONATE</Text>
-              </TouchableOpacity>
-            )}
             <TouchableOpacity
               style={styles.spacing}
               onPress={() => Linking.openURL(data.server_url)}
             >
-              <Text style={styles.footerText}>HOMEPAGE</Text>
+              <Text style={styles.footerText}>SERVER</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
