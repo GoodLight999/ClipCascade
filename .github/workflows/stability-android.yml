@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: stability-recovery
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Apply exact reviewed patch
         run: |
@@ -53,7 +53,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          git show HEAD^:.github/workflows/stability-android.yml > .github/workflows/stability-android.yml
+          git show abf81cbd1b5cb9500f61452cdeb0ceb29766d506:.github/workflows/stability-android.yml > .github/workflows/stability-android.yml
           rm -f tools/mobile-static-repair.patch
           if [ '${{ steps.validation.outcome }}' != 'success' ]; then
             git checkout HEAD -- \
