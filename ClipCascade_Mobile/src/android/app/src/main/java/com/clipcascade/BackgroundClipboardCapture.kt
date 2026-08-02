@@ -39,8 +39,7 @@ object BackgroundClipboardCapture {
 
         if (
             source == "clipboard_listener" &&
-            ignoredClipboardListenerEvents.get() > 0 &&
-            ignoredClipboardListenerEvents.getAndDecrement() > 0
+            consumeIgnoredClipboardListenerEvent()
         ) {
             CaptureDiagnostics.recordIgnored(source, "application_owned_clipboard_write")
             return
@@ -98,6 +97,16 @@ object BackgroundClipboardCapture {
                 }
             } finally {
                 finishRequest(appContext)
+            }
+        }
+    }
+
+    private fun consumeIgnoredClipboardListenerEvent(): Boolean {
+        while (true) {
+            val current = ignoredClipboardListenerEvents.get()
+            if (current <= 0) return false
+            if (ignoredClipboardListenerEvents.compareAndSet(current, current - 1)) {
+                return true
             }
         }
     }
