@@ -5,22 +5,46 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * One background-read decision point shared by Accessibility and READ_LOGS.
- * Preferred path: Shizuku shell read. Fallback: the existing overlay activity.
- * Concurrent triggers are coalesced so multiple Android signals cannot launch
- * parallel clipboard reads or overlapping overlay activities.
+ * Single automatic clipboard-acquisition decision point.
+ *
+ * Foreground ClipboardManager notifications, documented Accessibility
+ * ACTION_COPY events, and the optional READ_LOGS signal all enter here.
+ * Preferred reader: Shizuku UserService. Fallback reader: the existing overlay
+ * activity. The existing React Native sender remains the only transport owner.
+ *
+ * Concurrent signals are coalesced. One latest pending signal is retained so a
+ * second real copy that arrives during an in-flight read is not silently lost.
  */
 object BackgroundClipboardCapture {
-    private const val TAG = "BackgroundCapture"
+    private const val TAG = "ClipboardCapture"
     private val inFlight = AtomicBoolean(false)
     private val pendingSource = AtomicReference<String?>(null)
+    private val ignoredClipboardListenerEvents = AtomicInteger(0)
+
+    /**
+     * Marks an application-owned clipboard write that must not be synchronized.
+     * This is used only when ClipCascade itself copies setup commands.
+     */
+    fun ignoreNextClipboardListenerEvent() {
+        ignoredClipboardListenerEvents.incrementAndGet()
+    }
 
     fun request(context: Context, source: String) {
         val appContext = context.applicationContext
         CaptureDiagnostics.recordTrigger(source)
+
+        if (
+            source == "clipboard_listener" &&
+            ignoredClipboardListenerEvents.get() > 0 &&
+            ignoredClipboardListenerEvents.getAndDecrement() > 0
+        ) {
+            CaptureDiagnostics.recordIgnored(source, "application_owned_clipboard_write")
+            return
+        }
 
         if (!ClipboardListenerModule.isRuntimeActive()) {
             Log.d(TAG, "Ignoring $source trigger because the ClipCascade runtime is inactive")
@@ -69,7 +93,7 @@ object BackgroundClipboardCapture {
                         CaptureDiagnostics.recordFailure(source, "overlay_launch_failed", error)
                     }
                 } else {
-                    Log.w(TAG, "No usable background clipboard read path for $source: ${result.status}")
+                    Log.w(TAG, "No usable clipboard read path for $source: ${result.status}")
                     CaptureDiagnostics.recordIgnored(source, "overlay_permission_missing")
                 }
             } finally {
