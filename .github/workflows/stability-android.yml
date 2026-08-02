@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   build-standalone-apk:
-    name: Build bundled Android APK
+    name: Static audit, tests, and bundled Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -53,18 +53,24 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
+      - name: Run JavaScript static analysis
+        run: |
+          mkdir -p ci-logs/android
+          set -o pipefail
+          npm run lint 2>&1 | tee ci-logs/android/eslint.log
+
       - name: Run JavaScript reliability tests
         run: |
           mkdir -p ci-logs/android
           set -o pipefail
           npm test -- --runInBand 2>&1 | tee ci-logs/android/jest.log
 
-      - name: Generate app code, run Android tests, and build standalone APK
+      - name: Run Android lint and tests, then build standalone APK
         run: |
           mkdir -p ci-logs/android
           chmod +x android/gradlew
           set -o pipefail
-          (cd android && ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleStandalone) 2>&1 | tee ci-logs/android/gradle-build.log
+          (cd android && ./gradlew --no-daemon --stacktrace :app:lintStandalone :app:testDebugUnitTest :app:assembleStandalone) 2>&1 | tee ci-logs/android/gradle-build.log
 
       - name: Upload build logs
         if: always()
@@ -77,6 +83,7 @@ jobs:
 
       - name: Verify bundled JavaScript and stage APK
         run: |
+          set -euo pipefail
           APK_PATH=android/app/build/outputs/apk/standalone/app-standalone.apk
           test -f "$APK_PATH"
           unzip -Z1 "$APK_PATH" | grep -Fxq 'assets/index.android.bundle'
@@ -85,6 +92,7 @@ jobs:
           cp "$APK_PATH" ci-artifacts/android/ClipCascade-Android-stability-standalone.apk
           cd ci-artifacts/android
           sha256sum ClipCascade-Android-stability-standalone.apk > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Upload installable engineering APK
