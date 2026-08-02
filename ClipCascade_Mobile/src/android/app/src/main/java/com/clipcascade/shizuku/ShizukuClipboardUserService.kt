@@ -15,8 +15,8 @@ import java.lang.reflect.Method
  *
  * Shizuku's official UserService documentation states that non-SDK APIs are
  * available in this process. The Binder call signatures below are limited to
- * the IClipboard#getPrimaryClip signatures present in AOSP releases supported
- * by this application; unknown signatures fail closed instead of guessing.
+ * explicit AOSP IClipboard#getPrimaryClip signatures; unknown signatures fail
+ * closed and report their actual parameter list.
  */
 class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
     constructor() : super()
@@ -26,9 +26,10 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
 
     override fun getServiceUid(): Int = Process.myUid()
 
-    override fun readClipboard(): String {
+    override fun readClipboard(userId: Int): String {
         return try {
-            encodeClip(HiddenClipboardReader.readPrimaryClip())
+            require(userId >= 0) { "Invalid Android user id: $userId" }
+            encodeClip(HiddenClipboardReader.readPrimaryClip(userId))
         } catch (error: Throwable) {
             val cause = rootCause(error)
             JSONObject()
@@ -78,10 +79,9 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
 
     private object HiddenClipboardReader {
         private const val SHELL_PACKAGE = "com.android.shell"
-        private const val DEFAULT_DEVICE_ID = 0
-        private const val PER_USER_RANGE = 100_000
+        private const val ROOT_PACKAGE = "root"
 
-        fun readPrimaryClip(): ClipData? {
+        fun readPrimaryClip(userId: Int): ClipData? {
             val serviceManager = Class.forName("android.os.ServiceManager")
             val binder = serviceManager
                 .getMethod("getService", String::class.java)
@@ -97,7 +97,7 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
             val interfaceClass = Class.forName("android.content.IClipboard")
             val method = findSupportedGetPrimaryClip(interfaceClass.methods)
             method.isAccessible = true
-            return method.invoke(service, *argumentsFor(method)) as? ClipData
+            return method.invoke(service, *argumentsFor(method, userId)) as? ClipData
         }
 
         private fun findSupportedGetPrimaryClip(methods: Array<Method>): Method {
@@ -112,7 +112,7 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
                             method.parameterTypes.joinToString(
                                 prefix = "(",
                                 postfix = ")"
-                            ) { it.simpleName }
+                            ) { it.name }
                         }
                 )
         }
@@ -147,18 +147,21 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
         private fun isLegacySignature(method: Method): Boolean =
             method.parameterTypes.contentEquals(arrayOf(String::class.java))
 
-        private fun argumentsFor(method: Method): Array<Any?> {
-            // AOSP UserHandle.getUserId(uid) is uid / PER_USER_RANGE.
-            val userId = Process.myUid() / PER_USER_RANGE
+        private fun argumentsFor(method: Method, userId: Int): Array<Any?> {
+            val packageName = when (Process.myUid()) {
+                0 -> ROOT_PACKAGE
+                2_000 -> SHELL_PACKAGE
+                else -> error("Unsupported Shizuku UserService UID: ${Process.myUid()}")
+            }
             return when {
                 isAndroid14PlusSignature(method) ->
-                    arrayOf(SHELL_PACKAGE, null, userId, DEFAULT_DEVICE_ID)
+                    arrayOf(packageName, null, userId, Context.DEVICE_ID_DEFAULT)
                 isAndroid12Signature(method) ->
-                    arrayOf(SHELL_PACKAGE, null, userId)
+                    arrayOf(packageName, null, userId)
                 isAndroid10Signature(method) ->
-                    arrayOf(SHELL_PACKAGE, userId)
+                    arrayOf(packageName, userId)
                 isLegacySignature(method) ->
-                    arrayOf(SHELL_PACKAGE)
+                    arrayOf(packageName)
                 else -> error("Unsupported IClipboard#getPrimaryClip signature")
             }
         }
