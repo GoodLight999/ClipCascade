@@ -2,6 +2,7 @@
 package com.clipcascade
 
 import android.Manifest
+import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -25,7 +26,6 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
 
     private val clipboardManager: ClipboardManager =
         reactContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    private val emissionGate = ClipboardEmissionGate()
     private var listener: ClipboardManager.OnPrimaryClipChangedListener? = null
     private var isListening = false
     private var lastEmittedTime: Long = 0
@@ -51,8 +51,11 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
             return
         }
 
+        // Preserve the upstream foreground listener path. It emits directly to
+        // the existing React Native event and does not depend on Shizuku,
+        // Accessibility, overlay state, or a second native duplicate gate.
         listener = ClipboardManager.OnPrimaryClipChangedListener {
-            emitClip(clipboardManager.primaryClip, "ordinary_listener")
+            emitOrdinaryClipboard(clipboardManager.primaryClip)
         }
         clipboardManager.addPrimaryClipChangedListener(listener)
         isListening = true
@@ -133,41 +136,45 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
         logcatProcess = null
     }
 
-    private fun emitClip(clip: android.content.ClipData?, source: String) {
-        if (clip == null || clip.itemCount == 0) {
-            CaptureDiagnostics.recordIgnored(source, "clipboard_empty")
-            return
-        }
-        val description = clip.description
-        val mimeType = if (description.mimeTypeCount > 0) description.getMimeType(0) else ""
+    private fun emitOrdinaryClipboard(clip: ClipData?) {
+        if (clip == null || clip.itemCount <= 0) return
+
+        val description = clip.description ?: return
+        if (description.mimeTypeCount <= 0) return
+        val mimeType = description.getMimeType(0) ?: return
         val item = clip.getItemAt(0)
+        val params: WritableMap = Arguments.createMap()
 
         when {
-            item.text != null && mimeType.startsWith("text/") ->
-                emitContent(item.text.toString(), "text", source)
-            item.uri != null && mimeType.startsWith("image/") ->
-                emitContent(item.uri.toString(), "image", source)
-            item.uri != null ->
-                emitContent(item.uri.toString(), "files", source)
-            item.text != null ->
-                emitContent(item.text.toString(), "text", source)
-            else -> CaptureDiagnostics.recordIgnored(source, "clipboard_type_unsupported")
+            mimeType.startsWith("text/") && item.text != null -> {
+                params.putString("content", item.text.toString())
+                params.putString("type", "text")
+            }
+            mimeType.startsWith("image/") && item.uri != null -> {
+                params.putString("content", item.uri.toString())
+                params.putString("type", "image")
+            }
+            item.uri != null -> {
+                params.putString("content", item.uri.toString())
+                params.putString("type", "files")
+            }
+            item.text != null -> {
+                params.putString("content", item.text.toString())
+                params.putString("type", "text")
+            }
+            else -> return
         }
+
+        sendEventToJS(params)
     }
 
-    private fun emitContent(content: String, type: String, source: String): Boolean {
-        if (!emissionGate.shouldEmit(content, type)) {
-            CaptureDiagnostics.recordDuplicate(source)
-            return false
-        }
-
+    private fun emitExternalContent(content: String, type: String, source: String) {
         val params: WritableMap = Arguments.createMap().apply {
             putString("content", content)
             putString("type", type)
         }
         sendEventToJS(params)
         CaptureDiagnostics.recordEmission(source)
-        return true
     }
 
     private fun sendEventToJS(params: WritableMap) {
@@ -182,12 +189,12 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun addListener(type: String?) {
-        // Required for RN built-in Event Emitter Calls.
+        // Required for React Native NativeEventEmitter.
     }
 
     @ReactMethod
     fun removeListeners(type: Int?) {
-        // Required for RN built-in Event Emitter Calls.
+        // Required for React Native NativeEventEmitter.
     }
 
     companion object {
@@ -219,7 +226,7 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
             return try {
                 module.reactApplicationContext.runOnJSQueueThread {
                     if (runtimeActive) {
-                        module.emitContent(content, type, source)
+                        module.emitExternalContent(content, type, source)
                     } else {
                         CaptureDiagnostics.recordIgnored(source, "runtime_stopped_before_emit")
                     }
