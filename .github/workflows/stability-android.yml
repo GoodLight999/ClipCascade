@@ -7,6 +7,12 @@ on:
     paths:
       - 'tools/mobile-static-repair.patch'
       - '.github/workflows/stability-android.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'tools/mobile-static-repair.patch'
+      - '.github/workflows/stability-android.yml'
 
 permissions:
   contents: write
