@@ -36,6 +36,24 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Snapshot checked-out mobile source before analysis
+        working-directory: .
+        run: |
+          set -euo pipefail
+          mkdir -p ci-source
+          git archive --format=tar.gz \
+            --output=ci-source/ClipCascade-Mobile-source.tar.gz \
+            HEAD ClipCascade_Mobile/src
+          tar -tzf ci-source/ClipCascade-Mobile-source.tar.gz >/dev/null
+
+      - name: Upload pre-analysis source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-Mobile-source-snapshot
+          path: ci-source/ClipCascade-Mobile-source.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -57,7 +75,7 @@ jobs:
         run: |
           mkdir -p ci-logs/android
           set -o pipefail
-          npm run lint 2>&1 | tee ci-logs/android/eslint.log
+          npm run lint -- --max-warnings=0 2>&1 | tee ci-logs/android/eslint.log
 
       - name: Run JavaScript reliability tests
         run: |
