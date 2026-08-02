@@ -1,6 +1,5 @@
 import {
   PermissionsAndroid,
-  Image,
   StyleSheet,
   Text,
   View,
@@ -29,8 +28,6 @@ import { DOMParser } from 'react-native-html-parser';
 import {
   setDataInAsyncStorage,
   getDataFromAsyncStorage,
-  getMultipleDataFromAsyncStorage,
-  clearAsyncStorage,
 } from './AsyncStorageManagement';
 import StartForegroundService from './StartForegroundService';
 const { formatP2SOutboxStatus } = require('./P2SOutboxStatus');
@@ -70,7 +67,6 @@ export default function App() {
   const isMountedRef = useRef(true);
 
   const [newVersionAvailable, setNewVersionAvailable] = useState([false, '']);
-  const [donateUrl, setDonateUrl] = useState(null);
 
   // Constants
   const MAX_LOGIN_AUTO_RETRY = 3; // Retry login attempts
@@ -91,19 +87,14 @@ export default function App() {
     'https://github.com/GoodLight999/Trial-and-Error-ClipCascade/releases/latest';
   const APP_NAME = 'ClipCascade';
   const HELP_URL = `${GITHUB_URL}/blob/stability-recovery/docs/ANDROID_SETUP.md`;
-  const METADATA_URL =
-    'https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/metadata.json';
-
-  // Request permissions for notifications
-  PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
 
   const fetchTimeout = async (input, init, timeout_ms = FETCH_TIMEOUT) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout_ms);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout_ms);
       return await fetch(input, { ...init, signal: controller.signal });
-    } catch (e) {
-      throw e;
+    } finally {
+      clearTimeout(timeoutId);
     }
   };
 
@@ -205,6 +196,9 @@ export default function App() {
     // initialize
     const init = async () => {
       try {
+        await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
         // enable websocket button
         await setDataInAsyncStorage('enableWSButton', 'true');
 
@@ -261,7 +255,7 @@ export default function App() {
           await setDataInAsyncStorage('p2pStatusMessage', '');
           //validate session
           setLoadingPageMessage('Verifying Session...');
-          validResult = await validateSession(data_s);
+          const validResult = await validateSession(data_s);
           setEnableLoadingPage(false);
           if (validResult[0]) {
             //enable websocket page
@@ -299,22 +293,9 @@ export default function App() {
           if (!response.ok) {
             throw new Error('Network response was not ok');
           }
-          const data = await response.json();
-          if (data && data.android !== APP_VERSION) {
-            setNewVersionAvailable([true, data.android]);
-          }
-        } catch (e) {
-          // Silent catch
-        }
-
-        try {
-          const response = await fetchTimeout(METADATA_URL);
-          if (!response.ok) {
-            throw new Error('Network response was not ok');
-          }
-          const data = await response.json();
-          if (data) {
-            setDonateUrl(data.funding);
+          const versionMetadata = await response.json();
+          if (versionMetadata && versionMetadata.android !== APP_VERSION) {
+            setNewVersionAvailable([true, versionMetadata.android]);
           }
         } catch (e) {
           // Silent catch
@@ -347,6 +328,8 @@ export default function App() {
       };
       clearWSStatusMessage();
     };
+  // Mount-only bootstrap; storage hydration must not rerun on state updates.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Function to convert a server URL to a WebSocket URL
@@ -367,7 +350,7 @@ export default function App() {
       throw new Error(`Unsupported protocol in URL: ${inputUrl}`);
     }
 
-    if (endpoint != null) {
+    if (endpoint !== null && endpoint !== undefined) {
       wsUrl += endpoint;
       wsUrl = wsUrl.replace(/\/+$/, '');
     }
@@ -574,7 +557,7 @@ export default function App() {
 
         // Hash the password for encryption
         if (data_s.cipher_enabled === 'true') {
-          hashResult = await hash(data_s, password);
+          const hashResult = await hash(data_s, password_s);
           data_s = hashResult[2];
           if (!hashResult[0]) {
             return [
@@ -635,7 +618,7 @@ export default function App() {
         body: formData.toString(),
       });
 
-      if (response.status == 204) {
+      if (response.status === 204) {
         setWsPageMessage('✅ Logout successful: ' + response.status);
       } else {
         setWsPageMessage('❌ Logout failed: ' + response.status);
@@ -718,10 +701,10 @@ export default function App() {
         setWsPageP2PMessage('');
         setP2SOutboxMessage('');
         await clearFiles();
-        wsIsRunning_s = wsIsRunning === 'true' ? 'false' : 'true'; // toggle
+        const nextWsIsRunning = wsIsRunning === 'true' ? 'false' : 'true'; // toggle
         await setDataInAsyncStorage('wsForegroundServiceTerminated', 'false');
-        await setDataInAsyncStorage('wsIsRunning', wsIsRunning_s);
-        if (wsIsRunning_s === 'true') {
+        await setDataInAsyncStorage('wsIsRunning', nextWsIsRunning);
+        if (nextWsIsRunning === 'true') {
           //start foreground service
           await setDataInAsyncStorage('wsStatusMessage', '');
           await setDataInAsyncStorage('p2pStatusMessage', '');
@@ -742,7 +725,7 @@ export default function App() {
         }
         await NativeBridgeModule.clearImageCache();
 
-        setWsIsRunning(wsIsRunning_s);
+        setWsIsRunning(nextWsIsRunning);
       }
     } catch (error) {
       setWsPageMessage('❌ Error: ' + error);

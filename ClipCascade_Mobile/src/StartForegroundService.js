@@ -7,7 +7,7 @@ import {
 
 import notifee, { AndroidImportance } from '@notifee/react-native';
 import { Client } from '@stomp/stompjs';
-import * as encoding from 'text-encoding'; //do not remove this (polyfills for TextEncoder/TextDecoder stompjs)
+import { TextEncoder, TextDecoder } from 'text-encoding';
 import { xxHash32 } from 'js-xxhash';
 import AesGcmCrypto from 'react-native-aes-gcm-crypto';
 import { Buffer } from 'buffer';
@@ -22,7 +22,6 @@ import {
   setDataInAsyncStorage,
   getDataFromAsyncStorage,
   getMultipleDataFromAsyncStorage,
-  clearAsyncStorage,
 } from './AsyncStorageManagement';
 const { P2STextOutbox } = require('./P2STextOutbox');
 const {
@@ -124,10 +123,10 @@ module.exports = async (inputData = null) => {
         const decrypt = async encryptedData => {
           try {
             const plainText = await AesGcmCrypto.decrypt(
-              encryptedData['ciphertext'],
+              encryptedData.ciphertext,
               await getDataFromAsyncStorage('hashed_password'),
-              Buffer.from(encryptedData['nonce'], 'base64').toString('hex'),
-              Buffer.from(encryptedData['tag'], 'base64').toString('hex'),
+              Buffer.from(encryptedData.nonce, 'base64').toString('hex'),
+              Buffer.from(encryptedData.tag, 'base64').toString('hex'),
               false,
             );
             return plainText;
@@ -149,7 +148,11 @@ module.exports = async (inputData = null) => {
         const calculateBase64DecodedLength = async base64Str => {
           // Calculates the decoded byte length of a Base64-encoded string.
           const n = base64Str.length;
-          const padding = (base64Str.match(/=/g) || []).length;
+          const padding = base64Str.endsWith('==')
+            ? 2
+            : base64Str.endsWith('=')
+              ? 1
+              : 0;
           return 3 * (n / 4) - padding;
         };
 
@@ -165,6 +168,7 @@ module.exports = async (inputData = null) => {
         };
 
         // generate uuid
+        /* eslint-disable no-bitwise -- UUID v4 masks are bitwise by definition. */
         const generateUuid = async () => {
           return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
             const r = (Math.random() * 16) | 0;
@@ -172,6 +176,7 @@ module.exports = async (inputData = null) => {
             return v.toString(16);
           });
         };
+        /* eslint-enable no-bitwise */
 
         const p2pStatusMessageChanged = async () => {
           isP2PStatusMsgChanged = true;
@@ -414,7 +419,7 @@ module.exports = async (inputData = null) => {
           };
 
           const clearP2STextEchoTimer = () => {
-            if (p2sTextEchoTimer != null) {
+            if (p2sTextEchoTimer !== null) {
               clearTimeout(p2sTextEchoTimer);
               p2sTextEchoTimer = null;
             }
@@ -445,7 +450,7 @@ module.exports = async (inputData = null) => {
           };
 
           const drainP2STextOutbox = async () => {
-            if (p2sTextDrainPromise != null) {
+            if (p2sTextDrainPromise !== null) {
               return p2sTextDrainPromise;
             }
 
@@ -607,7 +612,7 @@ module.exports = async (inputData = null) => {
               await drainP2STextOutbox();
 
               if (enable_websocket_status_notification === 'true') {
-                if (websocket_status_notification_toggle == true) {
+                if (websocket_status_notification_toggle === true) {
                   websocket_status_notification_toggle = false;
                   await showWebSocketStatusNotification(
                     'WebSocket Connection Restored 🔗',
@@ -650,7 +655,7 @@ module.exports = async (inputData = null) => {
               );
               if (
                 enable_websocket_status_notification === 'true' &&
-                websocket_status_notification_toggle == false &&
+                websocket_status_notification_toggle === false &&
                 (await getDataFromAsyncStorage('wsIsRunning')) === 'true'
               ) {
                 websocket_status_notification_toggle = true;
@@ -842,13 +847,13 @@ module.exports = async (inputData = null) => {
           getP2PStatusMessage = async () => {
             let msg = '📊';
             msg += ` Peers: ${liveConnectionsCount}`;
-            if (sendingFragmentStats != null) {
+            if (sendingFragmentStats !== null) {
               msg += ` | Sending: ${sendingFragmentStats}`;
             }
-            if (receivingFragmentStats != null) {
+            if (receivingFragmentStats !== null) {
               msg += ` | Receiving: ${receivingFragmentStats}`;
             }
-            if (p2pMsg != null) {
+            if (p2pMsg !== null) {
               msg += ` | ${p2pMsg}`;
             }
             return msg;
@@ -952,7 +957,7 @@ module.exports = async (inputData = null) => {
           }
 
           const initializeWebSocketSignalingClient = async () => {
-            if (wsSignalingClient == null) {
+            if (wsSignalingClient === null) {
               wsSignalingClient = new WebSocket(websocket_url);
 
               wsSignalingClient.onopen = async () => {
@@ -961,7 +966,7 @@ module.exports = async (inputData = null) => {
                 await setDataInAsyncStorage('wsStatusMessage', '✅ Connected');
 
                 if (enable_websocket_status_notification === 'true') {
-                  if (websocket_status_notification_toggle == true) {
+                  if (websocket_status_notification_toggle === true) {
                     websocket_status_notification_toggle = false;
                     await showWebSocketStatusNotification(
                       'WebSocket Connection Restored 🔗',
@@ -983,7 +988,7 @@ module.exports = async (inputData = null) => {
                         await cleanupPeerConnections();
                       }
                       myPeerId = data.peerId;
-                      if (pendingPeerList != null) {
+                      if (pendingPeerList !== null) {
                         const pending = pendingPeerList;
                         pendingPeerList = null;
                         await handlePeerList(pending);
@@ -1036,7 +1041,7 @@ module.exports = async (inputData = null) => {
                 );
                 if (
                   enable_websocket_status_notification === 'true' &&
-                  websocket_status_notification_toggle == false &&
+                  websocket_status_notification_toggle === false &&
                   (await getDataFromAsyncStorage('wsIsRunning')) === 'true'
                 ) {
                   websocket_status_notification_toggle = true;
@@ -1049,7 +1054,7 @@ module.exports = async (inputData = null) => {
                 wsSignalingClient = null;
                 setTimeout(async () => {
                   if (
-                    wsSignalingClient == null &&
+                    wsSignalingClient === null &&
                     (await getDataFromAsyncStorage('wsIsRunning')) === 'true'
                   ) {
                     initializeWebSocketSignalingClient();
@@ -1080,7 +1085,7 @@ module.exports = async (inputData = null) => {
                     clipContent,
                   );
                 } else if (type_ === 'files') {
-                  temp = {};
+                  const temp = {};
                   const file_paths = clipContent
                     .split(',')
                     .filter(item => item.trim() !== '');
@@ -1128,7 +1133,7 @@ module.exports = async (inputData = null) => {
                     let loopBroken = false;
                     sendingFragmentId = metadata.id;
                     for (let i = 0; i < fragments.length; i++) {
-                      if (sendingFragmentId != metadata.id) {
+                      if (sendingFragmentId !== metadata.id) {
                         loopBroken = true;
                         return;
                       }
@@ -1235,7 +1240,7 @@ module.exports = async (inputData = null) => {
                 return;
               }
 
-              await clearFiles((expensiveCall = true));
+              await clearFiles(true);
               await resetSendingFragmentId();
 
               let cb = String(message.payload);
@@ -1244,19 +1249,19 @@ module.exports = async (inputData = null) => {
 
               // Check if the payload exceeds the maximum size: first layer protection
               if (
-                metadata != null &&
+                metadata !== null &&
                 max_clipboard_size_local_limit_bytes >= 0 &&
                 metadata.combinedRawPayloadSizeInBytes >
                   max_clipboard_size_local_limit_bytes
               ) {
                 await resetReceivingFragments();
-                p2pMsg = `⚠️ Payload size limit exceeded: ${metadata['combinedRawPayloadSizeInBytes']} bytes exceeds ${max_clipboard_size_local_limit_bytes} bytes`;
+                p2pMsg = `⚠️ Payload size limit exceeded: ${metadata.combinedRawPayloadSizeInBytes} bytes exceeds ${max_clipboard_size_local_limit_bytes} bytes`;
                 await p2pStatusMessageChanged();
                 return;
               }
 
               // Fragmented message handling
-              if (metadata != null && metadata.isFragmented) {
+              if (metadata !== null && metadata.isFragmented) {
                 receivingFragmentStats = `${metadata.index + 1}/${
                   metadata.totalFragments
                 }`;
@@ -1503,17 +1508,17 @@ module.exports = async (inputData = null) => {
             if (p2pShuttingDown || !myPeerId || !peers.has(remotePeerId)) {
               return;
             }
-            if (deadPc != null && peerConnections[remotePeerId] !== deadPc) {
+            if (deadPc !== null && peerConnections[remotePeerId] !== deadPc) {
               return;
             }
             await runSerializedPeerOp(remotePeerId, async () => {
               if (p2pShuttingDown || !myPeerId || !peers.has(remotePeerId)) {
                 return;
               }
-              if (deadPc != null && peerConnections[remotePeerId] !== deadPc) {
+              if (deadPc !== null && peerConnections[remotePeerId] !== deadPc) {
                 return;
               }
-              if (deadPc == null) {
+              if (deadPc === null) {
                 const ch = dataChannels[remotePeerId];
                 if (ch && ch.readyState === 'open') {
                   return;
@@ -1726,7 +1731,7 @@ module.exports = async (inputData = null) => {
                   },
                 });
 
-                if (files_in_memory != null) {
+                if (files_in_memory !== null) {
                   // save files
                   await NativeBridgeModule.saveBase64Files(
                     dirPath,
