@@ -1,12 +1,6 @@
 name: One-time verified mobile repair
 
 on:
-  push:
-    branches:
-      - stability-recovery
-    paths:
-      - 'tools/mobile-static-repair.patch'
-      - '.github/workflows/stability-android.yml'
   pull_request:
     branches:
       - main
@@ -22,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  repair-validate-and-clean:
+  repair-validate-and-commit:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -44,8 +38,6 @@ jobs:
         run: npm ci
 
       - name: Validate repaired JavaScript
-        id: validation
-        continue-on-error: true
         working-directory: ClipCascade_Mobile/src
         run: |
           set -euo pipefail
@@ -55,38 +47,14 @@ jobs:
           npm run lint -- --max-warnings=0
           npm test -- --runInBand
 
-      - name: Restore permanent workflow and remove helper
-        if: always()
-        run: |
-          set -euo pipefail
-          git show abf81cbd1b5cb9500f61452cdeb0ceb29766d506:.github/workflows/stability-android.yml > .github/workflows/stability-android.yml
-          rm -f tools/mobile-static-repair.patch
-          if [ '${{ steps.validation.outcome }}' != 'success' ]; then
-            git checkout HEAD -- \
-              ClipCascade_Mobile/src/App.js \
-              ClipCascade_Mobile/src/StartForegroundService.js \
-              ClipCascade_Mobile/src/HeadlessTask.js
-          fi
-
-      - name: Commit repair or cleanup
-        if: always()
+      - name: Commit only the validated product changes
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add \
-            .github/workflows/stability-android.yml \
-            tools/mobile-static-repair.patch \
             ClipCascade_Mobile/src/App.js \
             ClipCascade_Mobile/src/StartForegroundService.js \
             ClipCascade_Mobile/src/HeadlessTask.js
-          if [ '${{ steps.validation.outcome }}' = 'success' ]; then
-            git commit -m 'fix(mobile): repair static-analysis defects'
-          else
-            git commit -m 'chore: clean failed mobile repair helper'
-          fi
+          git commit -m 'fix(mobile): repair static-analysis defects'
           git push origin HEAD:stability-recovery
-
-      - name: Enforce validation result
-        if: always()
-        run: test '${{ steps.validation.outcome }}' = 'success'
