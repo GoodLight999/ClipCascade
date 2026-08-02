@@ -5,9 +5,18 @@ import unittest
 class WindowsGuiContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.source = (
-            pathlib.Path(__file__).resolve().parents[1] / "src" / "gui" / "tray.py"
-        ).read_text(encoding="utf-8")
+        test_file = pathlib.Path(__file__).resolve()
+        candidates = (
+            test_file.parents[1] / "src" / "gui" / "tray.py",
+            test_file.parents[1] / "gui" / "tray.py",
+        )
+        source_path = next((path for path in candidates if path.is_file()), None)
+        if source_path is None:
+            raise FileNotFoundError(
+                "GUI source not found in repository or packaged layout: "
+                + ", ".join(str(path) for path in candidates)
+            )
+        cls.source = source_path.read_text(encoding="utf-8")
 
     def test_desktop_has_visible_tk_window(self):
         self.assertIn('self.root.title("ClipCascade")', self.source)
