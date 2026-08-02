@@ -105,6 +105,8 @@ jobs:
           Copy-Item dist/ClipCascade.exe ci-artifacts/windows/ClipCascade-Windows-stability.exe
           $hash = (Get-FileHash ci-artifacts/windows/ClipCascade-Windows-stability.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  ClipCascade-Windows-stability.exe" | Set-Content -Encoding ascii ci-artifacts/windows/SHA256SUMS.txt
+          $recorded = (Get-Content ci-artifacts/windows/SHA256SUMS.txt).Split(' ')[0]
+          if ($recorded -ne $hash) { throw 'Windows checksum mismatch' }
           Get-Item ci-artifacts/windows/ClipCascade-Windows-stability.exe | Format-List Name,Length
           Get-Content ci-artifacts/windows/SHA256SUMS.txt
 
@@ -117,14 +119,22 @@ jobs:
           retention-days: 30
 
   linux-package:
-    name: Build Linux source package
+    name: Build and test extracted Linux package
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     needs: desktop-tests
 
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install packaged-test dependency
+        run: python -m pip install websocket-client==1.8.0
 
       - name: Stage source package
         run: |
@@ -135,9 +145,22 @@ jobs:
           find ci-artifacts/linux/package -type d -name __pycache__ -prune -exec rm -rf {} +
           find ci-artifacts/linux/package -type f -name '*.pyc' -delete
           tar -C ci-artifacts/linux/package -czf ci-artifacts/linux/ClipCascade-Linux-stability.tar.gz ClipCascade
+
+      - name: Verify and test the extracted deliverable
+        run: |
+          set -euo pipefail
           cd ci-artifacts/linux
           sha256sum ClipCascade-Linux-stability.tar.gz > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
           tar -tzf ClipCascade-Linux-stability.tar.gz >/dev/null
+          mkdir smoke
+          tar -xzf ClipCascade-Linux-stability.tar.gz -C smoke
+          python -m compileall -q smoke/ClipCascade
+          PYTHONPATH="$PWD/smoke/ClipCascade" \
+            python -m unittest discover \
+              -s smoke/ClipCascade/tests \
+              -p "test_*.py" \
+              -v
           cat SHA256SUMS.txt
 
       - name: Upload Linux package
