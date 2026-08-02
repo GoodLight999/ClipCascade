@@ -50,10 +50,21 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
         // overlay fallback. This prevents foreground success from hiding a
         // broken background acquisition path.
         listener = ClipboardManager.OnPrimaryClipChangedListener {
-            BackgroundClipboardCapture.request(
-                reactApplicationContext,
-                "clipboard_listener"
-            )
+            val appOwned = clipboardManager.primaryClipDescription
+                ?.extras
+                ?.getBoolean(APP_OWNED_CLIP_MARKER)
+                ?: false
+            if (appOwned) {
+                CaptureDiagnostics.recordIgnored(
+                    "clipboard_listener",
+                    "application_owned_clipboard_write"
+                )
+            } else {
+                BackgroundClipboardCapture.request(
+                    reactApplicationContext,
+                    "clipboard_listener"
+                )
+            }
         }
         clipboardManager.addPrimaryClipChangedListener(listener)
         isListening = true
@@ -158,6 +169,9 @@ class ClipboardListenerModule(reactContext: ReactApplicationContext) :
     }
 
     companion object {
+        internal const val APP_OWNED_CLIP_MARKER =
+            "com.clipcascade.extra.APPLICATION_OWNED_CLIP"
+
         @Volatile
         private var runtimeActive: Boolean = false
 
