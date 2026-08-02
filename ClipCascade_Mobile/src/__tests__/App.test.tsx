@@ -96,13 +96,18 @@ describe('App canonical product contract', () => {
     );
   });
 
-  test('does not send product UI links back to the upstream repository', () => {
+  test('does not expose upstream or server-supplied donation links in product UI', () => {
     expect(appSource).not.toContain(
       'https://github.com/Sathvik-Rao/ClipCascade',
     );
     expect(appSource).not.toContain(
       'https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade',
     );
+    expect(appSource).not.toContain('Linking.openURL(donateUrl)');
+    expect(appSource).not.toContain('>DONATE<');
+    expect(appSource).toContain('>PROJECT<');
+    expect(appSource).toContain('>SETUP<');
+    expect(appSource).toContain('>SERVER<');
     expect(runtimeMetadataSource).not.toContain('Sathvik-Rao');
     expect(runtimeMetadataSource).not.toContain(
       'https://github.com/Sathvik-Rao/ClipCascade',
@@ -137,6 +142,9 @@ describe('App canonical product contract', () => {
     );
     expect(shizukuUserServiceSource).toContain(
       'arrayOf(SHELL_PACKAGE, null, userId, DEFAULT_DEVICE_ID)',
+    );
+    expect(shizukuUserServiceSource).toContain(
+      'val userId = Process.myUid() / PER_USER_RANGE',
     );
     expect(shizukuUserServiceSource).not.toContain('maxByOrNull');
     expect(shizukuUserServiceSource).not.toContain(
