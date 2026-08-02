@@ -79,6 +79,7 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
     private object HiddenClipboardReader {
         private const val SHELL_PACKAGE = "com.android.shell"
         private const val DEFAULT_DEVICE_ID = 0
+        private const val PER_USER_RANGE = 100_000
 
         fun readPrimaryClip(): ClipData? {
             val serviceManager = Class.forName("android.os.ServiceManager")
@@ -147,7 +148,8 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
             method.parameterTypes.contentEquals(arrayOf(String::class.java))
 
         private fun argumentsFor(method: Method): Array<Any?> {
-            val userId = Process.myUserHandle().identifier
+            // AOSP UserHandle.getUserId(uid) is uid / PER_USER_RANGE.
+            val userId = Process.myUid() / PER_USER_RANGE
             return when {
                 isAndroid14PlusSignature(method) ->
                     arrayOf(SHELL_PACKAGE, null, userId, DEFAULT_DEVICE_ID)
