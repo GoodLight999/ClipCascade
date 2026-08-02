@@ -1,7 +1,7 @@
 name: One-time verified mobile repair
 
-# The patch is applied to a clean checkout and committed only after syntax,
-# ESLint, and Jest all succeed.
+# The exact patch is applied to a clean checkout and committed only after
+# syntax, ESLint, and all Jest contracts succeed.
 on:
   pull_request:
     branches:
