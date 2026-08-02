@@ -152,7 +152,12 @@ describe('App canonical product contract', () => {
     expect(clipboardListenerSource).not.toContain(
       'emitOrdinaryClipboard(clipboardManager.primaryClip)',
     );
-    expect(clipboardListenerSource).not.toContain('clipboardManager.primaryClip');
+    expect(clipboardListenerSource).not.toContain(
+      'val clip = clipboardManager.primaryClip',
+    );
+    expect(clipboardListenerSource).toContain(
+      'clipboardManager.primaryClipDescription',
+    );
     expect(accessibilityServiceSource).toContain(
       'BackgroundClipboardCapture.request(this, "accessibility_action_copy")',
     );
