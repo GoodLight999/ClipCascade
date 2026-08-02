@@ -15,9 +15,9 @@ import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 
 /**
- * Existing overlay fallback used only when direct Shizuku reading is unavailable.
- * All content now returns through ClipboardListenerModule so ordinary listener,
- * Shizuku, and overlay reads share one duplicate gate and diagnostics path.
+ * Existing overlay reader used when the unified coordinator cannot complete a
+ * Shizuku read. It returns content to the same React Native event and existing
+ * sender as a successful Shizuku read.
  */
 class ClipboardFloatingActivity : AppCompatActivity() {
 
@@ -32,14 +32,14 @@ class ClipboardFloatingActivity : AppCompatActivity() {
         overridePendingTransition(0, 0)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            Log.w(TAG, "Overlay permission is not available; skipping background clipboard read")
+            Log.w(TAG, "Overlay permission is not available; skipping clipboard read")
             CaptureDiagnostics.recordIgnored("overlay", "overlay_permission_missing")
             finishWithoutAnimation()
             return
         }
 
         if (!ClipboardListenerModule.isRuntimeActive()) {
-            Log.w(TAG, "React Native clipboard runtime is inactive; skipping background clipboard read")
+            Log.w(TAG, "React Native clipboard runtime is inactive; skipping clipboard read")
             CaptureDiagnostics.recordIgnored("overlay", "runtime_inactive")
             finishWithoutAnimation()
             return
