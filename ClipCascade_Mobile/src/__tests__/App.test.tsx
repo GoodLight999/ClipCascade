@@ -10,74 +10,63 @@
 import fs from 'fs';
 import path from 'path';
 
-const appSource = fs.readFileSync(path.resolve(__dirname, '..', 'App.js'), 'utf8');
-const shizukuBridgeSource = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '..',
-    'android',
-    'app',
-    'src',
-    'main',
-    'java',
-    'com',
-    'clipcascade',
-    'ShizukuClipboardBridge.kt',
-  ),
-  'utf8',
+const sourceRoot = path.resolve(__dirname, '..');
+const androidMain = path.resolve(sourceRoot, 'android', 'app', 'src', 'main');
+const kotlinRoot = path.resolve(androidMain, 'java', 'com', 'clipcascade');
+const testKotlinRoot = path.resolve(
+  sourceRoot,
+  'android',
+  'app',
+  'src',
+  'test',
+  'java',
+  'com',
+  'clipcascade',
 );
-const clipboardListenerSource = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '..',
-    'android',
-    'app',
-    'src',
-    'main',
-    'java',
-    'com',
-    'clipcascade',
-    'ClipboardListenerModule.kt',
-  ),
-  'utf8',
+
+const read = (...parts: string[]) =>
+  fs.readFileSync(path.resolve(...parts), 'utf8');
+
+const appSource = read(sourceRoot, 'App.js');
+const shizukuBridgeSource = read(kotlinRoot, 'ShizukuClipboardBridge.kt');
+const backgroundCaptureSource = read(kotlinRoot, 'BackgroundClipboardCapture.kt');
+const clipboardListenerSource = read(kotlinRoot, 'ClipboardListenerModule.kt');
+const accessibilityServiceSource = read(
+  kotlinRoot,
+  'ClipCascadeAccessibilityService.kt',
 );
-const shizukuUserServiceSource = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '..',
-    'android',
-    'app',
-    'src',
-    'main',
-    'java',
-    'com',
-    'clipcascade',
-    'shizuku',
-    'ShizukuClipboardUserService.kt',
-  ),
-  'utf8',
+const copyClassifierSource = read(kotlinRoot, 'CopySignalClassifier.kt');
+const shizukuUserServiceSource = read(
+  kotlinRoot,
+  'shizuku',
+  'ShizukuClipboardUserService.kt',
 );
-const androidManifestSource = fs.readFileSync(
-  path.resolve(__dirname, '..', 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
-  'utf8',
+const shizukuAidlSource = read(
+  androidMain,
+  'aidl',
+  'com',
+  'clipcascade',
+  'shizuku',
+  'IShizukuClipboardService.aidl',
 );
-const setupStylesSource = fs.readFileSync(
-  path.resolve(
-    __dirname,
-    '..',
-    'android',
-    'app',
-    'src',
-    'main',
-    'res',
-    'values',
-    'styles.xml',
-  ),
-  'utf8',
+const accessibilityConfigSource = read(
+  androidMain,
+  'res',
+  'xml',
+  'accessibility_service_config.xml',
 );
-const runtimeMetadataSource = fs.readFileSync(
-  path.resolve(__dirname, '..', '..', '..', 'metadata.json'),
-  'utf8',
+const androidManifestSource = read(androidMain, 'AndroidManifest.xml');
+const setupStylesSource = read(
+  androidMain,
+  'res',
+  'values',
+  'styles.xml',
+);
+const runtimeMetadataSource = read(
+  sourceRoot,
+  '..',
+  '..',
+  'metadata.json',
 );
 
 describe('App canonical product contract', () => {
@@ -109,9 +98,6 @@ describe('App canonical product contract', () => {
     expect(appSource).toContain('>SETUP<');
     expect(appSource).toContain('>SERVER<');
     expect(runtimeMetadataSource).not.toContain('Sathvik-Rao');
-    expect(runtimeMetadataSource).not.toContain(
-      'https://github.com/Sathvik-Rao/ClipCascade',
-    );
     expect(shizukuBridgeSource).not.toContain('shizuku.rikka.app/download');
   });
 
@@ -136,33 +122,86 @@ describe('App canonical product contract', () => {
     expect(shizukuBridgeSource).not.toContain('queryBroadcastReceivers');
   });
 
-  test('limits hidden clipboard calls to explicit AOSP IClipboard signatures', () => {
+  test('passes the client Android user to explicit AOSP clipboard signatures', () => {
+    expect(shizukuAidlSource).toContain('String readClipboard(int userId)');
+    expect(shizukuBridgeSource).toContain(
+      'clientUserId = Process.myUid() / PER_USER_RANGE',
+    );
+    expect(shizukuBridgeSource).toContain(
+      'service.readClipboard(requestedUserId)',
+    );
     expect(shizukuUserServiceSource).toContain(
       'private fun isAndroid14PlusSignature',
     );
     expect(shizukuUserServiceSource).toContain(
-      'arrayOf(SHELL_PACKAGE, null, userId, DEFAULT_DEVICE_ID)',
+      'arrayOf(packageName, null, userId, Context.DEVICE_ID_DEFAULT)',
     );
-    expect(shizukuUserServiceSource).toContain(
-      'val userId = Process.myUid() / PER_USER_RANGE',
-    );
+    expect(shizukuUserServiceSource).toContain('0 -> ROOT_PACKAGE');
+    expect(shizukuUserServiceSource).toContain('2_000 -> SHELL_PACKAGE');
     expect(shizukuUserServiceSource).not.toContain('maxByOrNull');
     expect(shizukuUserServiceSource).not.toContain(
-      'Unsupported getPrimaryClip parameter',
+      'val userId = Process.myUid() / PER_USER_RANGE',
     );
   });
 
-  test('preserves the upstream ordinary listener independently of background capture', () => {
+  test('routes every automatic trigger through the same acquisition coordinator', () => {
     expect(clipboardListenerSource).toContain(
+      'BackgroundClipboardCapture.request(',
+    );
+    expect(clipboardListenerSource).toContain('"clipboard_listener"');
+    expect(clipboardListenerSource).toContain('"read_logs"');
+    expect(clipboardListenerSource).not.toContain(
       'emitOrdinaryClipboard(clipboardManager.primaryClip)',
     );
-    expect(clipboardListenerSource).toContain(
-      '.emit("onClipboardChange", params)',
+    expect(clipboardListenerSource).not.toContain('clipboardManager.primaryClip');
+    expect(accessibilityServiceSource).toContain(
+      'BackgroundClipboardCapture.request(this, "accessibility_action_copy")',
     );
-    expect(clipboardListenerSource).not.toContain(
-      'private val emissionGate = ClipboardEmissionGate()',
+    expect(backgroundCaptureSource).toContain(
+      'ShizukuClipboardBridge.readClipboard',
     );
-    expect(clipboardListenerSource).toContain('emitExternalClipboard');
+    expect(backgroundCaptureSource).toContain(
+      'ClipboardFloatingActivity.getIntent',
+    );
+    expect(backgroundCaptureSource).toContain(
+      'ClipboardListenerModule.emitExternalClipboard',
+    );
+  });
+
+  test('uses only the documented Accessibility ACTION_COPY signal', () => {
+    expect(copyClassifierSource).toContain(
+      'action == AccessibilityNodeInfo.ACTION_COPY',
+    );
+    expect(accessibilityServiceSource).toContain(
+      'CopySignalClassifier.isCopyAction(event.action)',
+    );
+    expect(accessibilityConfigSource).toContain(
+      'android:accessibilityEventTypes="typeAllMask"',
+    );
+    expect(accessibilityConfigSource).toContain(
+      'android:canRetrieveWindowContent="false"',
+    );
+    expect(accessibilityConfigSource).toContain(
+      'android:notificationTimeout="0"',
+    );
+    expect(copyClassifierSource).not.toContain('startsWith');
+    expect(copyClassifierSource).not.toContain('contains');
+    expect(copyClassifierSource).not.toContain('コピー');
+    expect(copyClassifierSource).not.toContain('copied');
+    expect(accessibilityServiceSource).not.toContain('postDelayed');
+    expect(accessibilityServiceSource).not.toContain('event.text');
+    expect(accessibilityServiceSource).not.toContain('contentDescription');
+  });
+
+  test('contains no obsolete native duplicate gate', () => {
+    expect(
+      fs.existsSync(path.resolve(kotlinRoot, 'ClipboardEmissionGate.kt')),
+    ).toBe(false);
+    expect(
+      fs.existsSync(path.resolve(testKotlinRoot, 'ClipboardEmissionGateTest.kt')),
+    ).toBe(false);
+    expect(clipboardListenerSource).not.toContain('ClipboardEmissionGate');
+    expect(backgroundCaptureSource).not.toContain('duplicateWindowMs');
   });
 
   test('assigns explicit high-contrast defaults to the app and setup screen', () => {
