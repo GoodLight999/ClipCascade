@@ -23,29 +23,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  repository-snapshot:
-    name: Exact repository tree snapshot
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-      - name: Create and verify git archive
-        run: |
-          set -euo pipefail
-          mkdir -p ci-repository-snapshot
-          git archive --format=tar.gz \
-            --output=ci-repository-snapshot/ClipCascade-repository-tree.tar.gz \
-            HEAD
-          tar -tzf ci-repository-snapshot/ClipCascade-repository-tree.tar.gz >/dev/null
-      - name: Upload exact tree snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClipCascade-repository-tree-snapshot
-          path: ci-repository-snapshot/ClipCascade-repository-tree.tar.gz
-          if-no-files-found: error
-          retention-days: 3
-
   desktop-tests:
     name: Desktop tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
