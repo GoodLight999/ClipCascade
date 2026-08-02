@@ -4,7 +4,7 @@ import os
 import threading
 import time
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 import webbrowser
 
 from PIL import Image, ImageDraw
@@ -46,9 +46,13 @@ class TaskbarPanel:
         self.file_download_items = None
         self.previous_stats: str = ""
         self.previous_stats_items = None
+        self._closing = False
 
         self.root = tk.Tk()
-        self.root.withdraw()
+        self.root.title("ClipCascade")
+        self.root.geometry("560x340")
+        self.root.minsize(500, 300)
+        self.root.protocol("WM_DELETE_WINDOW", self._hide_window)
 
         if PLATFORM == MACOS:
             try:
@@ -61,6 +65,7 @@ class TaskbarPanel:
                 pass
 
         self.is_connected = bool(getattr(self.ws_interface, "is_connected", False))
+        self._build_window()
 
         self.icon = Icon(
             "ClipCascade",
@@ -69,9 +74,141 @@ class TaskbarPanel:
         )
         self.icon.title = "ClipCascade"
         self.update_stats()
+        self._schedule_window_refresh()
 
     def run(self):
-        self.icon.run()
+        # pystray's detached mode keeps the native tray pump alive while Tk owns
+        # the GUI main loop. Windows users therefore receive a real status
+        # window instead of an invisible tray-only process.
+        try:
+            self.icon.run_detached()
+        except (AttributeError, NotImplementedError):
+            threading.Thread(target=self.icon.run, daemon=True).start()
+        self.root.deiconify()
+        self.root.lift()
+        self.root.mainloop()
+
+    def _build_window(self):
+        outer = ttk.Frame(self.root, padding=20)
+        outer.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            outer,
+            text="ClipCascade",
+            font=("Segoe UI", 20, "bold"),
+        ).pack(anchor=tk.W)
+        ttk.Label(
+            outer,
+            text="Clipboard synchronization status",
+        ).pack(anchor=tk.W, pady=(0, 18))
+
+        self.window_status_var = tk.StringVar(value="Starting…")
+        self.window_detail_var = tk.StringVar(value="")
+        self.window_server_var = tk.StringVar(value=self._server_summary())
+
+        status_frame = ttk.LabelFrame(outer, text="Connection", padding=12)
+        status_frame.pack(fill=tk.X)
+        ttk.Label(
+            status_frame,
+            textvariable=self.window_status_var,
+            font=("Segoe UI", 12, "bold"),
+        ).pack(anchor=tk.W)
+        ttk.Label(
+            status_frame,
+            textvariable=self.window_detail_var,
+            wraplength=490,
+        ).pack(anchor=tk.W, pady=(6, 0))
+        ttk.Label(
+            status_frame,
+            textvariable=self.window_server_var,
+            wraplength=490,
+        ).pack(anchor=tk.W, pady=(6, 0))
+
+        controls = ttk.Frame(outer)
+        controls.pack(fill=tk.X, pady=(18, 0))
+        ttk.Button(
+            controls,
+            text="Connect / Reconnect",
+            command=lambda: self._on_connect(None, None),
+        ).pack(side=tk.LEFT)
+        ttk.Button(
+            controls,
+            text="Disconnect",
+            command=lambda: self._on_disconnect(None, None),
+        ).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(
+            controls,
+            text="Open logs",
+            command=lambda: self._open_logs(None, None),
+        ).pack(side=tk.LEFT, padx=(8, 0))
+
+        secondary = ttk.Frame(outer)
+        secondary.pack(fill=tk.X, pady=(10, 0))
+        ttk.Button(
+            secondary,
+            text="Program files",
+            command=lambda: self._open_program_location(None, None),
+        ).pack(side=tk.LEFT)
+        ttk.Button(
+            secondary,
+            text="Hide to tray",
+            command=self._hide_window,
+        ).pack(side=tk.RIGHT)
+
+        ttk.Label(
+            outer,
+            text="Closing this window keeps ClipCascade running in the task tray.",
+        ).pack(anchor=tk.W, pady=(18, 0))
+
+    def _server_summary(self):
+        if self.config is None:
+            return ""
+        data = getattr(self.config, "data", {}) or {}
+        server_mode = data.get("server_mode") or "unknown mode"
+        server_url = data.get("server_url") or "server not configured"
+        return f"{server_mode} · {server_url}"
+
+    def _schedule_window_refresh(self):
+        if self._closing:
+            return
+        self._refresh_window()
+        self.root.after(1000, self._schedule_window_refresh)
+
+    def _refresh_window(self):
+        try:
+            view = self._connection_view()
+            self.window_status_var.set(view.label)
+            details = ""
+            if self.ws_interface is not None:
+                details = self.ws_interface.get_stats() or ""
+            self.window_detail_var.set(details)
+            self.window_server_var.set(self._server_summary())
+        except Exception as error:
+            logging.error(f"Failed to refresh GUI status: {error}")
+            self.window_status_var.set("Status unavailable")
+            self.window_detail_var.set(str(error))
+
+    def _show_window(self, icon=None, item_=None):
+        def show():
+            self.root.deiconify()
+            self.root.lift()
+            try:
+                self.root.focus_force()
+            except tk.TclError:
+                pass
+
+        self.root.after(0, show)
+
+    def _hide_window(self):
+        if not self._closing:
+            self.root.withdraw()
+
+    def _shutdown_window(self):
+        self._closing = True
+        try:
+            self.root.after(0, self.root.destroy)
+        except tk.TclError:
+            pass
 
     def _connection_view(self):
         return derive_tray_connection_view(
@@ -146,6 +283,7 @@ class TaskbarPanel:
 
     def create_menu(self, item_: tuple = None):
         menu_items = [
+            item("🪟 Open ClipCascade", self._show_window, default=True),
             Menu.SEPARATOR,
             item("🗒️ Open Logs", self._open_logs),
             item("📂 Program Files", self._open_program_location),
@@ -166,7 +304,7 @@ class TaskbarPanel:
             and self.disconnecting_items is not None
         ):
             menu_items.insert(
-                self.disconnecting_items[1],
+                1,
                 item(self.disconnecting_items[0], self.disconnecting_items[2]),
             )
         else:
@@ -180,12 +318,10 @@ class TaskbarPanel:
             else:
                 callback = None
             menu_items.insert(
-                0,
+                1,
                 item(
                     connection_view.label,
                     callback,
-                    default=connection_view.action
-                    in (TrayPrimaryAction.CONNECT, TrayPrimaryAction.RECONNECT),
                     enabled=connection_view.enabled,
                 ),
             )
@@ -201,17 +337,17 @@ class TaskbarPanel:
 
         if self.is_file_download_enabled and self.file_download_items is not None:
             menu_items.insert(
-                self.file_download_items[1],
+                self.file_download_items[1] + 1,
                 item(
                     self.file_download_items[0],
                     self.file_download_items[2],
-                    default=True,
+                    default=False,
                 ),
             )
 
         if self.previous_stats_items is not None:
             menu_items.insert(
-                self.previous_stats_items[1],
+                2,
                 item(
                     self.previous_stats_items[0],
                     self.previous_stats_items[2],
@@ -228,7 +364,7 @@ class TaskbarPanel:
         threading.Thread(target=self._update_stats_thread, daemon=True).start()
 
     def _update_stats_thread(self):
-        while True:
+        while not self._closing:
             try:
                 current_stats = self.ws_interface.get_stats()
                 if current_stats is not None and self.previous_stats != current_stats:
@@ -249,10 +385,10 @@ class TaskbarPanel:
                 msg_type="error",
             ).mainloop()
 
-    def _on_update(self, icon, item):
+    def _on_update(self, icon, item_):
         TaskbarPanel.open_webbrowser(self.new_version_available[3])
 
-    def _on_connect(self, icon, item):
+    def _on_connect(self, icon, item_):
         connection_view = self._connection_view()
         if self.on_connect_callback:
             try:
@@ -262,8 +398,9 @@ class TaskbarPanel:
         if not connection_view.authoritative:
             self.is_connected = True
         self.update_menu()
+        self._refresh_window()
 
-    def _on_disconnect(self, icon, item):
+    def _on_disconnect(self, icon, item_):
         connection_view = self._connection_view()
         if not self.on_disconnect_callback:
             return
@@ -276,19 +413,21 @@ class TaskbarPanel:
 
         if connection_view.authoritative:
             self.update_menu()
+            self._refresh_window()
             return
 
         if self.ws_interface is not None and self.ws_interface.is_auto_reconnecting:
             threading.Thread(
                 target=self._wait_to_disconnect,
-                args=(icon, item),
+                args=(icon, item_),
                 daemon=True,
             ).start()
         else:
             self.is_connected = False
             self.update_menu()
+            self._refresh_window()
 
-    def _wait_to_disconnect(self, icon, item):
+    def _wait_to_disconnect(self, icon, item_):
         if self.ws_interface is None:
             return
 
@@ -308,17 +447,18 @@ class TaskbarPanel:
         self.ws_interface.is_auto_reconnecting = False
         self.is_connected = False
         self.update_menu()
+        self.root.after(0, self._refresh_window)
 
-    def _open_homepage(self, icon, item):
+    def _open_homepage(self, icon, item_):
         TaskbarPanel.open_webbrowser(self.config.data["server_url"])
 
-    def _open_github(self, icon, item):
+    def _open_github(self, icon, item_):
         TaskbarPanel.open_webbrowser(self.github_url)
 
-    def _open_help(self, icon, item):
+    def _open_help(self, icon, item_):
         TaskbarPanel.open_webbrowser(HELP_URL)
 
-    def _open_donate(self, icon, item):
+    def _open_donate(self, icon, item_):
         if self.donation_url is not None:
             TaskbarPanel.open_webbrowser(self.donation_url)
 
@@ -330,7 +470,7 @@ class TaskbarPanel:
         elif PLATFORM.startswith(LINUX):
             subprocess.run(["xdg-open", path])
 
-    def _open_logs(self, icon, item):
+    def _open_logs(self, icon, item_):
         log_file_path = os.path.join(get_program_files_directory(), LOG_FILE_NAME)
         if os.path.exists(log_file_path):
             try:
@@ -346,7 +486,7 @@ class TaskbarPanel:
                 msg_type="error",
             ).mainloop()
 
-    def _open_program_location(self, icon, item):
+    def _open_program_location(self, icon, item_):
         program_location = get_program_files_directory()
         try:
             self.open_location(program_location)
@@ -362,7 +502,7 @@ class TaskbarPanel:
         self.file_download_items = (
             "📥 Download File(s)",
             0,
-            lambda icon, item: self._on_download(icon, item, files),
+            lambda icon, item_: self._on_download(icon, item_, files),
         )
         self.update_menu()
 
@@ -372,7 +512,7 @@ class TaskbarPanel:
         self.icon.icon = self.create_clipboard_icon()
         self.update_menu()
 
-    def _on_download(self, icon, item, files):
+    def _on_download(self, icon, item_, files):
         try:
             try:
                 if self.config.data["default_file_download_location"] != "":
@@ -415,18 +555,18 @@ class TaskbarPanel:
             logging.error(msg)
             CustomDialog(msg, msg_type="error").mainloop()
 
-    def _on_logoff(self, icon, item):
+    def _on_logoff(self, icon, item_):
         try:
             if self.on_logoff_callback:
                 self.on_logoff_callback()
             self.icon.stop()
-            self.root.quit()
+            self._shutdown_window()
         except Exception as e:
             CustomDialog(
                 f"An error occurred while logging off: {e}",
                 msg_type="error",
             ).mainloop()
 
-    def _on_quit(self, icon, item):
+    def _on_quit(self, icon, item_):
         self.icon.stop()
-        self.root.quit()
+        self._shutdown_window()
