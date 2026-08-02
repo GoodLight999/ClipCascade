@@ -9,8 +9,7 @@ package com.clipcascade
  */
 object DiagnosticReportBuilder {
     data class CapabilityState(
-        val shizukuInstalled: Boolean,
-        val shizukuRunning: Boolean,
+        val shizukuBinderAvailable: Boolean,
         val shizukuPermission: Boolean,
         val shizukuServiceBound: Boolean,
         val shizukuServiceUid: Int?,
@@ -47,7 +46,6 @@ object DiagnosticReportBuilder {
         val shizukuSuccessCount: Long,
         val overlayFallbackCount: Long,
         val emittedCount: Long,
-        val duplicateSuppressedCount: Long,
         val ignoredCount: Long,
         val lastSource: String?,
         val lastStage: String?,
@@ -80,27 +78,25 @@ object DiagnosticReportBuilder {
         appendLine()
 
         appendLine("[Capabilities]")
-        appendLine("Shizuku Binder available: ${flag(input.capabilities.shizukuInstalled)}")
-        appendLine("Shizuku running: ${flag(input.capabilities.shizukuRunning)}")
+        appendLine("Shizuku Binder available: ${flag(input.capabilities.shizukuBinderAvailable)}")
         appendLine("Shizuku permission: ${flag(input.capabilities.shizukuPermission)}")
         appendLine("Shizuku UserService: ${flag(input.capabilities.shizukuServiceBound)}")
         appendLine("Shizuku service UID: ${input.capabilities.shizukuServiceUid ?: "none"}")
         appendLine("Shizuku last error: ${safeOrNone(input.capabilities.shizukuError)}")
-        appendLine("Accessibility: ${flag(input.capabilities.accessibilityEnabled)}")
+        appendLine("Accessibility ACTION_COPY trigger: ${flag(input.capabilities.accessibilityEnabled)}")
         appendLine("Overlay fallback: ${flag(input.capabilities.overlayEnabled)}")
         appendLine("READ_LOGS trigger: ${flag(input.capabilities.readLogsEnabled)}")
         appendLine("Battery optimization exempt: ${flag(input.capabilities.batteryExempt)}")
         appendLine("ClipCascade runtime active: ${flag(input.capabilities.runtimeActive)}")
         appendLine()
 
-        appendLine("[Capture pipeline]")
+        appendLine("[Unified capture pipeline]")
         appendLine("Triggers: ${input.capture.triggerCount}")
         appendLine("Coalesced triggers: ${input.capture.coalescedTriggerCount}")
         appendLine("Shizuku attempts: ${input.capture.shizukuAttemptCount}")
         appendLine("Shizuku successes: ${input.capture.shizukuSuccessCount}")
         appendLine("Overlay fallbacks: ${input.capture.overlayFallbackCount}")
         appendLine("Emitted to JavaScript: ${input.capture.emittedCount}")
-        appendLine("Duplicates suppressed: ${input.capture.duplicateSuppressedCount}")
         appendLine("Ignored/unavailable: ${input.capture.ignoredCount}")
         appendLine("Last source: ${safeOrNone(input.capture.lastSource)}")
         appendLine("Last stage: ${safeOrNone(input.capture.lastStage)}")
