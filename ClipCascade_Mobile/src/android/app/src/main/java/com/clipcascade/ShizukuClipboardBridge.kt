@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.Process
+import android.os.SystemClock
 import com.clipcascade.shizuku.IShizukuClipboardService
 import com.clipcascade.shizuku.ShizukuClipboardUserService
 import org.json.JSONObject
@@ -60,7 +61,8 @@ object ShizukuClipboardBridge {
         val content: String? = null,
         val type: String? = null,
         val status: String,
-        val error: String? = null
+        val error: String? = null,
+        val readCompletedAtElapsedMs: Long? = null
     )
 
     private val userServiceConnection = object : ServiceConnection {
@@ -72,10 +74,15 @@ object ShizukuClipboardBridge {
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
-            remoteService = null
-            binding.set(false)
-            lastError = "Shizuku UserService disconnected"
-            notifyStatusChanged()
+            clearUserService("Shizuku UserService disconnected")
+        }
+
+        override fun onBindingDied(name: ComponentName) {
+            clearUserService("Shizuku UserService binding died")
+        }
+
+        override fun onNullBinding(name: ComponentName) {
+            clearUserService("Shizuku UserService returned a null binding")
         }
     }
 
@@ -245,12 +252,18 @@ object ShizukuClipboardBridge {
         val requestedUserId = clientUserId
         executor.execute {
             val result = try {
-                decodeResult(service.readClipboard(requestedUserId))
+                val decoded = decodeResult(service.readClipboard(requestedUserId))
+                if (decoded.success) {
+                    decoded.copy(
+                        readCompletedAtElapsedMs = SystemClock.elapsedRealtime()
+                    )
+                } else {
+                    decoded
+                }
             } catch (error: Throwable) {
-                remoteService = null
-                binding.set(false)
-                lastError = "${error.javaClass.simpleName}: ${error.message ?: "clipboard read failed"}"
-                notifyStatusChanged()
+                clearUserService(
+                    "${error.javaClass.simpleName}: ${error.message ?: "clipboard read failed"}"
+                )
                 CaptureResult(false, status = "error", error = lastError)
             }
             mainHandler.post { callback(result) }
@@ -304,6 +317,13 @@ object ShizukuClipboardBridge {
 
     private fun binderUnavailableMessage(): String =
         "Shizuku Binder is unavailable. Start the installed compatible Shizuku server, then reopen or refresh ClipCascade."
+
+    private fun clearUserService(error: String) {
+        remoteService = null
+        binding.set(false)
+        lastError = error
+        notifyStatusChanged()
+    }
 
     private fun notifyStatusChanged() {
         statusListeners.forEach { listener ->
