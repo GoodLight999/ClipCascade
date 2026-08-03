@@ -1,0 +1,7 @@
+<resources>
+    <style name="AppTheme" parent="AppTheme.Base">
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+    <style name="Theme.ClipCascade.BackgroundSetup" parent="AppTheme" />
+</resources>
