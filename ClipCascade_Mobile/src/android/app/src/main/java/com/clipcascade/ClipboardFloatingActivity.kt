@@ -24,22 +24,25 @@ class ClipboardFloatingActivity : AppCompatActivity() {
     private lateinit var floatingView: View
     private lateinit var clipboardManager: ClipboardManager
     private var isViewAttached = false
+    private var coordinatorCompleted = false
+    private var triggerSource = "unknown"
     private var globalLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         overridePendingTransition(0, 0)
+        triggerSource = intent.getStringExtra(EXTRA_TRIGGER_SOURCE) ?: "unknown"
 
         if (!Settings.canDrawOverlays(this)) {
             Log.w(TAG, "Overlay permission is not available; skipping clipboard read")
-            CaptureDiagnostics.recordIgnored("overlay", "overlay_permission_missing")
+            CaptureDiagnostics.recordIgnored(diagnosticSource(), "overlay_permission_missing")
             finishWithoutAnimation()
             return
         }
 
         if (!ClipboardListenerModule.isRuntimeActive()) {
             Log.w(TAG, "React Native clipboard runtime is inactive; skipping clipboard read")
-            CaptureDiagnostics.recordIgnored("overlay", "runtime_inactive")
+            CaptureDiagnostics.recordIgnored(diagnosticSource(), "runtime_inactive")
             finishWithoutAnimation()
             return
         }
@@ -59,7 +62,11 @@ class ClipboardFloatingActivity : AppCompatActivity() {
                     getClipboardContent()
                 } catch (error: Exception) {
                     Log.e(TAG, "Unable to read clipboard from overlay activity", error)
-                    CaptureDiagnostics.recordFailure("overlay", "overlay_read_failed", error)
+                    CaptureDiagnostics.recordFailure(
+                        diagnosticSource(),
+                        "overlay_read_failed",
+                        error
+                    )
                 } finally {
                     makeFloatingViewOutOfFocus()
                     removeFloatingView(finishActivity = true)
@@ -71,7 +78,11 @@ class ClipboardFloatingActivity : AppCompatActivity() {
             }
         } catch (error: Exception) {
             Log.e(TAG, "Unable to create clipboard overlay", error)
-            CaptureDiagnostics.recordFailure("overlay", "overlay_create_failed", error)
+            CaptureDiagnostics.recordFailure(
+                diagnosticSource(),
+                "overlay_create_failed",
+                error
+            )
             removeFloatingView(finishActivity = false)
             finishWithoutAnimation()
         }
@@ -99,7 +110,7 @@ class ClipboardFloatingActivity : AppCompatActivity() {
     private fun getClipboardContent() {
         val clip = clipboardManager.primaryClip
         if (clip == null || clip.itemCount == 0) {
-            CaptureDiagnostics.recordIgnored("overlay", "clipboard_empty")
+            CaptureDiagnostics.recordIgnored(diagnosticSource(), "clipboard_empty")
             return
         }
 
@@ -127,12 +138,19 @@ class ClipboardFloatingActivity : AppCompatActivity() {
                 type = "text"
             }
             else -> {
-                CaptureDiagnostics.recordIgnored("overlay", "clipboard_type_unsupported")
+                CaptureDiagnostics.recordIgnored(
+                    diagnosticSource(),
+                    "clipboard_type_unsupported"
+                )
                 return
             }
         }
 
-        ClipboardListenerModule.emitExternalClipboard(content, type, "overlay")
+        ClipboardListenerModule.emitExternalClipboard(
+            content,
+            type,
+            diagnosticSource()
+        )
     }
 
     private fun makeFloatingViewInFocus() {
@@ -164,7 +182,11 @@ class ClipboardFloatingActivity : AppCompatActivity() {
                 windowManager.removeViewImmediate(floatingView)
             } catch (error: Exception) {
                 Log.w(TAG, "Unable to remove clipboard overlay", error)
-                CaptureDiagnostics.recordFailure("overlay", "overlay_remove_failed", error)
+                CaptureDiagnostics.recordFailure(
+                    diagnosticSource(),
+                    "overlay_remove_failed",
+                    error
+                )
             }
             isViewAttached = false
         }
@@ -174,6 +196,14 @@ class ClipboardFloatingActivity : AppCompatActivity() {
         }
     }
 
+    private fun diagnosticSource(): String = "overlay:$triggerSource"
+
+    private fun completeCoordinatorOnce() {
+        if (coordinatorCompleted) return
+        coordinatorCompleted = true
+        BackgroundClipboardCapture.completeOverlay(this)
+    }
+
     private fun finishWithoutAnimation() {
         finish()
         overridePendingTransition(0, 0)
@@ -181,18 +211,22 @@ class ClipboardFloatingActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         removeFloatingView(finishActivity = false)
+        completeCoordinatorOnce()
         super.onDestroy()
     }
 
     companion object {
         private const val TAG = "ClipboardFloating"
+        private const val EXTRA_TRIGGER_SOURCE =
+            "com.clipcascade.extra.OVERLAY_TRIGGER_SOURCE"
 
-        fun getIntent(context: Context): Intent {
+        fun getIntent(context: Context, triggerSource: String): Intent {
             return Intent(context.applicationContext, ClipboardFloatingActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_NO_ANIMATION or
                     Intent.FLAG_ACTIVITY_NO_HISTORY or
                     Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+                putExtra(EXTRA_TRIGGER_SOURCE, triggerSource)
             }
         }
     }
