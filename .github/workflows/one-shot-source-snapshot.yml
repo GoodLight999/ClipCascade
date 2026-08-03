@@ -1,0 +1,38 @@
+name: One-shot exact source snapshot
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/one-shot-source-snapshot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: stability-recovery
+      - name: Archive exact checked-out tree
+        run: |
+          set -euo pipefail
+          mkdir -p ci-snapshot
+          git archive --format=tar.gz \
+            --output=ci-snapshot/ClipCascade-source.tar.gz \
+            HEAD
+          tar -tzf ci-snapshot/ClipCascade-source.tar.gz >/dev/null
+          git rev-parse HEAD > ci-snapshot/HEAD.txt
+          sha256sum ci-snapshot/ClipCascade-source.tar.gz \
+            > ci-snapshot/SHA256SUMS.txt
+          sha256sum -c ci-snapshot/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClipCascade-exact-source-snapshot
+          path: ci-snapshot/
+          if-no-files-found: error
+          retention-days: 3
