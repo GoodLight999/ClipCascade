@@ -23,7 +23,7 @@ object BackgroundClipboardCapture {
 
     private data class Trigger(
         val source: String,
-        val requestedAtElapsedMs: Long
+        val requestedAtElapsedNanos: Long
     )
 
     private val stateLock = Any()
@@ -32,7 +32,7 @@ object BackgroundClipboardCapture {
 
     fun request(context: Context, source: String) {
         val appContext = context.applicationContext
-        val trigger = Trigger(source, SystemClock.elapsedRealtime())
+        val trigger = Trigger(source, SystemClock.elapsedRealtimeNanos())
         CaptureDiagnostics.recordTrigger(source)
 
         if (!ClipboardListenerModule.isRuntimeActive()) {
@@ -46,7 +46,7 @@ object BackgroundClipboardCapture {
                 val current = pendingTrigger
                 if (
                     current == null ||
-                    trigger.requestedAtElapsedMs >= current.requestedAtElapsedMs
+                    trigger.requestedAtElapsedNanos >= current.requestedAtElapsedNanos
                 ) {
                     pendingTrigger = trigger
                 }
@@ -68,10 +68,10 @@ object BackgroundClipboardCapture {
         CaptureDiagnostics.recordShizukuAttempt(trigger.source)
         ShizukuClipboardBridge.readClipboard { result ->
             var overlayOwnsCompletion = false
-            var coveredThroughElapsedMs: Long? = null
+            var coveredThroughElapsedNanos: Long? = null
             try {
                 if (result.success && result.content != null && result.type != null) {
-                    coveredThroughElapsedMs = result.readCompletedAtElapsedMs
+                    coveredThroughElapsedNanos = result.readCompletedAtElapsedNanos
                     CaptureDiagnostics.recordShizukuSuccess(trigger.source)
                     if (
                         !ClipboardListenerModule.emitExternalClipboard(
@@ -89,8 +89,6 @@ object BackgroundClipboardCapture {
                     return@readClipboard
                 }
 
-                // Shizuku may be absent, stopped, denied, binding, unsupported,
-                // or may intentionally request fallback for non-text content.
                 CaptureDiagnostics.recordOverlayFallback(
                     trigger.source,
                     result.error ?: result.status
@@ -103,8 +101,6 @@ object BackgroundClipboardCapture {
                                 trigger.source
                             )
                         )
-                        // ClipboardFloatingActivity calls completeOverlay once
-                        // its actual read attempt and teardown have finished.
                         overlayOwnsCompletion = true
                     } catch (error: Throwable) {
                         Log.e(TAG, "Overlay fallback failed for ${trigger.source}", error)
@@ -126,7 +122,7 @@ object BackgroundClipboardCapture {
                 }
             } finally {
                 if (!overlayOwnsCompletion) {
-                    finishRequest(context, coveredThroughElapsedMs)
+                    finishRequest(context, coveredThroughElapsedNanos)
                 }
             }
         }
@@ -134,14 +130,14 @@ object BackgroundClipboardCapture {
 
     fun completeOverlay(
         context: Context,
-        readCompletedAtElapsedMs: Long?
+        readCompletedAtElapsedNanos: Long?
     ) {
-        finishRequest(context.applicationContext, readCompletedAtElapsedMs)
+        finishRequest(context.applicationContext, readCompletedAtElapsedNanos)
     }
 
     private fun finishRequest(
         context: Context,
-        coveredThroughElapsedMs: Long?
+        coveredThroughElapsedNanos: Long?
     ) {
         var coveredTrigger: Trigger? = null
         val nextTrigger = synchronized(stateLock) {
@@ -153,16 +149,13 @@ object BackgroundClipboardCapture {
                     active = false
                     null
                 }
-                coveredThroughElapsedMs != null &&
-                    queued.requestedAtElapsedMs <= coveredThroughElapsedMs -> {
+                coveredThroughElapsedNanos != null &&
+                    queued.requestedAtElapsedNanos <= coveredThroughElapsedNanos -> {
                     active = false
                     coveredTrigger = queued
                     null
                 }
-                else -> {
-                    // Keep ownership while the next causal request starts.
-                    queued
-                }
+                else -> queued
             }
         }
 
