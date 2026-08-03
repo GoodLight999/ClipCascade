@@ -84,11 +84,31 @@ jobs:
           mkdir -p ci-logs/android
           chmod +x android/gradlew
           set -o pipefail
-          (cd android && ./gradlew --no-daemon --stacktrace :app:lintStandalone :app:testDebugUnitTest :app:assembleStandalone) 2>&1 | tee ci-logs/android/gradle-build.log
+          (cd android && ./gradlew --no-daemon --stacktrace \
+            :app:lintStandalone \
+            :app:testDebugUnitTest \
+            :app:assembleStandalone) \
+            2>&1 | tee ci-logs/android/gradle-build.log
+
+      - name: Collect complete Android reports
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p ci-logs/android/lint ci-logs/android/tests
+          find android/app/build -type f \
+            \( -name 'lint-results-standalone*' -o -name 'lint-results*.xml' \) \
+            -exec cp -v {} ci-logs/android/lint/ \; 2>/dev/null || true
+          if [ -d android/app/build/test-results ]; then
+            cp -a android/app/build/test-results/. ci-logs/android/tests/
+          fi
+          if [ -d android/app/build/reports/tests ]; then
+            cp -a android/app/build/reports/tests ci-logs/android/tests/html
+          fi
 
       - name: Verify bundled JavaScript and stage APK
         id: package_verify
-        if: steps.gradle.outcome == 'success'
+        if: always()
+        continue-on-error: true
         run: |
           set -euo pipefail
           APK_PATH=android/app/build/outputs/apk/standalone/app-standalone.apk
