@@ -1,0 +1,89 @@
+name: One-shot generation-safe clipboard writes
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/one-shot-owned-clipboard-v2.yml'
+      - 'ClipCascade_Mobile/src/__tests__/OwnedClipboardContracts.test.ts'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-owned-clipboard-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apply-validate-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Check out active branch
+        uses: actions/checkout@v4
+        with:
+          ref: stability-recovery
+          fetch-depth: 0
+
+      - name: Restore and apply locally validated patch
+        run: |
+          set -euo pipefail
+          cat > /tmp/app-owned-generation.patch.gz.b64 <<'EOF'
+          H4sICOJicGoCA2FwcC1vd25lZC1nZW5lcmF0aW9uLnBhdGNoAO1bS3PjxhG+61eMt1JF0ACppZ4rKWuvRFEO7dWjSG3sxOXigsCIhBfEIANQEm3zmFtuuSaVU/5YfkF+QrpnABCPGT6k3XJSFR4kEuie6e7p/rrn1Wg0iL3d9r2wbUeO7dLBJRt6Pt2OuLPdj20eXzBOR5xNA7dP+b3n0OaP0ZZpmmS4OdubN6TROrBeERP+HpA3b7YIIb3bdtehbTtwPdeOqZU869Mo8lhwTiOHe2EMX+HNnNxxNiE1Tm0nbgR27N3TxgMd8tipnWw1vEnIeExQriGzuZtQvymQO+nb7ewb8m6RhPtnFCCi8bkd293gNJoFTj9m3B5J0UbyzQW0XHyHyu0cWa0WMXcOrVaq3nnn4vTd29vB5el3g/PO29M/DC77QpPXhNM/TT1OjVpz+2an36Mxn90w33NmtfrJFtlq3E0DBxUnjk/tYBpmer31opgGlEdGHcQ1fRoTp/zuK/xjC/bX5OWJpAIzgAmydq6D9tgORrQ/HWZWBupg6vvAsGWWBTgtshfFQF0pjnTnngZxZ+LFMeVNTifsnp76/oK41v/daa9zPrjtfHcrNN2UsXt5+lXnSZwX3bedPnI21uZkQaavNBaym2QdU36ZNGiszbEwPiFXwl0vmTv1adSsGP3LZhSzUP7ygtGXTeyFzMFvyETwNOkj+nMEbdroqMTwgnAqnDfppk5efwEDh467v2MdEXN/39o5SvxWfhwWRDGJ6WPcCRzmUo6s9IHcLp4YciDK9Oe0TJ88EfSoYMKxyrVOcrSidV/l4aa5JAJyTWAUeNCKHTjrD0W+d20sAoORWDRjSZmiYsNrCXCSbybSu1X62VCrPOv2NjmFLkLQgrrUBfQTkJ01SSb2TCpOpiHxwKfYQ1CQySo1N5zGZDIFzQMG2oOjEsaJFDsbP9EK9DackXhMiTPlHGIx67RZUO6OGIpx/+z162XIV4cu4ykPSuo+Daae3EAGV09uIYOtkkXWQhQwUX6k6kX/3BiW0s88/+MpWJWxz3F4SD5AQw7mYdNokI3tAOIImOPB2I7GIE6tdlJkidlo5FN4c2f7ET1BHwx3ouQxwv2CdOgz58PAm0DWHjD07pSp2OId1DPRwAsGExgYPstsUCCC2iOC1mg8AKeNQWLwd+/Oc4T7DUpClZTcCS+jUdqsFDgkshkygeoH5JNFxWHLau1AVXG0Z7VeFuCZEKgZZO4tQw6ari2NBn1Q9LQm4vJJkRjdKEeK3tEoEJDtzz8vPyKfkz6b0NgDMcn7bLibUDX1Yw4j/J54EQTyPfuA8U3voBgUMW6HIb65A41nhIXgG64FxrBd4IGxIggwgT2Nx4x7PyEQgTUACKrd3zICXur62KwXWVi7+XSCutpgbM9vRPYdwBZ1gMqLJkBlxwgG3AOJIxqIDjPvIol3ERaAXA9jGgDIQQdRUAN3oRSxznFgSKTgEZLOaKwSrHtHhiweS4NHxEbFuTcaUY7q5FqxJOglHT8w2ZVsO35A9B1Sx55G0nCRPVkQgwUxDNB2NIimXBgPFfRceA3O5xMXszzQCYVCzrBbEIAJXK1IvV1+pBjSgpecFCFEQP43lIZCVqg7oIgFA0ZjVN+WJaQXiJcQeyBeZnkLM4WisYnNPwj6B+7F0EaErtOQ+SJi0pemMZtAnDlZQiGOHUD8KZrjtAFiAwUysmk8xImJ8AN4Bt65sLGUGVxTZpBmuTH7wQbNJN6dcc8dJaiHhjoNw2uUEIudzIIluxFVcygIMpyVGSxSw5itlRnn+Z9z0Dt2xsSg9aSa293ZtQ6Jubu3B//yeAGmiHB2lnN9P0Xlrerop/jdFEwZfhcqPmiy3JgYCd8f2s6HhWMtUKmQZogigTdtN/tuLAZg3QJnRXs5yymKeyv/XtbNoc3tSSQru8IoSOwVBt99BfNZc3f/CCa3RYAuD1aug3wYrZWFNy73sNIm1fqVX2BuW0wMIGIBSLB/GLY0XdUrGusyophAJElqH5NUS9ig7Oul2kV4/r3ti1l/pkUfcN9whoCOs5AOwP+7gQjWWr1eNn+1TcEjKp4kbKrZbA2cG1bh7dkYMKyGfsFFCAWLl3UQJUpthd5LxHFYODuzI3qw18WWblkm0LsING3bzpgay9sGrxlay0nkbFr/UZRbMZ/SJ9hD+N+69ojG7EG4+TlkDZ/Z7lWuMjNq//7HX/9J0lcECY2oXls+SqoIcIbS/w929oX/H+wdVou0CgoUcQA/LDj3IojQgDrxcRqXSQg2Vhq0XF/mDcEpRHxEb3b66JPd4ML3RuPY0OcixcqXUXuI+qIyvZSFaQ0icyEwdasZqqIfNDUJO5wznup3xzHj/reoWB35qtJyqAHsIbse7L/K1jBL8bDCEt/SYV9MGgrWEBXj/6A19g6ENQ72n2uNts8i+utZQ6ZHDsSiihAC4FKL+P3LL6TmoHxiuQIqDHhZ28ygaKxD8JldQInDwwNr51BhrkVmDOhD+8wYQ+ZQAt7qKfIYoYlUsRm7KNtQkyj1pm5oEFvZTDYNlrjfUNGIeagXjikf0MAe+mBomceBRZ/Hi5NcaTgaOHwWxqW6W8E+V0uydBCVUigiQ033r7/9mbRTyCQNcsYh+Th2FEM2VjPVNeaKEEzbwg2b4XQIdffY0NjIpdi+SHvHpN+5Oh+cd/q33avT2+71lUbSIXNnx+Tr/vUVlP5YFXl3M0NbS4X2DLMotF6dKVo6Jszrx0mVp6aZq5nnqtGcVyu2kteZVYqVPmc+x+NMhYzVh0u9zVzL18zNPc1U+JlCOLWXmRv7mLm2h5mb+5e50rtMtW+ZKs9aUbUVpto6h1Nj5Np5Kx5z9kDo0im/LDoPj3at1j4xX708UMw7xUwvyXsdZ8xuvUlpt2atLFnUA6b7rToMBAuVawiN6vy4oXJ41RJDboXYqMZ4ulBZmOsqE0OFKrdf0qikAP3wNirLSAFrsLDEUnSj5eZJlpq8KNthGWV7FaWVpiVbviflqTV0ulMn51SsIcBkmvRvry9vkiqF4EqoP6uu+uaCO103ar2EWQwUc62Xuy1lNTc/qU7rAZC8UQDzeJhRSqhgICcUttn6gr6W2yAqNi1XlVCpTMp//wvJalCSlOQ1YpbBSWhhiSUPC+xtJRbb3U0s9upZFhPF5ce22EcoaT+K2YWlwLmswz0wVQvQ6uBIYasNyt/nFMAblcAbFcHLy+AF1uJik9yDuAAz4rZF1zV06yg5ph51qHefYxNo0NDUxnLw7YcbmT5xZa0bnM1iXPnTVmWLff0mFf8L2bbp02AUj7V9Pq2KRwSjooTSvX9G1bXa6uYTbG4qa8OlFjefY29lf0+pX3O2Nj+6pedqOSE/3SXGS2s5vflSyijrPn2SVH8r5daUhBe9068uO1e3g373jx0lzfJxndDYduXhGY1lPShRpchJWqfvph64mEYgL0pdigJjpncy5uQL0tIxBi59PCYvdbUvi20/89Zqyxo2h02GXkDdnsp/j9Vura6tNWbETW+fsRDmIh9osIBRBWlUjlOgTu3f9FwlD9ZWhjjeIw68wb/fVlSHp6apjQxRFVV6xjMmub613KSoXDLrVFOmx1LUi9/qpKWOoyXQvzqSVqOtdvq+OprKYuCApxJ97/2gcZJFtIni4WtZuaw3T8zNFNOeLB3lqgkiftJRP86+aUjnuh2jhd9gyBLzNWlp9ca9WXA+cQzC98XpCIIlF85hAqgq1FzXwx9hjg+5QxxtMNwcQ70JIdGxnbGhUzDZZvg+pJR3XYs4kvOH6jE2ReKRtFhNujMs+KhMPih3rb6MO02vaQuotZEb72Xbb3Pdq7lml6p+oosmBaprfF2P6zqGNZBdx5phu65CW4nuuqh+Er6rV+a0BaAO45XEK1FeybURzjf0DrwW0mt3NhVYr6VN0b6h8+mGfsyWIugKvhUYqpVXgaJa2tXLuDok1VlDv5+sRNOGfk6xAk81fOshqlbVFZjaWH6CYSWqNlbvfC/B1SXcc/3LuXaw6svt/y7Esx3iFF+0LBQXA5sDzqXaloIXLYVlzvvf/Fx0kvl27kkROufvl9hDWjLcCQtLGXI5UT9V11pxrp8uf7ZAkiUaP2EOWx0Bc2P7m5/U+uYTba+rmtcsFxRWNz+SzRVCzDfaUnjqnkF2mFgsZ97s3JDr9JTjkhXNxWqmZit73UGYJ0t8h4diPwK+pBsSWyVExpXx9GxsIA7e4h4Vnm4DobeKe09hcnUsQn1eLzsUk1t2Xyy2A/Av1uBln//fn/j19ifa6f0RPGu7WHA3onQtPFmDrle3KioL5tmGBZ50xWNXrd3Wfnru8FOeNhRFRVw9Ob713BOJm51E/HgnEJ908vDTnDjUnjTUpdtNThY+6UThM08SbjWW3a4F+OPMc7ftMBS/J7YXbP9o39vbMFMTd1MdybStMPSHePkd3Oc2ntzUPRA3deVBpeR6bNJyM3H8plgoeowr70fcDseeEzXPvHhih6veX9hOzPhsyyyRsah5A6gC6IIL3GdTvPNRbusRhOE0kwiH4Iaze8+lvErqMmeKORyHvhkmZM3z5CnyZjwfWAyQ8whBxT1Ajp8kDrriGiPe/5VhmgDRrjDW7p61uzj9OU+R8E0PN2cvaTxmydL33TQg+mCVmqQHHiy8wTHx8HDcjfxSqFlkGivgxH1yxyK57NlOvjYD+nDjgytgd8aLnO+IjYgXVgpn9SY4jj9TVUbu4kJ2E3i4LZYXEzUyFTrijVEv8s/VUkokxfvQYCSwiJ/EVupaFRmaI8DIGSScSVIhGAlps/22e3N2fdo7H/Q7vd9325063h3JxLq0AwALXk5lOei94YAnfIYcRmrBkhbJYEDWjpgPaVtcpc1dZ8uStCy8Oo8OVd+8WzSEM07FKt2LhTrf9rq3nUGn17vuvVCsQr64sD3c/4GaJ7kxk12XQbvgc3HdKFVV1YaQt/g4r5b8mm3xhFyeNUBH1g4/OGw5ePM7YZWXhsbxwml8xhgWEEal4khA6/TmZnD97VXnfIBGG1ye9r7p9CyREIpayB+FiCRpRK6Vv4aCQIbm8hAtVZrlSgIrIk7ooyeOZYHbQOsuEfkMby6KLW5xpc0BcJr6IiYk2uwfiUMHr/as1m6l5sGwEo28494xgT8QWnlMxOiBpxdMXAMxNFFnkeQeXjyzpGhIXVfUdm0wmvCud71uoeguZu0lmATS6MRIUb0ng41b5IUYmhdWpmN9bezDfqp+v27PiqhLRFEcLUxkK4XTp4JV8gRYfTaIkg1BlGz9B6wmKk9uRAAA
+          EOF
+          tr -d '[:space:]' < /tmp/app-owned-generation.patch.gz.b64 \
+            | base64 -d \
+            | gzip -d \
+            > /tmp/app-owned-generation.patch
+          git apply --check /tmp/app-owned-generation.patch
+          git apply /tmp/app-owned-generation.patch
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Validate JavaScript and contracts
+        working-directory: ClipCascade_Mobile/src
+        run: |
+          set -euo pipefail
+          npm ci
+          node --check StartForegroundService.js
+          npm run lint -- --max-warnings=0
+          npm test -- --runInBand
+
+      - name: Validate Android lint, tests, and APK
+        working-directory: ClipCascade_Mobile/src/android
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace \
+            :app:lintStandalone \
+            :app:testDebugUnitTest \
+            :app:assembleStandalone
+          apk=app/build/outputs/apk/standalone/app-standalone.apk
+          test -f "$apk"
+          unzip -Z1 "$apk" | grep -Fxq assets/index.android.bundle
+          unzip -tq "$apk"
+
+      - name: Commit only validated product files
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            ClipCascade_Mobile/src/StartForegroundService.js \
+            ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/NativeBridgeModule.kt
+          git commit -m 'fix(android): generation-safe app-owned clipboard writes'
+          git push origin HEAD:stability-recovery
