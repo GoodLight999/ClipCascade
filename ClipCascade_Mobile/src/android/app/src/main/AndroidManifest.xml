@@ -67,10 +67,17 @@
         android:label="@string/background_setup_title"
         android:theme="@style/Theme.ClipCascade.BackgroundSetup" />
 
+      <!--
+        This is the exact service class documented by Notifee for custom
+        foreground-service types. The implementation lives in Notifee's
+        separately packaged Android core artifact, which Android Lint cannot
+        resolve while analyzing this React Native module graph.
+      -->
       <service
         android:name="app.notifee.core.ForegroundService"
         android:foregroundServiceType="remoteMessaging"
         android:exported="false"
+        tools:ignore="MissingClass"
         tools:replace="android:foregroundServiceType"/>
 
       <service
