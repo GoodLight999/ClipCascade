@@ -50,6 +50,17 @@ jobs:
           PY
           python -m py_compile tools/apply_pending_share_queue.py
           python tools/apply_pending_share_queue.py "$GITHUB_WORKSPACE"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('ClipCascade_Mobile/src/StartForegroundService.js')
+          source = path.read_text(encoding='utf-8')
+          old = 'void requestPendingShareDrain();'
+          if source.count(old) != 2:
+              raise SystemExit(
+                  f'pending-share fire-and-forget calls: expected 2, found {source.count(old)}'
+              )
+          path.write_text(source.replace(old, 'requestPendingShareDrain();'), encoding='utf-8')
+          PY
           git diff --check
 
       - name: Set up Node.js
