@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.View
@@ -26,6 +27,7 @@ class ClipboardFloatingActivity : AppCompatActivity() {
     private var isViewAttached = false
     private var coordinatorCompleted = false
     private var triggerSource = "unknown"
+    private var readCompletedAtElapsedMs: Long? = null
     private var globalLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,30 +54,6 @@ class ClipboardFloatingActivity : AppCompatActivity() {
 
         try {
             createFloatingView()
-            makeFloatingViewInFocus()
-
-            globalLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
-                try {
-                    globalLayoutListener?.let {
-                        floatingView.viewTreeObserver.removeOnGlobalLayoutListener(it)
-                    }
-                    getClipboardContent()
-                } catch (error: Exception) {
-                    Log.e(TAG, "Unable to read clipboard from overlay activity", error)
-                    CaptureDiagnostics.recordFailure(
-                        diagnosticSource(),
-                        "overlay_read_failed",
-                        error
-                    )
-                } finally {
-                    makeFloatingViewOutOfFocus()
-                    removeFloatingView(finishActivity = true)
-                }
-            }
-
-            globalLayoutListener?.let {
-                floatingView.viewTreeObserver.addOnGlobalLayoutListener(it)
-            }
         } catch (error: Exception) {
             Log.e(TAG, "Unable to create clipboard overlay", error)
             CaptureDiagnostics.recordFailure(
@@ -92,9 +70,33 @@ class ClipboardFloatingActivity : AppCompatActivity() {
         floatingView = View(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
         }
+
+        // Register before addView so a fast first layout cannot be missed.
+        globalLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+            try {
+                globalLayoutListener?.let {
+                    floatingView.viewTreeObserver.removeOnGlobalLayoutListener(it)
+                }
+                getClipboardContent()
+            } catch (error: Exception) {
+                Log.e(TAG, "Unable to read clipboard from overlay activity", error)
+                CaptureDiagnostics.recordFailure(
+                    diagnosticSource(),
+                    "overlay_read_failed",
+                    error
+                )
+            } finally {
+                makeFloatingViewOutOfFocus()
+                removeFloatingView(finishActivity = true)
+            }
+        }
+        globalLayoutListener?.let {
+            floatingView.viewTreeObserver.addOnGlobalLayoutListener(it)
+        }
+
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            1,
+            1,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
@@ -105,10 +107,15 @@ class ClipboardFloatingActivity : AppCompatActivity() {
         }
         windowManager.addView(floatingView, params)
         isViewAttached = true
+        makeFloatingViewInFocus()
     }
 
     private fun getClipboardContent() {
         val clip = clipboardManager.primaryClip
+        // The timestamp is captured immediately after the platform read returns,
+        // not when the activity later tears down or the JS event is delivered.
+        readCompletedAtElapsedMs = SystemClock.elapsedRealtime()
+
         if (clip == null || clip.itemCount == 0) {
             CaptureDiagnostics.recordIgnored(diagnosticSource(), "clipboard_empty")
             return
@@ -201,7 +208,10 @@ class ClipboardFloatingActivity : AppCompatActivity() {
     private fun completeCoordinatorOnce() {
         if (coordinatorCompleted) return
         coordinatorCompleted = true
-        BackgroundClipboardCapture.completeOverlay(this)
+        BackgroundClipboardCapture.completeOverlay(
+            this,
+            readCompletedAtElapsedMs
+        )
     }
 
     private fun finishWithoutAnimation() {
