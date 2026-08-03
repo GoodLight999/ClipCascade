@@ -8,6 +8,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import com.reactnativecommunity.asyncstorage.ReactDatabaseSupplier
 import org.json.JSONObject
+import org.json.JSONTokener
 
 /**
  * Native access to the same SQLite database owned by React Native AsyncStorage.
@@ -15,6 +16,7 @@ import org.json.JSONObject
  * ReactDatabaseSupplier is process-wide. Bridge instances may drop their local
  * database reference, but must never close the supplier-owned database because
  * JavaScript AsyncStorage and other native bridge instances may still use it.
+ * Values use the same JSON-string representation as AsyncStorageManagement.js.
  */
 class AsyncStorageBridge(context: Context) {
     companion object {
@@ -77,12 +79,13 @@ class AsyncStorageBridge(context: Context) {
                 null
             ) ?: return null
 
-            if (cursor.moveToFirst()) {
-                cursor
-                    .getString(cursor.getColumnIndexOrThrow(VALUE_COLUMN))
-                    .replace("^\"|\"$".toRegex(), "")
-            } else {
-                null
+            if (!cursor.moveToFirst()) return null
+
+            val rawValue = cursor.getString(cursor.getColumnIndexOrThrow(VALUE_COLUMN))
+            when (val decoded = JSONTokener(rawValue).nextValue()) {
+                JSONObject.NULL -> null
+                is String -> decoded
+                else -> decoded.toString()
             }
         } catch (error: Exception) {
             Log.e(TAG, "Error retrieving value for key $key", error)
@@ -110,7 +113,7 @@ class AsyncStorageBridge(context: Context) {
             }
             val values = ContentValues().apply {
                 put(KEY_COLUMN, key)
-                put(VALUE_COLUMN, "\"$value\"")
+                put(VALUE_COLUMN, JSONObject.quote(value))
             }
             database.insertWithOnConflict(
                 TABLE_CATALYST,
