@@ -1,120 +1,169 @@
 # ClipCascade Android setup and acceptance guide
 
-Last updated: 2026-07-27 (Asia/Tokyo)
+Last updated: 2026-08-03 (Asia/Tokyo)
 
-This guide applies to the `stability-recovery` engineering APK. It preserves the existing ClipCascade server protocol and does not require root.
+This guide applies to the `stability-recovery` engineering APK. It preserves the existing ClipCascade server protocol and STOMP destinations, uses debug signing, and does not require root.
 
 ## Recommended setup order
 
-1. Install the latest engineering APK.
-2. Long-press the ClipCascade launcher icon and open **バックグラウンド設定**.
-3. Tap **Shizukuを開く／未導入なら入手する**.
-4. In the installed official or compatible forked Shizuku manager, start the server using wireless debugging or the method supported by the device.
-5. Return to ClipCascade and tap **Shizuku権限を許可して接続**. ClipCascade actively asks every visible compatible manager to resend its Binder; it no longer waits only for passive process-start delivery.
-6. Confirm that the setup screen shows:
-   - Shizuku installed: enabled;
-   - Shizuku running: enabled;
-   - Shizuku permission: enabled;
-   - Shizuku read service: connected, normally UID 2000 for shell mode.
-7. Tap **Shizuku読み取りをテスト**. The result reports only clipboard type and length; it never displays or stores clipboard content.
-8. Enable ClipCascade's Accessibility service. It detects only high-confidence copy actions and copied confirmations. Generic clicks and generic text selections are intentionally ignored.
-9. Keep overlay permission enabled as a fallback while device testing is in progress.
-10. Exempt ClipCascade and the selected Shizuku manager from battery optimization when the device vendor aggressively stops background services.
+1. Install the latest engineering APK over the previous engineering build.
+2. Open ClipCascade and complete the existing server/login setup.
+3. Long-press the launcher icon and open **バックグラウンド設定**.
+4. Start the installed official or compatible forked Shizuku server using the method supported by that manager and device.
+5. Return to ClipCascade, refresh the setup status, and confirm that the Shizuku Binder is available.
+6. Tap **Shizuku権限を許可して接続** and approve the request in the installed manager.
+7. Confirm that the setup screen reports:
+   - Shizuku Binder: available;
+   - Shizuku permission: granted;
+   - Shizuku read service: connected, normally UID 2000 in shell mode;
+   - ClipCascade runtime: active while the foreground service is running.
+8. Tap **Shizuku読み取りをテスト**. The result reports only clipboard type and length; it does not display clipboard content.
+9. Enable ClipCascade's Accessibility service. Android can bind it because the service is exported while protected by `android.permission.BIND_ACCESSIBILITY_SERVICE`.
+10. Keep overlay permission enabled for the fallback path.
+11. On ROMs that aggressively stop background services, open the system battery-optimization settings and exempt ClipCascade and the selected Shizuku manager manually.
+
+## One automatic capture coordinator
+
+Foreground and background automatic copies do not use separate payload-reading implementations.
+
+```text
+ClipboardManager change notification
+Accessibility exact ACTION_COPY
+optional READ_LOGS trigger
+        ↓
+BackgroundClipboardCapture
+        ↓
+Shizuku UserService read
+        ↓ unavailable / denied / binding / failed / non-text
+overlay fallback read
+        ↓
+onClipboardChange
+        ↓
+existing StartForegroundService.js transport
+```
+
+The ordinary `ClipboardManager` listener is a trigger only. It does not read `primaryClip` and send it through a privileged foreground-only shortcut.
 
 ## Shizuku
 
-ClipCascade discovers a Shizuku-compatible manager through the standard `rikka.shizuku.intent.action.REQUEST_BINDER` receiver rather than depending only on the official manager package name.
+ClipCascade uses the official Shizuku client lifecycle:
 
-When the Binder is absent, ClipCascade explicitly sends a targeted Binder-request broadcast to each discovered compatible manager. The setup status records the detected manager label, version, and package without exposing clipboard contents.
+- `rikka.shizuku.ShizukuProvider` in the manifest;
+- sticky Binder-received listener;
+- Binder-dead listener;
+- official permission request;
+- `Shizuku.bindUserService`;
+- explicit UserService disconnect, binding-death, and null-binding handling.
 
-For a fork with a stealth or application-hiding feature, configure the fork so that ClipCascade is allowed to discover and use its API. If the fork deliberately hides both its Binder receiver and launcher identity from ClipCascade, Android package visibility prevents reliable automatic discovery.
+It does **not**:
 
-The **Shizukuを開く** action opens the detected compatible manager. If none is discoverable, it opens this recovery project's setup guide rather than directing the user to one upstream download site.
+- scan manager package names or launcher labels;
+- identify forks by product text;
+- send `rikka.shizuku.intent.action.REQUEST_BINDER` manually;
+- use a private manager broadcast;
+- open a hard-coded Shizuku download URL.
 
-## What each path does
+The UserService accepts only explicit AOSP `IClipboard#getPrimaryClip` signatures known to the implementation. Unknown signatures fail closed and appear in diagnostics. The calling Android user ID is derived in the client process from the AOSP UID/user relation. Direct Shizuku output is currently text-only; images and files fall back to the app-process overlay path.
 
-### Ordinary listener
+## Accessibility
 
-Used while Android allows the app process to observe the clipboard normally.
+Accessibility is a copy-operation trigger only.
 
-### Shizuku
+The service reacts only when Android reports `AccessibilityEvent.action == AccessibilityNodeInfo.ACTION_COPY`. It does not infer copying from:
 
-Preferred background read path. Accessibility or READ_LOGS supplies a copy trigger, then a shell-identity UserService reads text and returns it to the existing React Native `onClipboardChange -> sendClipBoard` path.
+- translated phrases such as “copied” or “コピーしました”;
+- button labels or content descriptions;
+- generic clicks;
+- generic text selection;
+- arbitrary window content;
+- notification or toast text.
 
-The first Shizuku implementation directly returns text only. Images and files use the existing app-process fallback until URI ownership is proven separately.
+## Overlay fallback
 
-### Accessibility
+The overlay is used when Shizuku cannot complete the read or the content requires the existing app-process URI path.
 
-Trigger only. It does not collect window contents and does not own transport. It accepts explicit copy actions, copy-labelled clicks, and copied-confirmation announcements or notifications.
+The capture coordinator remains active until the overlay performs its platform clipboard read and is destroyed. A listener and Accessibility trigger for the same copy therefore cannot launch concurrent overlays.
 
-### Overlay fallback
+Pending triggers are compared with the actual monotonic read-completion timestamp. A trigger already covered by the completed read is discarded; a trigger that arrived after the read is processed next. There is no arbitrary debounce or duplicate time window.
 
-Used only when Shizuku is unavailable, denied, still binding, unsupported, or returns non-text content. It returns content through the same native emission gate as ordinary and Shizuku paths.
+## App-owned clipboard writes
 
-### READ_LOGS / guided ADB fallback
+Text and image content written to the local clipboard by ClipCascade itself carries an explicit `ClipDescription.extras` marker. This covers:
 
-An optional trigger path retained from the existing application. The setup screen can copy the required commands. Root is not required.
+- received P2S/P2P content;
+- content shared into ClipCascade;
+- setup commands copied by ClipCascade.
+
+The automatic listener ignores this marker, preventing resend loops without relying on hashes, delays, event ordering, or a “block once” flag.
+
+## Shared-content handoff
+
+Android share intents are placed in a bounded native queue. React Native receives only a wake signal and atomically drains the queue after the foreground-service transport is ready. This prevents cold-start shares from being emitted before JavaScript listeners exist.
+
+The queue is process-local and bounded to 64 events. If that bound is reached, the oldest pending share is discarded and a warning is logged. It is not a durable cross-process outbox.
+
+## READ_LOGS / guided ADB fallback
+
+READ_LOGS remains an optional trigger path inherited from the existing application. The setup screen can copy the required commands. Root is not required. The copied setup commands are explicitly marked as application-owned so they are not synchronized.
 
 ## Payload-free diagnostics
 
-The setup screen records only:
+The setup screen records only operational metadata:
 
-- trigger count;
-- coalesced trigger count;
+- trigger and coalesced-trigger counts;
 - Shizuku attempts and successes;
 - overlay fallbacks;
 - events emitted to React Native;
-- short-window duplicates suppressed;
 - ignored or unavailable stages;
 - last source, stage, error class/reason, and timestamp;
 - P2S text-outbox count/state/attempt/deadline metadata when server mode is P2S.
 
 Clipboard content is not retained in the diagnostic ledger.
 
-`[P2S text outbox] Status: unavailable` is expected while the application is configured for P2P mode; the durable text outbox belongs only to the existing P2S transport.
+`[P2S text outbox] Status: unavailable` is expected in P2P mode. The persistent text outbox belongs only to the existing P2S transport.
 
 ## Real-device acceptance matrix
 
-Run each row separately and record the result in `docs/EXPERIMENT_LOG.md`.
+Run each case separately and record the exact preceding action and resulting diagnostic report.
 
 | Case | Expected result |
 |---|---|
-| App open, ordinary text copy | One outbound send |
-| App background, Shizuku running, Accessibility enabled | One outbound text send without overlay focus change |
-| Fork manager running before ClipCascade starts | Explicit reprobe obtains the Binder or reports the exact detected manager |
-| Shizuku stopped, overlay enabled | Automatic overlay fallback and one outbound send |
-| Shizuku denied, overlay disabled | No focus change; diagnostic reports no usable path |
-| Repeat same copy through overlapping triggers | One JS emission; duplicate/coalesced counter increases |
-| Copy identical text again after a deliberate pause | Treated as a new user action |
-| Amazon search field click/type | No capture trigger and no focus loss |
-| Browser search field click/type | No capture trigger and no focus loss |
-| Launcher drawer interaction | No dismissal or focus change |
-| Generic text selection without Copy | No capture trigger |
-| Explicit Copy action from selection toolbar | One capture attempt |
-| Image/file copy | Existing app-process fallback; no claim of direct Shizuku URI transfer |
-| Device reboot | Verify ClipCascade service policy and restart Shizuku as required by the device setup method |
+| App visible, fresh text copied in another app | Unified coordinator runs and exactly one outbound send occurs |
+| App background, Shizuku running, Accessibility enabled | `ACTION_COPY → Shizuku read → existing sender`, without overlay focus change |
+| ClipCascade starts after the manager | Official Provider/listener lifecycle receives the Binder or reports the actual failure |
+| Shizuku stopped, overlay enabled | One overlay fallback and one outbound send |
+| Shizuku denied, overlay disabled | No clipboard payload read; diagnostic reports no usable path |
+| Listener and Accessibility report the same copy | One completed read/emission; the covered trigger is coalesced |
+| A new copy occurs after the previous read | It is processed as a new request, even if the text is identical |
+| Generic click, typing, or text selection without Copy | No Accessibility capture trigger |
+| Explicit Copy action from a supported selection toolbar | One capture attempt |
+| P2S/P2P content is received locally | Clipboard is updated with the app-owned marker and is not sent back |
+| App receives text/image/file through Android share while cold | Native queue retains it until JavaScript transport readiness |
+| Image/file copy | Existing overlay/app-process URI path; no direct Shizuku URI-transfer claim |
+| Device reboot | Verify ClipCascade restart policy and restart Shizuku as required by its manager |
 
 ## Evidence to capture for a failure
 
 Do not include clipboard content. Record:
 
-- Android version and device model;
-- manager label/version/package shown in the Shizuku error;
-- which path was enabled;
-- setup-screen capability status;
+- Android version, ROM, and device model;
+- installed Shizuku manager/fork and its version;
+- Shizuku Binder/permission/UserService status;
+- Accessibility, overlay, READ_LOGS, and battery-exemption status;
 - diagnostic counters before and after the action;
 - last source, stage, and error;
-- whether the UI lost focus, closed, or changed;
-- whether the server received the item and whether a remote device applied it;
-- whether duplicates appeared;
-- approximate battery observation period.
+- whether the UI lost focus or an overlay appeared;
+- whether the server received the item;
+- whether a remote device applied it;
+- whether a duplicate appeared;
+- the exact action immediately before failure.
 
 ## Current limitations
 
-- Engineering APK uses debug signing.
-- Fork discovery still depends on the fork exposing the standard Binder-request receiver or a recognizable launcher identity to ClipCascade.
-- Shizuku hidden clipboard invocation is build-verified but still requires device coverage across Android/vendor versions.
-- Shizuku direct output is text-only in the first implementation.
-- P2S text has a persistent bounded FIFO outbox; P2P, images, and files do not use that outbox.
+- The engineering APK uses debug signing.
+- Shizuku hidden clipboard invocation is build-verified but still needs real-device coverage across Android/vendor implementations.
+- A Binder transaction that never returns has no arbitrary timeout; this remains a real-device liveness test item rather than a guessed constant.
+- Shizuku direct output is text-only.
+- P2S text has a persistent bounded FIFO outbox; P2P, images, files, and pending Android share intents do not use that durable outbox.
 - The current server protocol has no explicit remote-application delivery receipt.
-- Build success is not device/runtime proof.
+- Static checks and successful CI are not runtime proof.
