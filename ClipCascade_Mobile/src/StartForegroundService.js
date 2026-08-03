@@ -16,8 +16,6 @@ import {
   RTCIceCandidate,
   RTCSessionDescription,
 } from 'react-native-webrtc';
-import Clipboard from '@react-native-clipboard/clipboard';
-
 import {
   setDataInAsyncStorage,
   getDataFromAsyncStorage,
@@ -29,11 +27,16 @@ const {
   DEFAULT_MAX_DELAY_MS,
 } = require('./P2SRetryPolicy');
 
-function cleanupClipboardListeners() {
+let clipboardListenerGeneration = 0;
+let activeClipboardOnChangeSubscription = null;
+
+function cleanupActiveClipboardListeners() {
   DeviceEventEmitter.removeAllListeners('SHARED_TEXT');
   DeviceEventEmitter.removeAllListeners('SHARED_IMAGE');
   DeviceEventEmitter.removeAllListeners('SHARED_FILES');
-  DeviceEventEmitter.removeAllListeners('onClipboardChange');
+  activeClipboardOnChangeSubscription?.remove();
+  activeClipboardOnChangeSubscription = null;
+  NativeModules.ClipboardListener?.stopListening?.();
 }
 
 module.exports = async (inputData = null) => {
@@ -52,9 +55,29 @@ module.exports = async (inputData = null) => {
         const textEncoder = new TextEncoder();
         const textDecoder = new TextDecoder();
 
+        cleanupActiveClipboardListeners();
+        const listenerGeneration = ++clipboardListenerGeneration;
+        let instanceClipboardOnChangeSubscription = null;
+        const cleanupClipboardListeners = () => {
+          const subscription = instanceClipboardOnChangeSubscription;
+          subscription?.remove();
+          instanceClipboardOnChangeSubscription = null;
+
+          // A superseded service instance may clean up its own subscription,
+          // but must not stop or remove listeners owned by the current instance.
+          if (listenerGeneration !== clipboardListenerGeneration) return;
+
+          DeviceEventEmitter.removeAllListeners('SHARED_TEXT');
+          DeviceEventEmitter.removeAllListeners('SHARED_IMAGE');
+          DeviceEventEmitter.removeAllListeners('SHARED_FILES');
+          if (activeClipboardOnChangeSubscription === subscription) {
+            activeClipboardOnChangeSubscription = null;
+          }
+          NativeModules.ClipboardListener?.stopListening?.();
+        };
+
         let previous_clipboard_content_hash = '';
         let toggle = false; // p2s toggle
-        let block_image_once = false;
         let files_in_memory = null;
         let websocket_status_notification_toggle = false;
         let p2pMsg = null; // p2p status message
@@ -271,12 +294,10 @@ module.exports = async (inputData = null) => {
           try {
             const clipContent = event.text;
             if (clipContent) {
-              /**
-               * Sometimes `Clipboard.setString` is invoked before the app is fully opened, leading to an unauthorized state.
-               * To handle this, implement a fail-safe mechanism that retries sending clipboard content only when it hasn't been successfully sent yet.
-               * If both events are triggered successfully, the content won't be sent twice because the same content is hashed, ensuring that identical data is only processed once.
-               */
-              Clipboard.setString(clipContent);
+              // Write a marked local copy for user visibility while sending the
+              // shared payload directly through the existing transport. The native
+              // marker prevents automatic recapture of this app-owned write.
+              await NativeBridgeModule.setAppOwnedTextClipboard(clipContent);
               await sendClipBoard(clipContent, 'text');
             }
           } catch (e) {
@@ -323,7 +344,7 @@ module.exports = async (inputData = null) => {
         // start clipboard listening
         ClipboardListener.startListening();
         // clipboard listener callback
-        const clipboardOnChange = clipboardListener.addListener(
+        instanceClipboardOnChangeSubscription = clipboardListener.addListener(
           'onClipboardChange',
           async params => {
             try {
@@ -338,6 +359,8 @@ module.exports = async (inputData = null) => {
             }
           },
         );
+        activeClipboardOnChangeSubscription =
+          instanceClipboardOnChangeSubscription;
 
         const clearFiles = async (expensiveCall = false) => {
           files_in_memory = null;
@@ -571,12 +594,11 @@ module.exports = async (inputData = null) => {
 
                         if (await validateClipboardSize(cb, type_, 'Inbound')) {
                           if (type_ === 'text') {
-                            Clipboard.setString(cb);
+                            await NativeBridgeModule.setAppOwnedTextClipboard(cb);
                           } else if (type_ === 'image') {
                             await NativeBridgeModule.copyBase64ImageToClipboardUsingCache(
                               cb,
                             );
-                            block_image_once = true;
                           } else if (type_ === 'files') {
                             await showFilesDownloadNotification('📥 Download File(s)');
                             files_in_memory = cb;
@@ -625,12 +647,10 @@ module.exports = async (inputData = null) => {
               }
             },
             onDisconnect: async () => {
-              block_image_once = false;
               await releaseP2STextInFlight();
               await setDataInAsyncStorage('wsStatusMessage', 'Disconnected');
             },
             onStompError: async frame => {
-              block_image_once = false;
               await releaseP2STextInFlight();
               await setDataInAsyncStorage(
                 'wsStatusMessage',
@@ -638,7 +658,6 @@ module.exports = async (inputData = null) => {
               );
             },
             onWebSocketError: async event => {
-              block_image_once = false;
               await releaseP2STextInFlight();
               await setDataInAsyncStorage(
                 'wsStatusMessage',
@@ -646,7 +665,6 @@ module.exports = async (inputData = null) => {
               );
             },
             onWebSocketClose: async event => {
-              block_image_once = false;
               await releaseP2STextInFlight();
               const reason = event?.reason || 'closed by client';
               await setDataInAsyncStorage(
@@ -758,32 +776,27 @@ module.exports = async (inputData = null) => {
               if (await newCB(hcb)) {
                 previous_clipboard_content_hash = hcb;
 
-                if (block_image_once) {
-                  block_image_once = false;
-                } else {
-                  toggle = true;
+                toggle = true;
 
-                  if (cipher_enabled === 'true') {
-                    clipContent = await encrypt(clipContent);
-                  }
-
-                  await setDataInAsyncStorage(
-                    'wsStatusMessage',
-                    '✅ Connected - Broadcasting',
-                  );
-
-                  stompClient.publish({
-                    destination: SEND_DESTINATION,
-                    body: JSON.stringify({
-                      payload: String(clipContent),
-                      type: type_,
-                    }),
-                  });
+                if (cipher_enabled === 'true') {
+                  clipContent = await encrypt(clipContent);
                 }
+
+                await setDataInAsyncStorage(
+                  'wsStatusMessage',
+                  '✅ Connected - Broadcasting',
+                );
+
+                stompClient.publish({
+                  destination: SEND_DESTINATION,
+                  body: JSON.stringify({
+                    payload: String(clipContent),
+                    type: type_,
+                  }),
+                });
               }
             } catch (e) {
               toggle = false;
-              block_image_once = false;
               throw e;
             }
           };
@@ -796,9 +809,8 @@ module.exports = async (inputData = null) => {
             // 1) Stop clipboard listening
             try {
               await ClipboardListener.stopListening();
-              if (clipboardOnChange) {
-                clipboardOnChange.remove();
-              }
+              instanceClipboardOnChangeSubscription?.remove();
+              instanceClipboardOnChangeSubscription = null;
             } catch (e) {
               // no-op
             }
@@ -1025,7 +1037,6 @@ module.exports = async (inputData = null) => {
               };
 
               wsSignalingClient.onerror = async event => {
-                block_image_once = false;
                 await setDataInAsyncStorage(
                   'wsStatusMessage',
                   '❌ WebSocket Error: ' + JSON.stringify(event, null, 2),
@@ -1033,7 +1044,6 @@ module.exports = async (inputData = null) => {
               };
 
               wsSignalingClient.onclose = async event => {
-                block_image_once = false;
                 const reason = event?.reason || 'closed by client';
                 await setDataInAsyncStorage(
                   'wsStatusMessage',
@@ -1102,74 +1112,69 @@ module.exports = async (inputData = null) => {
                 if (await newCB(hcb)) {
                   previous_clipboard_content_hash = hcb;
 
-                  if (block_image_once) {
-                    block_image_once = false;
-                  } else {
-                    await resetSendingFragmentId();
-                    await resetReceivingFragments();
+                  await resetSendingFragmentId();
+                  await resetReceivingFragments();
 
-                    const rawPayloadSizeInBytes =
-                      textEncoder.encode(clipContent).length;
+                  const rawPayloadSizeInBytes =
+                    textEncoder.encode(clipContent).length;
 
-                    if (cipher_enabled === 'true') {
-                      //ecrypt
-                      clipContent = await encrypt(clipContent);
+                  if (cipher_enabled === 'true') {
+                    //ecrypt
+                    clipContent = await encrypt(clipContent);
+                  }
+
+                  // fragment payload
+                  const fragments = await fragmentString(
+                    clipContent,
+                    FRAGMENT_SIZE,
+                  );
+
+                  const metadata = {
+                    id: await generateUuid(),
+                    isFragmented: fragments.length > 1,
+                    index: 0,
+                    totalFragments: fragments.length,
+                    combinedRawPayloadSizeInBytes: rawPayloadSizeInBytes,
+                  };
+
+                  let loopBroken = false;
+                  sendingFragmentId = metadata.id;
+                  for (let i = 0; i < fragments.length; i++) {
+                    if (sendingFragmentId !== metadata.id) {
+                      loopBroken = true;
+                      return;
                     }
 
-                    // fragment payload
-                    const fragments = await fragmentString(
-                      clipContent,
-                      FRAGMENT_SIZE,
+                    const fragment = fragments[i];
+
+                    const messageJson = JSON.stringify({
+                      payload: fragment,
+                      type: type_,
+                      metadata: metadata,
+                    });
+                    metadata.index += 1;
+
+                    // send to all open DataChannels
+                    Object.entries(dataChannels).forEach(
+                      async ([peerId, channel]) => {
+                        if (channel.readyState === 'open') {
+                          await channel.send(messageJson);
+                        }
+                      },
                     );
 
-                    const metadata = {
-                      id: await generateUuid(),
-                      isFragmented: fragments.length > 1,
-                      index: 0,
-                      totalFragments: fragments.length,
-                      combinedRawPayloadSizeInBytes: rawPayloadSizeInBytes,
-                    };
-
-                    let loopBroken = false;
-                    sendingFragmentId = metadata.id;
-                    for (let i = 0; i < fragments.length; i++) {
-                      if (sendingFragmentId !== metadata.id) {
-                        loopBroken = true;
-                        return;
-                      }
-
-                      const fragment = fragments[i];
-
-                      const messageJson = JSON.stringify({
-                        payload: fragment,
-                        type: type_,
-                        metadata: metadata,
-                      });
-                      metadata.index += 1;
-
-                      // send to all open DataChannels
-                      Object.entries(dataChannels).forEach(
-                        async ([peerId, channel]) => {
-                          if (channel.readyState === 'open') {
-                            await channel.send(messageJson);
-                          }
-                        },
-                      );
-
-                      // Update stats
-                      if (metadata.isFragmented) {
-                        sendingFragmentStats = `${metadata.index}/${metadata.totalFragments}`;
-                        await p2pStatusMessageChanged();
-                      }
+                    // Update stats
+                    if (metadata.isFragmented) {
+                      sendingFragmentStats = `${metadata.index}/${metadata.totalFragments}`;
+                      await p2pStatusMessageChanged();
                     }
-                    if (!loopBroken) {
-                      await resetSendingFragmentId();
-                    }
+                  }
+                  if (!loopBroken) {
+                    await resetSendingFragmentId();
                   }
                 }
               }
             } catch (e) {
-              block_image_once = false;
               p2pMsg = '❌ P2P Outbound Error: ' + JSON.stringify(e, null, 2);
               await p2pStatusMessageChanged();
             }
@@ -1180,9 +1185,8 @@ module.exports = async (inputData = null) => {
             // 1) Stop listening to clipboard events
             try {
               await ClipboardListener.stopListening();
-              if (clipboardOnChange) {
-                clipboardOnChange.remove();
-              }
+              instanceClipboardOnChangeSubscription?.remove();
+              instanceClipboardOnChangeSubscription = null;
             } catch (e) {
               // no-op
             }
@@ -1323,12 +1327,11 @@ module.exports = async (inputData = null) => {
                 if (await validateClipboardSize(cb, type_, 'Inbound')) {
                   // set clipboard content
                   if (type_ === 'text') {
-                    Clipboard.setString(cb);
+                    await NativeBridgeModule.setAppOwnedTextClipboard(cb);
                   } else if (type_ === 'image') {
                     await NativeBridgeModule.copyBase64ImageToClipboardUsingCache(
                       cb,
                     );
-                    block_image_once = true;
                   } else if (type_ === 'files') {
                     await showFilesDownloadNotification('📥 Download File(s)');
 
@@ -1754,7 +1757,7 @@ module.exports = async (inputData = null) => {
         pollFlagsLoop();
       } catch (error) {
         await setDataInAsyncStorage('wsStatusMessage', '❌ Error:' + error);
-        cleanupClipboardListeners();
+        cleanupActiveClipboardListeners();
         await notifee.stopForegroundService();
       }
     });

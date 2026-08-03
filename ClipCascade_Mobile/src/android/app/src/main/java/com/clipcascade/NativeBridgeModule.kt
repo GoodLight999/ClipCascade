@@ -16,6 +16,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.PersistableBundle
 import androidx.core.content.FileProvider
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.serialization.decodeFromString
@@ -133,6 +134,30 @@ class NativeBridgeModule(reactContext: ReactApplicationContext) : ReactContextBa
     }
 
     @ReactMethod
+    fun setAppOwnedTextClipboard(content: String, promise: Promise) {
+        try {
+            val clipData = ClipData.newPlainText("ClipCascade text", content).apply {
+                description.extras = appOwnedClipboardExtras()
+            }
+            val clipboard = reactApplicationContext
+                .getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(clipData)
+            promise.resolve(null)
+        } catch (error: Exception) {
+            promise.reject(
+                "CLIPBOARD_WRITE_ERROR",
+                "Failed to write app-owned text to the clipboard",
+                error
+            )
+        }
+    }
+
+    private fun appOwnedClipboardExtras(): PersistableBundle =
+        PersistableBundle().apply {
+            putBoolean(ClipboardListenerModule.APP_OWNED_CLIP_MARKER, true)
+        }
+
+    @ReactMethod
     fun copyBase64ImageToClipboardUsingCache(base64String: String, promise: Promise) {
         try {
             // Clear existing cached images to prevent accumulation
@@ -159,7 +184,13 @@ class NativeBridgeModule(reactContext: ReactApplicationContext) : ReactContextBa
             val imageUri: Uri = FileProvider.getUriForFile(reactApplicationContext, authority, cacheFile)
 
             // Copy the URI to clipboard
-            val clipData = ClipData.newUri(reactApplicationContext.contentResolver, "Image", imageUri)
+            val clipData = ClipData.newUri(
+                reactApplicationContext.contentResolver,
+                "Image",
+                imageUri
+            ).apply {
+                description.extras = appOwnedClipboardExtras()
+            }
             val clipboard = reactApplicationContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(clipData)
 
