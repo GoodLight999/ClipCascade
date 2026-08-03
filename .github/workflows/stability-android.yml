@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   build-standalone-apk:
-    name: Static audit, tests, and bundled Android APK
+    name: Full audit, tests, and bundled Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     defaults:
@@ -34,17 +34,17 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -53,21 +53,36 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
 
-      - name: Audit production JavaScript dependencies
-        id: dependency_audit
+      - name: Audit full JavaScript dependency tree
+        id: dependency_audit_full
         continue-on-error: true
         run: |
           mkdir -p ci-logs/android
           set -o pipefail
-          npm audit --omit=dev --audit-level=high 2>&1 | tee ci-logs/android/npm-audit.log
+          npm audit --audit-level=high \
+            2>&1 | tee ci-logs/android/npm-audit-full.log
 
-      - name: Run JavaScript static analysis
+      - name: Audit production JavaScript dependencies
+        id: dependency_audit_production
+        continue-on-error: true
+        run: |
+          mkdir -p ci-logs/android
+          set -o pipefail
+          npm audit --omit=dev --audit-level=high \
+            2>&1 | tee ci-logs/android/npm-audit-production.log
+
+      - name: Run JavaScript syntax and static analysis
         id: eslint
         continue-on-error: true
         run: |
           mkdir -p ci-logs/android
           set -o pipefail
-          npm run lint -- --max-warnings=0 2>&1 | tee ci-logs/android/eslint.log
+          {
+            node --check App.js
+            node --check StartForegroundService.js
+            node --check HeadlessTask.js
+            npm run lint -- --max-warnings=0
+          } 2>&1 | tee ci-logs/android/eslint.log
 
       - name: Run JavaScript reliability tests
         id: jest
@@ -124,7 +139,7 @@ jobs:
 
       - name: Upload build logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ClipCascade-stability-android-build-log
           path: ClipCascade_Mobile/src/ci-logs/android/
@@ -133,7 +148,7 @@ jobs:
 
       - name: Upload installable engineering APK
         if: steps.package_verify.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ClipCascade-Android-stability-standalone
           path: ClipCascade_Mobile/src/ci-artifacts/android/
@@ -144,13 +159,15 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          printf '%-22s %s\n' \
-            dependency-audit '${{ steps.dependency_audit.outcome }}' \
+          printf '%-28s %s\n' \
+            dependency-audit-full '${{ steps.dependency_audit_full.outcome }}' \
+            dependency-audit-production '${{ steps.dependency_audit_production.outcome }}' \
             eslint '${{ steps.eslint.outcome }}' \
             jest '${{ steps.jest.outcome }}' \
             android-gradle '${{ steps.gradle.outcome }}' \
             package-verify '${{ steps.package_verify.outcome }}'
-          test '${{ steps.dependency_audit.outcome }}' = success
+          test '${{ steps.dependency_audit_full.outcome }}' = success
+          test '${{ steps.dependency_audit_production.outcome }}' = success
           test '${{ steps.eslint.outcome }}' = success
           test '${{ steps.jest.outcome }}' = success
           test '${{ steps.gradle.outcome }}' = success
