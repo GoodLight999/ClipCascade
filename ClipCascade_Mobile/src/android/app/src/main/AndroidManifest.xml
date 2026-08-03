@@ -1,10 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.READ_LOGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -77,12 +76,17 @@
         android:foregroundServiceType="remoteMessaging"
         android:exported="false"
         tools:ignore="MissingClass"
-        tools:replace="android:foregroundServiceType"/>
+        tools:replace="android:foregroundServiceType" />
 
+      <!--
+        Accessibility services must be exported so Android's system process can
+        bind to them. BIND_ACCESSIBILITY_SERVICE keeps that binding restricted
+        to the system.
+      -->
       <service
         android:name=".ClipCascadeAccessibilityService"
         android:enabled="true"
-        android:exported="false"
+        android:exported="true"
         android:label="@string/accessibility_service_label"
         android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
         <intent-filter>
@@ -120,8 +124,8 @@
         android:exported="false"
         android:grantUriPermissions="true">
         <meta-data
-            android:name="android.support.FILE_PROVIDER_PATHS"
-            android:resource="@xml/provider_paths" />
+          android:name="android.support.FILE_PROVIDER_PATHS"
+          android:resource="@xml/provider_paths" />
       </provider>
     </application>
 </manifest>
