@@ -1,10 +1,12 @@
 // android\app\src\main\java\com\clipcascade\ClipboardFloatingActivity.kt
 package com.clipcascade
 
+import android.app.Activity
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
@@ -32,7 +34,7 @@ class ClipboardFloatingActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        overridePendingTransition(0, 0)
+        disableTransitionAnimation(Activity.OVERRIDE_TRANSITION_OPEN)
         triggerSource = intent.getStringExtra(EXTRA_TRIGGER_SOURCE) ?: "unknown"
 
         if (!Settings.canDrawOverlays(this)) {
@@ -213,7 +215,16 @@ class ClipboardFloatingActivity : AppCompatActivity() {
 
     private fun finishWithoutAnimation() {
         finish()
-        overridePendingTransition(0, 0)
+        disableTransitionAnimation(Activity.OVERRIDE_TRANSITION_CLOSE)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun disableTransitionAnimation(overrideType: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            overrideActivityTransition(overrideType, 0, 0)
+        } else {
+            overridePendingTransition(0, 0)
+        }
     }
 
     override fun onDestroy() {
