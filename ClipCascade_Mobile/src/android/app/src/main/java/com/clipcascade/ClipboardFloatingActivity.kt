@@ -4,11 +4,10 @@ package com.clipcascade
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.os.Build
+import android.graphics.Color
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
@@ -31,7 +30,7 @@ class ClipboardFloatingActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         overridePendingTransition(0, 0)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+        if (!Settings.canDrawOverlays(this)) {
             Log.w(TAG, "Overlay permission is not available; skipping clipboard read")
             CaptureDiagnostics.recordIgnored("overlay", "overlay_permission_missing")
             finishWithoutAnimation()
@@ -79,8 +78,9 @@ class ClipboardFloatingActivity : AppCompatActivity() {
     }
 
     private fun createFloatingView() {
-        val inflater = getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
-        floatingView = inflater.inflate(R.layout.floating_view_layout, null)
+        floatingView = View(this).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+        }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
