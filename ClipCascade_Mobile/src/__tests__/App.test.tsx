@@ -162,7 +162,13 @@ describe('App canonical product contract', () => {
       'private fun isAndroid14PlusSignature',
     );
     expect(shizukuUserServiceSource).toContain(
-      'arrayOf(packageName, null, userId, Context.DEVICE_ID_DEFAULT)',
+      'private const val DEFAULT_DEVICE_ID = 0',
+    );
+    expect(shizukuUserServiceSource).toContain(
+      'arrayOf(packageName, null, userId, DEFAULT_DEVICE_ID)',
+    );
+    expect(shizukuUserServiceSource).not.toContain(
+      'Context.DEVICE_ID_DEFAULT',
     );
     expect(shizukuUserServiceSource).toContain('0 -> ROOT_PACKAGE');
     expect(shizukuUserServiceSource).toContain('2_000 -> SHELL_PACKAGE');
