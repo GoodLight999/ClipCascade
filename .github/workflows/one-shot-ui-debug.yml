@@ -1,0 +1,569 @@
+name: One-shot validated UI debug
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/one-shot-ui-debug.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-ui-debug-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apply-validate-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Check out active branch
+        uses: actions/checkout@v4
+        with:
+          ref: stability-recovery
+          fetch-depth: 0
+
+      - name: Apply deterministic six-file correction
+        run: |
+          set -euo pipefail
+          cat > /tmp/apply_ui_debug.py <<'PY'
+          from pathlib import Path
+          import sys
+
+          root = Path(sys.argv[1] if len(sys.argv) > 1 else '.').resolve()
+
+          def edit(path: str, edits):
+              p = root / path
+              s = p.read_text(encoding='utf-8')
+              for old, new, label in edits:
+                  count = s.count(old)
+                  if count != 1:
+                      raise SystemExit(f'{path}: {label}: expected 1 occurrence, found {count}')
+                  s = s.replace(old, new, 1)
+              p.write_text(s, encoding='utf-8')
+
+          p = root / 'ClipCascade_Mobile/src/App.js'
+          s = p.read_text(encoding='utf-8')
+
+          def app_once(old, new, label):
+              global s
+              count = s.count(old)
+              if count != 1:
+                  raise SystemExit(f'App.js: {label}: expected 1 occurrence, found {count}')
+              s = s.replace(old, new, 1)
+
+          app_once("  StatusBar,\n} from 'react-native';", "  StatusBar,\n  useColorScheme,\n} from 'react-native';", 'useColorScheme import')
+          app_once("import { useEffect, useState, useRef } from 'react';", "import { useEffect, useState, useRef, useMemo } from 'react';", 'useMemo import')
+          app_once("// App version\nconst APP_VERSION = '3.2.0';\n", """// App version
+          const APP_VERSION = '3.2.0';
+
+          const LIGHT_PALETTE = Object.freeze({
+            background: '#FFFFFF',
+            surface: '#F6F7F9',
+            textPrimary: '#15161A',
+            textSecondary: '#4E515B',
+            border: '#AEB4BE',
+            accent: '#2453A6',
+            buttonPrimary: '#2453A6',
+            buttonStart: '#176B3A',
+            buttonDanger: '#8A1833',
+            chrome: '#F4F5F7',
+          });
+
+          const DARK_PALETTE = Object.freeze({
+            background: '#111318',
+            surface: '#1B1E26',
+            textPrimary: '#F2F3F7',
+            textSecondary: '#C5C8D1',
+            border: '#737987',
+            accent: '#AFC6FF',
+            buttonPrimary: '#315DB8',
+            buttonStart: '#247A49',
+            buttonDanger: '#A52A49',
+            chrome: '#1B1E26',
+          });
+          """.replace('          ', ''))
+          app_once("export default function App() {\n  const { NativeBridgeModule } = NativeModules;\n\n  const isMountedRef = useRef(true);", """export default function App() {
+            const { NativeBridgeModule } = NativeModules;
+            const isDarkMode = useColorScheme() === 'dark';
+            const palette = isDarkMode ? DARK_PALETTE : LIGHT_PALETTE;
+            const styles = useMemo(() => createStyles(palette), [palette]);
+            const checkboxTintColors = useMemo(
+              () => ({ true: palette.accent, false: palette.textSecondary }),
+              [palette],
+            );
+
+            const isMountedRef = useRef(true);""".replace('            ', ''), 'component theme')
+
+          lines = s.splitlines()
+          out = []
+          for line in lines:
+              out.append(line)
+              if line.lstrip() == '<CheckBox':
+                  indent = line[:len(line) - len(line.lstrip())]
+                  out.append(indent + '  tintColors={checkboxTintColors}')
+          s = '\n'.join(out) + '\n'
+          if s.count('tintColors={checkboxTintColors}') != 7:
+              raise SystemExit('App.js: checkbox tint count mismatch')
+
+          app_once("""      <SafeAreaView
+            style={{
+              flex: 1,
+              paddingTop: StatusBar.currentHeight,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <View style={styles.loadingContainer}>""", """      <SafeAreaView
+            style={[
+              styles.safeArea,
+              styles.centeredSafeArea,
+              { paddingTop: StatusBar.currentHeight },
+            ]}
+          >
+            <StatusBar
+              barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+              backgroundColor={palette.chrome}
+            />
+            <View style={styles.loadingContainer}>""", 'init safe area')
+          app_once("""    <SafeAreaView
+            style={{
+              flex: 1,
+              paddingTop: StatusBar.currentHeight,
+            }}
+          >
+            {/* Loading Page */}""", """    <SafeAreaView
+            style={[styles.safeArea, { paddingTop: StatusBar.currentHeight }]}
+          >
+            <StatusBar
+              barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+              backgroundColor={palette.chrome}
+            />
+            {/* Loading Page */}""", 'main safe area')
+          app_once("backgroundColor: wsIsRunning === 'true' ? '#800020' : 'green',", """backgroundColor:
+                                wsIsRunning === 'true'
+                                  ? palette.buttonDanger
+                                  : palette.buttonStart,""", 'start stop color')
+
+          replacements = {
+              "style={[styles.loginButton, { backgroundColor: '#800020' }]}": "style={[styles.loginButton, { backgroundColor: palette.buttonDanger }]}",
+              "style={[styles.loginButton, { backgroundColor: '#4bab4e' }]}": "style={[styles.loginButton, { backgroundColor: palette.buttonStart }]}",
+              "style={[styles.loginButton, { backgroundColor: 'black' }]}": "style={[styles.loginButton, { backgroundColor: palette.buttonPrimary }]}",
+              "color: '#008080',": "color: palette.accent,",
+          }
+          for old, new in replacements.items():
+              if old not in s:
+                  raise SystemExit(f'App.js: expected style fragment missing: {old}')
+              s = s.replace(old, new)
+          if "backgroundColor: 'black'" in s:
+              raise SystemExit('App.js: black button remains')
+
+          start = s.index('// view styles\nconst styles = StyleSheet.create({')
+          new_styles = """// View styles use explicit light/dark colors instead of depending on OEM
+          // defaults. This prevents low-contrast gray surfaces and black text on dark
+          // themes while retaining the existing layout and interaction model.
+          const createStyles = palette =>
+            StyleSheet.create({
+              safeArea: {
+                flex: 1,
+                backgroundColor: palette.background,
+              },
+              centeredSafeArea: {
+                justifyContent: 'center',
+                alignItems: 'center',
+              },
+              container: {
+                padding: 20,
+                backgroundColor: palette.background,
+              },
+              loadingContainer: {
+                flex: 1,
+                justifyContent: 'center',
+                alignItems: 'center',
+                backgroundColor: palette.background,
+              },
+              appTitle: {
+                fontSize: 28,
+                fontWeight: 'bold',
+                textAlign: 'center',
+                paddingBottom: 20,
+                color: palette.textPrimary,
+              },
+              loadingBottomContainer: {
+                position: 'absolute',
+                bottom: 30,
+                alignItems: 'center',
+              },
+              loadingText: {
+                marginBottom: 10,
+                fontSize: 16,
+                color: palette.textSecondary,
+              },
+              row: {
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginBottom: 10,
+              },
+              label: {
+                flex: 1,
+                fontSize: 16,
+                color: palette.textPrimary,
+              },
+              input: {
+                flex: 2,
+                borderWidth: 1,
+                borderColor: palette.border,
+                backgroundColor: palette.surface,
+                color: palette.textPrimary,
+                padding: 8,
+                borderRadius: 5,
+              },
+              loginButton: {
+                backgroundColor: palette.buttonPrimary,
+                padding: 10,
+                borderRadius: 5,
+                alignItems: 'center',
+                marginVertical: 10,
+              },
+              loginButtonText: {
+                color: '#FFFFFF',
+                fontSize: 16,
+                fontWeight: '600',
+              },
+              linkText: {
+                color: palette.accent,
+                textDecorationLine: 'underline',
+                textAlign: 'center',
+                marginVertical: 10,
+                fontSize: 18,
+              },
+              message: {
+                color: palette.accent,
+                textAlign: 'center',
+                marginVertical: 12,
+                fontSize: 16,
+              },
+              serviceButton: {
+                padding: 10,
+                borderRadius: 5,
+                alignItems: 'center',
+                marginVertical: 10,
+              },
+              instructionsContainer: {
+                marginTop: 40,
+                paddingHorizontal: 10,
+              },
+              instructionsHeader: {
+                fontWeight: 'bold',
+                fontSize: 18,
+                textAlign: 'center',
+                marginBottom: 20,
+                color: palette.textPrimary,
+              },
+              instructionBlock: {
+                marginTop: 15,
+              },
+              instructionTitle: {
+                fontWeight: 'bold',
+                marginBottom: 5,
+                fontSize: 16,
+                color: palette.textPrimary,
+              },
+              instructionText: {
+                fontSize: 14,
+                lineHeight: 20,
+                color: palette.textPrimary,
+              },
+              instructionSteps: {
+                marginTop: 10,
+                marginLeft: 15,
+              },
+              footerContainer: {
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 50,
+                marginBottom: 10,
+                flexWrap: 'wrap',
+              },
+              footerText: {
+                fontSize: 16,
+                color: palette.accent,
+                marginTop: 5,
+              },
+              spacing: {
+                marginHorizontal: 12,
+              },
+            });
+          """.replace('          ', '')
+          s = s[:start] + new_styles
+          p.write_text(s, encoding='utf-8')
+
+          edit('ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/BackgroundSetupActivity.kt', [
+              ('import android.content.ClipboardManager\n', 'import android.content.ClipboardManager\nimport android.content.res.ColorStateList\n', 'ColorStateList import'),
+              ('''        val scrollView = ScrollView(this)
+                  val content = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setPadding(dp(20), dp(20), dp(20), dp(32))
+                  }
+          '''.replace('          ', ''), '''        val surfaceColor = ContextCompat.getColor(this, R.color.background_setup_surface)
+                  val primaryTextColor =
+                      ContextCompat.getColor(this, R.color.background_setup_text_primary)
+                  window.statusBarColor = ContextCompat.getColor(this, R.color.background_setup_chrome)
+                  window.navigationBarColor = surfaceColor
+
+                  val scrollView = ScrollView(this).apply {
+                      setBackgroundColor(surfaceColor)
+                  }
+                  val content = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setPadding(dp(20), dp(20), dp(20), dp(32))
+                      setBackgroundColor(surfaceColor)
+                  }
+          '''.replace('          ', ''), 'surface colors'),
+              ('''        content.addView(TextView(this).apply {
+                      text = getString(R.string.background_setup_intro)
+                      textSize = 16f
+                  }, blockLayoutParams())
+          '''.replace('          ', ''), '''        content.addView(TextView(this).apply {
+                      text = getString(R.string.background_setup_intro)
+                      textSize = 16f
+                      setTextColor(primaryTextColor)
+                  }, blockLayoutParams())
+          '''.replace('          ', ''), 'intro color'),
+              ('''        content.addView(TextView(this).apply {
+                      text = getString(R.string.shizuku_manager_instruction)
+                      textSize = 14f
+                  }, blockLayoutParams())
+          '''.replace('          ', ''), '''        content.addView(TextView(this).apply {
+                      text = getString(R.string.shizuku_manager_instruction)
+                      textSize = 14f
+                      setTextColor(primaryTextColor)
+                  }, blockLayoutParams())
+          '''.replace('          ', ''), 'instruction color'),
+              ('''        statusView = TextView(this).apply {
+                      textSize = 16f
+                      setTextIsSelectable(true)
+                  }
+          '''.replace('          ', ''), '''        statusView = TextView(this).apply {
+                      textSize = 16f
+                      setTextColor(primaryTextColor)
+                      setTextIsSelectable(true)
+                  }
+          '''.replace('          ', ''), 'status color'),
+              ('''        content.addView(TextView(this).apply {
+                      text = getString(R.string.background_setup_safety_note)
+                      textSize = 14f
+                  }, blockLayoutParams())
+          '''.replace('          ', ''), '''        content.addView(TextView(this).apply {
+                      text = getString(R.string.background_setup_safety_note)
+                      textSize = 14f
+                      setTextColor(primaryTextColor)
+                  }, blockLayoutParams())
+          '''.replace('          ', ''), 'safety color'),
+              ('''        Button(this).apply {
+                      setText(labelRes)
+                      setOnClickListener { action() }
+                      isAllCaps = false
+                  }
+          '''.replace('          ', ''), '''        Button(this).apply {
+                      setText(labelRes)
+                      setTextColor(
+                          ContextCompat.getColor(
+                              this@BackgroundSetupActivity,
+                              R.color.background_setup_text_primary
+                          )
+                      )
+                      backgroundTintList = ColorStateList.valueOf(
+                          ContextCompat.getColor(
+                              this@BackgroundSetupActivity,
+                              R.color.background_setup_button
+                          )
+                      )
+                      setOnClickListener { action() }
+                      isAllCaps = false
+                  }
+          '''.replace('          ', ''), 'button colors'),
+          ])
+
+          edit('ClipCascade_Mobile/src/index.js', [
+              (''' * Repository: https://github.com/Sathvik-Rao/ClipCascade
+           *
+           * Author: Sathvik Rao Poladi
+          '''.replace('          ', ''), ''' * Recovery repository: https://github.com/GoodLight999/Trial-and-Error-ClipCascade
+           * Original project and author: Sathvik Rao Poladi
+          '''.replace('          ', ''), 'mobile entry attribution'),
+          ])
+          edit('ClipCascade_Desktop/src/main.py', [
+              ('''# Repository: https://github.com/Sathvik-Rao/ClipCascade
+          #
+          # Author: Sathvik Rao Poladi
+          '''.replace('          ', ''), '''# Recovery repository: https://github.com/GoodLight999/Trial-and-Error-ClipCascade
+          # Original project and author: Sathvik Rao Poladi
+          '''.replace('          ', ''), 'desktop entry attribution'),
+          ])
+          edit('ClipCascade_Desktop/src/pyproject.toml', [
+              ('''Homepage = "https://clipcascade.sathvik.dev/"
+          Repository = "https://github.com/Sathvik-Rao/ClipCascade"
+          Documentation = "https://github.com/Sathvik-Rao/ClipCascade#readme"
+          Issues = "https://github.com/Sathvik-Rao/ClipCascade/issues"
+          Discussions = "https://github.com/Sathvik-Rao/ClipCascade/discussions"
+          '''.replace('          ', ''), '''Homepage = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade"
+          Repository = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade"
+          Documentation = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/blob/stability-recovery/docs/HANDOFF.md"
+          Issues = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/issues"
+          Discussions = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/discussions"
+          '''.replace('          ', ''), 'desktop project URLs'),
+          ])
+
+          edit('ClipCascade_Mobile/src/__tests__/App.test.tsx', [
+              ("const clipboardListenerSource = read(kotlinRoot, 'ClipboardListenerModule.kt');\n", """const clipboardListenerSource = read(kotlinRoot, 'ClipboardListenerModule.kt');
+          const backgroundSetupSource = read(kotlinRoot, 'BackgroundSetupActivity.kt');
+          const mobileIndexSource = read(sourceRoot, 'index.js');
+          const desktopEntrySource = read(
+            sourceRoot,
+            '..',
+            '..',
+            'ClipCascade_Desktop',
+            'src',
+            'main.py',
+          );
+          const desktopPyprojectSource = read(
+            sourceRoot,
+            '..',
+            '..',
+            'ClipCascade_Desktop',
+            'src',
+            'pyproject.toml',
+          );
+          """.replace('          ', ''), 'test source readers'),
+              ("    expect(runtimeMetadataSource).not.toContain('Sathvik-Rao');\n", """    expect(runtimeMetadataSource).not.toContain('Sathvik-Rao');
+              expect(mobileIndexSource).not.toContain('github.com/Sathvik-Rao');
+              expect(desktopEntrySource).not.toContain('github.com/Sathvik-Rao');
+              expect(desktopPyprojectSource).not.toContain('github.com/Sathvik-Rao');
+              expect(desktopPyprojectSource).not.toContain('clipcascade.sathvik.dev');
+              expect(desktopPyprojectSource).toContain(
+                'github.com/GoodLight999/Trial-and-Error-ClipCascade',
+              );
+          """.replace('          ', ''), 'URL assertions'),
+              ('''    expect(androidManifestSource).toContain(
+                'android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"',
+              );
+          '''.replace('          ', ''), '''    expect(androidManifestSource).toContain(
+                'android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"',
+              );
+              expect(androidManifestSource).toContain(
+                'android:name="app.notifee.core.ForegroundService"',
+              );
+              expect(androidManifestSource).toContain('tools:ignore="MissingClass"');
+          '''.replace('          ', ''), 'Notifee assertions'),
+              ("  test('assigns explicit high-contrast defaults to the app and setup screen', () => {\n", """  test('assigns explicit high-contrast colors to React Native and native setup UI', () => {
+              expect(appSource).toContain('useColorScheme');
+              expect(appSource).toContain("background: '#FFFFFF'");
+              expect(appSource).toContain("background: '#111318'");
+              expect(appSource).toContain("textPrimary: '#15161A'");
+              expect(appSource).toContain("textPrimary: '#F2F3F7'");
+              expect(appSource).toContain('const createStyles = palette =>');
+              expect(appSource).toContain('backgroundColor: palette.background');
+              expect(appSource).toContain('color: palette.textPrimary');
+              expect(appSource).toContain('backgroundColor: palette.surface');
+              expect(appSource).toContain('tintColors={checkboxTintColors}');
+              expect(appSource).not.toContain('const styles = StyleSheet.create');
+
+          """.replace('          ', ''), 'palette assertions'),
+              ('''    expect(setupStylesSource).toContain(
+                '<style name="Theme.ClipCascade.BackgroundSetup" parent="AppTheme" />',
+              );
+          '''.replace('          ', ''), '''    expect(setupStylesSource).toContain(
+                '<style name="Theme.ClipCascade.BackgroundSetup" parent="AppTheme" />',
+              );
+              expect(backgroundSetupSource).toContain(
+                'setBackgroundColor(surfaceColor)',
+              );
+              expect(backgroundSetupSource).toContain(
+                'setTextColor(primaryTextColor)',
+              );
+              expect(backgroundSetupSource).toContain('backgroundTintList');
+          '''.replace('          ', ''), 'native palette assertions'),
+          ])
+
+          print('Applied explicit UI palette and product URL corrections.')
+          PY
+          python /tmp/apply_ui_debug.py "$GITHUB_WORKSPACE"
+          git diff --check
+          actual="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            ClipCascade_Desktop/src/main.py \
+            ClipCascade_Desktop/src/pyproject.toml \
+            ClipCascade_Mobile/src/App.js \
+            ClipCascade_Mobile/src/__tests__/App.test.tsx \
+            ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/BackgroundSetupActivity.kt \
+            ClipCascade_Mobile/src/index.js | sort)"
+          test "$actual" = "$expected"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Validate mobile JavaScript
+        working-directory: ClipCascade_Mobile/src
+        run: |
+          set -euo pipefail
+          npm ci
+          node --check App.js
+          node --check StartForegroundService.js
+          node --check HeadlessTask.js
+          npm run lint -- --max-warnings=0
+          npm test -- --runInBand
+
+      - name: Validate Android native code and APK
+        working-directory: ClipCascade_Mobile/src/android
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace \
+            :app:lintStandalone \
+            :app:testDebugUnitTest \
+            :app:assembleStandalone
+          apk=app/build/outputs/apk/standalone/app-standalone.apk
+          test -f "$apk"
+          unzip -Z1 "$apk" | grep -Fxq assets/index.android.bundle
+          unzip -tq "$apk"
+
+      - name: Validate desktop source and tests
+        run: |
+          set -euo pipefail
+          python -m pip install websocket-client==1.8.0
+          python -m compileall -q ClipCascade_Desktop/src ClipCascade_Desktop/tests
+          PYTHONPATH="$GITHUB_WORKSPACE/ClipCascade_Desktop/src" \
+            python -m unittest discover \
+              -s ClipCascade_Desktop/tests \
+              -p 'test_*.py' \
+              -v
+
+      - name: Commit only validated product changes
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            ClipCascade_Desktop/src/main.py \
+            ClipCascade_Desktop/src/pyproject.toml \
+            ClipCascade_Mobile/src/App.js \
+            ClipCascade_Mobile/src/__tests__/App.test.tsx \
+            ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/BackgroundSetupActivity.kt \
+            ClipCascade_Mobile/src/index.js
+          git commit -m 'fix(ui): enforce explicit high-contrast product palette'
+          git push origin HEAD:stability-recovery
