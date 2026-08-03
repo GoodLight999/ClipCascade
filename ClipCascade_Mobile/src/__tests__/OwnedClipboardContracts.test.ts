@@ -47,12 +47,22 @@ describe('app-owned clipboard writes', () => {
     expect(foregroundService).not.toContain('block_image_once');
   });
 
-  test('native clipboard subscription is removed during cleanup', () => {
+  test('only the active service generation can stop native monitoring', () => {
+    expect(foregroundService).toContain('let clipboardListenerGeneration = 0');
     expect(foregroundService).toContain(
-      'let clipboardOnChangeSubscription = null',
+      'let activeClipboardOnChangeSubscription = null',
     );
     expect(foregroundService).toContain(
-      'clipboardOnChangeSubscription?.remove()',
+      'const listenerGeneration = ++clipboardListenerGeneration',
+    );
+    expect(foregroundService).toContain(
+      'let instanceClipboardOnChangeSubscription = null',
+    );
+    expect(foregroundService).toContain(
+      'if (listenerGeneration !== clipboardListenerGeneration) return',
+    );
+    expect(foregroundService).toContain(
+      'instanceClipboardOnChangeSubscription = clipboardListener.addListener',
     );
     expect(foregroundService).toContain(
       'NativeModules.ClipboardListener?.stopListening?.()',
