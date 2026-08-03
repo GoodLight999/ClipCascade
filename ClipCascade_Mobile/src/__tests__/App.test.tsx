@@ -31,6 +31,24 @@ const appSource = read(sourceRoot, 'App.js');
 const shizukuBridgeSource = read(kotlinRoot, 'ShizukuClipboardBridge.kt');
 const backgroundCaptureSource = read(kotlinRoot, 'BackgroundClipboardCapture.kt');
 const clipboardListenerSource = read(kotlinRoot, 'ClipboardListenerModule.kt');
+const backgroundSetupSource = read(kotlinRoot, 'BackgroundSetupActivity.kt');
+const mobileIndexSource = read(sourceRoot, 'index.js');
+const desktopEntrySource = read(
+  sourceRoot,
+  '..',
+  '..',
+  'ClipCascade_Desktop',
+  'src',
+  'main.py',
+);
+const desktopPyprojectSource = read(
+  sourceRoot,
+  '..',
+  '..',
+  'ClipCascade_Desktop',
+  'src',
+  'pyproject.toml',
+);
 const accessibilityServiceSource = read(
   kotlinRoot,
   'ClipCascadeAccessibilityService.kt',
@@ -97,6 +115,13 @@ describe('App canonical product contract', () => {
     expect(appSource).toContain('>SETUP<');
     expect(appSource).toContain('>SERVER<');
     expect(runtimeMetadataSource).not.toContain('Sathvik-Rao');
+    expect(mobileIndexSource).not.toContain('github.com/Sathvik-Rao');
+    expect(desktopEntrySource).not.toContain('github.com/Sathvik-Rao');
+    expect(desktopPyprojectSource).not.toContain('github.com/Sathvik-Rao');
+    expect(desktopPyprojectSource).not.toContain('clipcascade.sathvik.dev');
+    expect(desktopPyprojectSource).toContain(
+      'github.com/GoodLight999/Trial-and-Error-ClipCascade',
+    );
     expect(shizukuBridgeSource).not.toContain('shizuku.rikka.app/download');
   });
 
@@ -110,6 +135,10 @@ describe('App canonical product contract', () => {
     expect(androidManifestSource).toContain(
       'android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"',
     );
+    expect(androidManifestSource).toContain(
+      'android:name="app.notifee.core.ForegroundService"',
+    );
+    expect(androidManifestSource).toContain('tools:ignore="MissingClass"');
     expect(shizukuBridgeSource).toContain(
       'Shizuku.addBinderReceivedListenerSticky',
     );
@@ -208,7 +237,19 @@ describe('App canonical product contract', () => {
     expect(backgroundCaptureSource).not.toContain('duplicateWindowMs');
   });
 
-  test('assigns explicit high-contrast defaults to the app and setup screen', () => {
+  test('assigns explicit high-contrast colors to React Native and native setup UI', () => {
+    expect(appSource).toContain('useColorScheme');
+    expect(appSource).toContain("background: '#FFFFFF'");
+    expect(appSource).toContain("background: '#111318'");
+    expect(appSource).toContain("textPrimary: '#15161A'");
+    expect(appSource).toContain("textPrimary: '#F2F3F7'");
+    expect(appSource).toContain('const createStyles = palette =>');
+    expect(appSource).toContain('backgroundColor: palette.background');
+    expect(appSource).toContain('color: palette.textPrimary');
+    expect(appSource).toContain('backgroundColor: palette.surface');
+    expect(appSource).toContain('tintColors={checkboxTintColors}');
+    expect(appSource).not.toContain('const styles = StyleSheet.create');
+
     expect(androidManifestSource).toContain(
       'android:theme="@style/Theme.ClipCascade.BackgroundSetup"',
     );
@@ -222,6 +263,13 @@ describe('App canonical product contract', () => {
     expect(setupStylesSource).toContain(
       '<style name="Theme.ClipCascade.BackgroundSetup" parent="AppTheme" />',
     );
+    expect(backgroundSetupSource).toContain(
+      'setBackgroundColor(surfaceColor)',
+    );
+    expect(backgroundSetupSource).toContain(
+      'setTextColor(primaryTextColor)',
+    );
+    expect(backgroundSetupSource).toContain('backgroundTintList');
   });
 
   test('retains the existing foreground-service transport entrypoint', () => {

@@ -77,8 +77,8 @@ line_length = 100
 multi_line_mode = 3
 
 [project.urls]
-Homepage = "https://clipcascade.sathvik.dev/"
-Repository = "https://github.com/Sathvik-Rao/ClipCascade"
-Documentation = "https://github.com/Sathvik-Rao/ClipCascade#readme"
-Issues = "https://github.com/Sathvik-Rao/ClipCascade/issues"
-Discussions = "https://github.com/Sathvik-Rao/ClipCascade/discussions"
+Homepage = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade"
+Repository = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade"
+Documentation = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/blob/stability-recovery/docs/HANDOFF.md"
+Issues = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/issues"
+Discussions = "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/discussions"

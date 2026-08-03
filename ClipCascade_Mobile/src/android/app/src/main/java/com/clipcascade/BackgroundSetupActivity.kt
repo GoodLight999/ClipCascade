@@ -4,6 +4,7 @@ import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.res.ColorStateList
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -43,25 +44,37 @@ class BackgroundSetupActivity : AppCompatActivity() {
         title = getString(R.string.background_setup_title)
         ShizukuClipboardBridge.initialize(this)
 
-        val scrollView = ScrollView(this)
+        val surfaceColor = ContextCompat.getColor(this, R.color.background_setup_surface)
+        val primaryTextColor =
+            ContextCompat.getColor(this, R.color.background_setup_text_primary)
+        window.statusBarColor = ContextCompat.getColor(this, R.color.background_setup_chrome)
+        window.navigationBarColor = surfaceColor
+
+        val scrollView = ScrollView(this).apply {
+            setBackgroundColor(surfaceColor)
+        }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(20), dp(20), dp(32))
+            setBackgroundColor(surfaceColor)
         }
         scrollView.addView(content)
 
         content.addView(TextView(this).apply {
             text = getString(R.string.background_setup_intro)
             textSize = 16f
+            setTextColor(primaryTextColor)
         }, blockLayoutParams())
 
         content.addView(TextView(this).apply {
             text = getString(R.string.shizuku_manager_instruction)
             textSize = 14f
+            setTextColor(primaryTextColor)
         }, blockLayoutParams())
 
         statusView = TextView(this).apply {
             textSize = 16f
+            setTextColor(primaryTextColor)
             setTextIsSelectable(true)
         }
         content.addView(statusView, blockLayoutParams())
@@ -121,6 +134,7 @@ class BackgroundSetupActivity : AppCompatActivity() {
         content.addView(TextView(this).apply {
             text = getString(R.string.background_setup_safety_note)
             textSize = 14f
+            setTextColor(primaryTextColor)
         }, blockLayoutParams())
 
         setContentView(scrollView)
@@ -377,6 +391,18 @@ adb -d shell am force-stop $packageName"""
     private fun actionButton(labelRes: Int, action: () -> Unit): Button =
         Button(this).apply {
             setText(labelRes)
+            setTextColor(
+                ContextCompat.getColor(
+                    this@BackgroundSetupActivity,
+                    R.color.background_setup_text_primary
+                )
+            )
+            backgroundTintList = ColorStateList.valueOf(
+                ContextCompat.getColor(
+                    this@BackgroundSetupActivity,
+                    R.color.background_setup_button
+                )
+            )
             setOnClickListener { action() }
             isAllCaps = false
         }

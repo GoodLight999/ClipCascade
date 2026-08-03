@@ -12,9 +12,10 @@ import {
   Alert,
   SafeAreaView,
   StatusBar,
+  useColorScheme,
 } from 'react-native';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 
 import CheckBox from '@react-native-community/checkbox';
 
@@ -60,9 +61,42 @@ const { formatP2SOutboxStatus } = require('./P2SOutboxStatus');
 // App version
 const APP_VERSION = '3.2.0';
 
+const LIGHT_PALETTE = Object.freeze({
+  background: '#FFFFFF',
+  surface: '#F6F7F9',
+  textPrimary: '#15161A',
+  textSecondary: '#4E515B',
+  border: '#AEB4BE',
+  accent: '#2453A6',
+  buttonPrimary: '#2453A6',
+  buttonStart: '#176B3A',
+  buttonDanger: '#8A1833',
+  chrome: '#F4F5F7',
+});
+
+const DARK_PALETTE = Object.freeze({
+  background: '#111318',
+  surface: '#1B1E26',
+  textPrimary: '#F2F3F7',
+  textSecondary: '#C5C8D1',
+  border: '#737987',
+  accent: '#AFC6FF',
+  buttonPrimary: '#315DB8',
+  buttonStart: '#247A49',
+  buttonDanger: '#A52A49',
+  chrome: '#1B1E26',
+});
+
 // Main App
 export default function App() {
   const { NativeBridgeModule } = NativeModules;
+  const isDarkMode = useColorScheme() === 'dark';
+  const palette = isDarkMode ? DARK_PALETTE : LIGHT_PALETTE;
+  const styles = useMemo(() => createStyles(palette), [palette]);
+  const checkboxTintColors = useMemo(
+    () => ({ true: palette.accent, false: palette.textSecondary }),
+    [palette],
+  );
 
   const isMountedRef = useRef(true);
 
@@ -880,13 +914,16 @@ export default function App() {
   if (initError[0]) {
     return (
       <SafeAreaView
-        style={{
-          flex: 1,
-          paddingTop: StatusBar.currentHeight,
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
+        style={[
+          styles.safeArea,
+          styles.centeredSafeArea,
+          { paddingTop: StatusBar.currentHeight },
+        ]}
       >
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={palette.chrome}
+        />
         <View style={styles.loadingContainer}>
           <Text style={styles.appTitle}>{APP_NAME}</Text>
           <View style={styles.loadingBottomContainer}>
@@ -898,11 +935,12 @@ export default function App() {
   }
   return (
     <SafeAreaView
-      style={{
-        flex: 1,
-        paddingTop: StatusBar.currentHeight,
-      }}
+      style={[styles.safeArea, { paddingTop: StatusBar.currentHeight }]}
     >
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor={palette.chrome}
+      />
       {/* Loading Page */}
       {enableLoadingPage && (
         <View style={styles.loadingContainer}>
@@ -950,6 +988,7 @@ export default function App() {
           <View style={styles.row}>
             <Text style={styles.label}>Enable Encryption (recommended):</Text>
             <CheckBox
+              tintColors={checkboxTintColors}
               value={data.cipher_enabled === 'true' ? true : false}
               onValueChange={newValue =>
                 handleInputChange('cipher_enabled', String(newValue))
@@ -1012,6 +1051,7 @@ export default function App() {
                   encryption is disabled):
                 </Text>
                 <CheckBox
+                  tintColors={checkboxTintColors}
                   value={data.save_password === 'true' ? true : false}
                   onValueChange={newValue =>
                     handleInputChange('save_password', String(newValue))
@@ -1041,6 +1081,7 @@ export default function App() {
                   granted):
                 </Text>
                 <CheckBox
+                  tintColors={checkboxTintColors}
                   value={data.relaunch_on_boot === 'true' ? true : false}
                   onValueChange={newValue =>
                     handleInputChange('relaunch_on_boot', String(newValue))
@@ -1052,6 +1093,7 @@ export default function App() {
                   Enable WebSocket Status Notification:
                 </Text>
                 <CheckBox
+                  tintColors={checkboxTintColors}
                   value={
                     data.enable_websocket_status_notification === 'true'
                       ? true
@@ -1068,6 +1110,7 @@ export default function App() {
               <View style={styles.row}>
                 <Text style={styles.label}>Enable Periodic Checks:</Text>
                 <CheckBox
+                  tintColors={checkboxTintColors}
                   value={data.enable_periodic_checks === 'true' ? true : false}
                   onValueChange={newValue =>
                     handleInputChange(
@@ -1080,6 +1123,7 @@ export default function App() {
               <View style={styles.row}>
                 <Text style={styles.label}>Enable Image Sharing:</Text>
                 <CheckBox
+                  tintColors={checkboxTintColors}
                   value={data.enable_image_sharing === 'true' ? true : false}
                   onValueChange={newValue =>
                     handleInputChange('enable_image_sharing', String(newValue))
@@ -1089,6 +1133,7 @@ export default function App() {
               <View style={styles.row}>
                 <Text style={styles.label}>Enable File Sharing:</Text>
                 <CheckBox
+                  tintColors={checkboxTintColors}
                   value={data.enable_file_sharing === 'true' ? true : false}
                   onValueChange={newValue =>
                     handleInputChange('enable_file_sharing', String(newValue))
@@ -1124,7 +1169,10 @@ export default function App() {
               style={[
                 styles.loginButton,
                 {
-                  backgroundColor: wsIsRunning === 'true' ? '#800020' : 'green',
+                  backgroundColor:
+                    wsIsRunning === 'true'
+                      ? palette.buttonDanger
+                      : palette.buttonStart,
                 },
               ]}
               onPress={foregroundService}
@@ -1134,7 +1182,7 @@ export default function App() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.loginButton, { backgroundColor: '#800020' }]}
+              style={[styles.loginButton, { backgroundColor: palette.buttonDanger }]}
               onPress={logout}
             >
               <Text style={styles.loginButtonText}>Logout</Text>
@@ -1155,7 +1203,7 @@ export default function App() {
             {enableFilesDownloadButton &&
               enableFilesDownloadButton === true && (
                 <TouchableOpacity
-                  style={[styles.loginButton, { backgroundColor: '#4bab4e' }]}
+                  style={[styles.loginButton, { backgroundColor: palette.buttonStart }]}
                   onPress={downloadFiles}
                 >
                   <Text style={styles.loginButtonText}>
@@ -1173,7 +1221,7 @@ export default function App() {
                   style={[
                     styles.message,
                     {
-                      color: '#008080',
+                      color: palette.accent,
                       fontWeight: 'bold',
                       textDecorationLine: 'underline',
                     },
@@ -1260,7 +1308,7 @@ export default function App() {
               </View>
 
               <TouchableOpacity
-                style={[styles.loginButton, { backgroundColor: 'black' }]}
+                style={[styles.loginButton, { backgroundColor: palette.buttonPrimary }]}
                 onPress={async () =>
                   await notifee.openBatteryOptimizationSettings()
                 }
@@ -1270,7 +1318,7 @@ export default function App() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.loginButton, { backgroundColor: 'black' }]}
+                style={[styles.loginButton, { backgroundColor: palette.buttonPrimary }]}
                 onPress={async () => await notifee.openPowerManagerSettings()}
               >
                 <Text style={styles.loginButtonText}>
@@ -1363,118 +1411,139 @@ export default function App() {
   );
 }
 
-// view styles
-const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  appTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    paddingBottom: 20,
-  },
-  loadingBottomContainer: {
-    position: 'absolute',
-    bottom: 30,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginBottom: 10,
-    fontSize: 16,
-    color: '#555',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  label: {
-    flex: 1,
-    fontSize: 16,
-  },
-  input: {
-    flex: 2,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 8,
-    borderRadius: 5,
-  },
-  loginButton: {
-    backgroundColor: '#007BFF',
-    padding: 10,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginVertical: 10,
-  },
-  loginButtonText: {
-    color: 'white',
-    fontSize: 16,
-  },
-  linkText: {
-    color: '#5081ab',
-    textDecorationLine: 'underline',
-    textAlign: 'center',
-    marginVertical: 10,
-    fontSize: 18,
-  },
-  message: {
-    color: '#5081ab',
-    textAlign: 'center',
-    marginVertical: 12,
-    fontSize: 16,
-  },
-  serviceButton: {
-    padding: 10,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginVertical: 10,
-  },
-  instructionsContainer: {
-    marginTop: 40,
-    paddingHorizontal: 10,
-  },
-  instructionsHeader: {
-    fontWeight: 'bold',
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  instructionBlock: {
-    marginTop: 15,
-  },
-  instructionTitle: {
-    fontWeight: 'bold',
-    marginBottom: 5,
-    fontSize: 16,
-  },
-  instructionText: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  instructionSteps: {
-    marginTop: 10,
-    marginLeft: 15,
-  },
-  footerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 50,
-    marginBottom: 10,
-    flexWrap: 'wrap',
-  },
-  footerText: {
-    fontSize: 16,
-    color: '#5081ab',
-    marginTop: 5,
-  },
-  spacing: {
-    marginHorizontal: 12,
-  },
-});
+// View styles use explicit light/dark colors instead of depending on OEM
+// defaults. This prevents low-contrast gray surfaces and black text on dark
+// themes while retaining the existing layout and interaction model.
+const createStyles = palette =>
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
+      backgroundColor: palette.background,
+    },
+    centeredSafeArea: {
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    container: {
+      padding: 20,
+      backgroundColor: palette.background,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: palette.background,
+    },
+    appTitle: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      textAlign: 'center',
+      paddingBottom: 20,
+      color: palette.textPrimary,
+    },
+    loadingBottomContainer: {
+      position: 'absolute',
+      bottom: 30,
+      alignItems: 'center',
+    },
+    loadingText: {
+      marginBottom: 10,
+      fontSize: 16,
+      color: palette.textSecondary,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    label: {
+      flex: 1,
+      fontSize: 16,
+      color: palette.textPrimary,
+    },
+    input: {
+      flex: 2,
+      borderWidth: 1,
+      borderColor: palette.border,
+      backgroundColor: palette.surface,
+      color: palette.textPrimary,
+      padding: 8,
+      borderRadius: 5,
+    },
+    loginButton: {
+      backgroundColor: palette.buttonPrimary,
+      padding: 10,
+      borderRadius: 5,
+      alignItems: 'center',
+      marginVertical: 10,
+    },
+    loginButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    linkText: {
+      color: palette.accent,
+      textDecorationLine: 'underline',
+      textAlign: 'center',
+      marginVertical: 10,
+      fontSize: 18,
+    },
+    message: {
+      color: palette.accent,
+      textAlign: 'center',
+      marginVertical: 12,
+      fontSize: 16,
+    },
+    serviceButton: {
+      padding: 10,
+      borderRadius: 5,
+      alignItems: 'center',
+      marginVertical: 10,
+    },
+    instructionsContainer: {
+      marginTop: 40,
+      paddingHorizontal: 10,
+    },
+    instructionsHeader: {
+      fontWeight: 'bold',
+      fontSize: 18,
+      textAlign: 'center',
+      marginBottom: 20,
+      color: palette.textPrimary,
+    },
+    instructionBlock: {
+      marginTop: 15,
+    },
+    instructionTitle: {
+      fontWeight: 'bold',
+      marginBottom: 5,
+      fontSize: 16,
+      color: palette.textPrimary,
+    },
+    instructionText: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: palette.textPrimary,
+    },
+    instructionSteps: {
+      marginTop: 10,
+      marginLeft: 15,
+    },
+    footerContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 50,
+      marginBottom: 10,
+      flexWrap: 'wrap',
+    },
+    footerText: {
+      fontSize: 16,
+      color: palette.accent,
+      marginTop: 5,
+    },
+    spacing: {
+      marginHorizontal: 12,
+    },
+  });
