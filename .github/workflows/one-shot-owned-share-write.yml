@@ -1,0 +1,177 @@
+name: One-shot app-owned share write
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/one-shot-owned-share-write.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-owned-share-write-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apply-validate-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Check out active branch
+        uses: actions/checkout@v4
+        with:
+          ref: stability-recovery
+          fetch-depth: 0
+
+      - name: Apply exact two-file correction
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 occurrence, found {count}')
+              return text.replace(old, new, 1)
+
+          bridge_path = Path('ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/NativeBridgeModule.kt')
+          bridge = bridge_path.read_text(encoding='utf-8')
+          bridge = once(
+              bridge,
+              'import android.graphics.BitmapFactory\n',
+              'import android.graphics.BitmapFactory\nimport android.os.PersistableBundle\n',
+              'PersistableBundle import',
+          )
+          marker = '''    @ReactMethod
+              fun copyBase64ImageToClipboardUsingCache(base64String: String, promise: Promise) {
+          '''.replace('              ', '')
+          method = '''    @ReactMethod
+              fun setAppOwnedTextClipboard(content: String, promise: Promise) {
+                  try {
+                      val clipData = ClipData.newPlainText("ClipCascade shared text", content).apply {
+                          description.extras = PersistableBundle().apply {
+                              putBoolean(ClipboardListenerModule.APP_OWNED_CLIP_MARKER, true)
+                          }
+                      }
+                      val clipboard = reactApplicationContext
+                          .getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                      clipboard.setPrimaryClip(clipData)
+                      promise.resolve(null)
+                  } catch (error: Exception) {
+                      promise.reject(
+                          "CLIPBOARD_WRITE_ERROR",
+                          "Failed to write app-owned shared text",
+                          error
+                      )
+                  }
+              }
+
+              @ReactMethod
+              fun copyBase64ImageToClipboardUsingCache(base64String: String, promise: Promise) {
+          '''.replace('              ', '')
+          bridge = once(bridge, marker, method, 'app-owned text method')
+          bridge_path.write_text(bridge, encoding='utf-8')
+
+          service_path = Path('ClipCascade_Mobile/src/StartForegroundService.js')
+          service = service_path.read_text(encoding='utf-8')
+          service = once(
+              service,
+              "import Clipboard from '@react-native-clipboard/clipboard';\n\n",
+              '',
+              'Clipboard import',
+          )
+          service = once(
+              service,
+              '''              Clipboard.setString(clipContent);
+                            await sendClipBoard(clipContent, 'text');
+          '''.replace('                            ', ''),
+              '''              await NativeBridgeModule.setAppOwnedTextClipboard(clipContent);
+                            await sendClipBoard(clipContent, 'text');
+          '''.replace('                            ', ''),
+              'shared text write',
+          )
+          service_path.write_text(service, encoding='utf-8')
+
+          test_path = Path('ClipCascade_Mobile/src/__tests__/AndroidNativeContracts.test.ts')
+          test = test_path.read_text(encoding='utf-8')
+          test = once(
+              test,
+              "const mainActivity = read(kotlinRoot, 'MainActivity.kt');\n",
+              "const mainActivity = read(kotlinRoot, 'MainActivity.kt');\nconst nativeBridge = read(kotlinRoot, 'NativeBridgeModule.kt');\nconst foregroundService = read(sourceRoot, 'StartForegroundService.js');\n",
+              'test readers',
+          )
+          insertion = '''  test('app-owned shared text cannot re-enter automatic capture', () => {
+              expect(nativeBridge).toContain('fun setAppOwnedTextClipboard');
+              expect(nativeBridge).toContain('APP_OWNED_CLIP_MARKER');
+              expect(nativeBridge).toContain('PersistableBundle');
+              expect(foregroundService).toContain(
+                'await NativeBridgeModule.setAppOwnedTextClipboard(clipContent)',
+              );
+              expect(foregroundService).not.toContain('Clipboard.setString(clipContent)');
+              expect(foregroundService).not.toContain(
+                "import Clipboard from '@react-native-clipboard/clipboard'",
+              );
+            });
+
+          '''.replace('          ', '')
+          test = once(
+              test,
+              "  test('hidden clipboard API use is explicit and API-26-safe', () => {\n",
+              insertion + "  test('hidden clipboard API use is explicit and API-26-safe', () => {\n",
+              'contract insertion',
+          )
+          test_path.write_text(test, encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Validate JavaScript and contracts
+        working-directory: ClipCascade_Mobile/src
+        run: |
+          set -euo pipefail
+          npm ci
+          node --check StartForegroundService.js
+          npm run lint -- --max-warnings=0
+          npm test -- --runInBand
+
+      - name: Validate Android lint, tests, and APK
+        working-directory: ClipCascade_Mobile/src/android
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace \
+            :app:lintStandalone \
+            :app:testDebugUnitTest \
+            :app:assembleStandalone
+          apk=app/build/outputs/apk/standalone/app-standalone.apk
+          test -f "$apk"
+          unzip -Z1 "$apk" | grep -Fxq assets/index.android.bundle
+          unzip -tq "$apk"
+
+      - name: Commit only validated product files
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            ClipCascade_Mobile/src/StartForegroundService.js \
+            ClipCascade_Mobile/src/__tests__/AndroidNativeContracts.test.ts \
+            ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/NativeBridgeModule.kt
+          git commit -m 'fix(android): mark shared-text clipboard writes as app-owned'
+          git push origin HEAD:stability-recovery
