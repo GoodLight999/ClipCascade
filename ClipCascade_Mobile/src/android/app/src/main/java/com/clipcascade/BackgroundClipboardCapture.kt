@@ -13,10 +13,11 @@ import android.util.Log
  * Preferred reader: Shizuku UserService. Fallback reader: the existing overlay
  * activity. The existing React Native sender remains the only transport owner.
  *
- * Concurrent signals are coalesced without an arbitrary debounce window. A
- * pending trigger whose monotonic timestamp is at or before the completed
- * clipboard read was already represented by that read and is discarded. Only
- * a trigger that arrived after the read is executed as a subsequent request.
+ * Concurrent signals are coalesced by actual read completion, without an
+ * arbitrary time window. A pending trigger whose monotonic timestamp is at or
+ * before the completed clipboard read was already represented by that read and
+ * is discarded. Only a trigger that arrived after the read is executed as a
+ * subsequent request.
  */
 object BackgroundClipboardCapture {
     private const val TAG = "ClipboardCapture"
