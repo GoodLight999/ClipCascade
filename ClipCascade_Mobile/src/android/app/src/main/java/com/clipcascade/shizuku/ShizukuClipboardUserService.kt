@@ -1,5 +1,6 @@
 package com.clipcascade.shizuku
 
+import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.Context
 import android.os.IBinder
@@ -80,7 +81,15 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
     private object HiddenClipboardReader {
         private const val SHELL_PACKAGE = "com.android.shell"
         private const val ROOT_PACKAGE = "root"
+        // AOSP Context.DEVICE_ID_DEFAULT is the inlined integer value 0.
+        private const val DEFAULT_DEVICE_ID = 0
 
+        /**
+         * This method intentionally uses Android's hidden ServiceManager and
+         * IClipboard interfaces inside a Shizuku UserService. The selected
+         * signatures are explicit and unknown signatures fail closed.
+         */
+        @SuppressLint("PrivateApi")
         fun readPrimaryClip(userId: Int): ClipData? {
             val serviceManager = Class.forName("android.os.ServiceManager")
             val binder = serviceManager
@@ -155,7 +164,7 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
             }
             return when {
                 isAndroid14PlusSignature(method) ->
-                    arrayOf(packageName, null, userId, Context.DEVICE_ID_DEFAULT)
+                    arrayOf(packageName, null, userId, DEFAULT_DEVICE_ID)
                 isAndroid12Signature(method) ->
                     arrayOf(packageName, null, userId)
                 isAndroid10Signature(method) ->
