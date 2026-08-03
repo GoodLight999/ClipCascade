@@ -48,7 +48,10 @@ jobs:
         run: |
           set -euo pipefail
           cp package.json package.json.before-audit-fix
-          npm audit fix --package-lock-only
+          # npm exits 1 while moderate CLI advisories remain even after all
+          # nonbreaking high-severity fixes are applied. The resulting audits
+          # below, not this intermediate exit code, are the acceptance gate.
+          npm audit fix --package-lock-only || true
           cmp package.json package.json.before-audit-fix
           rm package.json.before-audit-fix
           git diff --check
