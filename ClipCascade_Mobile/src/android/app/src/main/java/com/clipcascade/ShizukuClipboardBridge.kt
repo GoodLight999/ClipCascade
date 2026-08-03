@@ -62,7 +62,7 @@ object ShizukuClipboardBridge {
         val type: String? = null,
         val status: String,
         val error: String? = null,
-        val readCompletedAtElapsedMs: Long? = null
+        val readCompletedAtElapsedNanos: Long? = null
     )
 
     private val userServiceConnection = object : ServiceConnection {
@@ -255,7 +255,7 @@ object ShizukuClipboardBridge {
                 val decoded = decodeResult(service.readClipboard(requestedUserId))
                 if (decoded.success) {
                     decoded.copy(
-                        readCompletedAtElapsedMs = SystemClock.elapsedRealtime()
+                        readCompletedAtElapsedNanos = SystemClock.elapsedRealtimeNanos()
                     )
                 } else {
                     decoded
