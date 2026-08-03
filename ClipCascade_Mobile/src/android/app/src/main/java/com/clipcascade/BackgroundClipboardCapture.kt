@@ -1,7 +1,6 @@
 package com.clipcascade
 
 import android.content.Context
-import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import java.util.concurrent.atomic.AtomicBoolean
@@ -63,10 +62,7 @@ object BackgroundClipboardCapture {
                     source,
                     result.error ?: result.status
                 )
-                if (
-                    Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
-                    Settings.canDrawOverlays(appContext)
-                ) {
+                if (Settings.canDrawOverlays(appContext)) {
                     try {
                         appContext.startActivity(ClipboardFloatingActivity.getIntent(appContext))
                     } catch (error: Throwable) {
