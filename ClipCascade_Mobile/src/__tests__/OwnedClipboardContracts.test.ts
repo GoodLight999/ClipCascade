@@ -67,6 +67,26 @@ describe('app-owned clipboard writes', () => {
     );
   });
 
+  test('polling and failure cleanup belong to their service generation', () => {
+    expect(foregroundService).toContain('let serviceGeneration = 0');
+    expect(foregroundService).toContain(
+      'let cleanupServiceInstance = async () => {}',
+    );
+    expect(foregroundService).toContain(
+      'serviceGeneration = listenerGeneration',
+    );
+    expect(foregroundService).toContain(
+      'while (listenerGeneration === clipboardListenerGeneration)',
+    );
+    expect(foregroundService).toContain('pollFlagsLoop().catch(async error =>');
+    expect(foregroundService).toContain('await cleanupServiceInstance()');
+    expect(foregroundService).toContain(
+      'if (serviceGeneration === clipboardListenerGeneration)',
+    );
+    expect(foregroundService).not.toContain('while (true)');
+    expect(foregroundService).not.toContain('\n        pollFlagsLoop();\n');
+  });
+
   test('only the active service generation can stop native monitoring', () => {
     expect(foregroundService).toContain('let clipboardListenerGeneration = 0');
     expect(foregroundService).toContain(

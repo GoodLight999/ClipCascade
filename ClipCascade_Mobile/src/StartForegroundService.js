@@ -50,6 +50,8 @@ module.exports = async (inputData = null) => {
   // forground service
   notifee.registerForegroundService(notification => {
     return new Promise(async () => {
+      let serviceGeneration = 0;
+      let cleanupServiceInstance = async () => {};
       try {
         const { NativeBridgeModule } = NativeModules;
         const textEncoder = new TextEncoder();
@@ -57,6 +59,7 @@ module.exports = async (inputData = null) => {
 
         cleanupActiveClipboardListeners();
         const listenerGeneration = ++clipboardListenerGeneration;
+        serviceGeneration = listenerGeneration;
         let instanceClipboardOnChangeSubscription = null;
         let instanceShareAvailabilitySubscription = null;
         let sharedTransportReady = false;
@@ -1684,15 +1687,18 @@ module.exports = async (inputData = null) => {
         await requestPendingShareDrain();
 
         // terminate service when wsIsRunning is false
-        const stopServices = async () => {
-          if (server_mode === 'P2S') {
-            await stopServicesP2S();
-          } else if (server_mode === 'P2P') {
-            await stopServicesP2P();
+        cleanupServiceInstance = async () => {
+          try {
+            if (server_mode === 'P2S' && stopServicesP2S !== null) {
+              await stopServicesP2S();
+            } else if (server_mode === 'P2P' && stopServicesP2P !== null) {
+              await stopServicesP2P();
+            }
+          } finally {
+            cleanupClipboardListeners();
           }
-
-          cleanupClipboardListeners();
         };
+        const stopServices = cleanupServiceInstance;
 
         function sleep(ms) {
           return new Promise(res => setTimeout(res, ms));
@@ -1706,7 +1712,7 @@ module.exports = async (inputData = null) => {
             'filesAvailableToDownload',
           ];
 
-          while (true) {
+          while (listenerGeneration === clipboardListenerGeneration) {
             const json = NativeBridgeModule.getFlagsSync(POLL_KEYS);
             const latest = JSON.parse(json);
 
@@ -1773,13 +1779,34 @@ module.exports = async (inputData = null) => {
             }
             await sleep(1000);
           }
+
+          if (listenerGeneration !== clipboardListenerGeneration) {
+            await stopServices();
+          }
         }
 
-        pollFlagsLoop();
+        pollFlagsLoop().catch(async error => {
+          try {
+            await setDataInAsyncStorage(
+              'wsStatusMessage',
+              '❌ Foreground service poll error:' + error,
+            );
+            await cleanupServiceInstance();
+          } finally {
+            if (serviceGeneration === clipboardListenerGeneration) {
+              await notifee.stopForegroundService();
+            }
+          }
+        });
       } catch (error) {
-        await setDataInAsyncStorage('wsStatusMessage', '❌ Error:' + error);
-        cleanupActiveClipboardListeners();
-        await notifee.stopForegroundService();
+        try {
+          await setDataInAsyncStorage('wsStatusMessage', '❌ Error:' + error);
+          await cleanupServiceInstance();
+        } finally {
+          if (serviceGeneration === clipboardListenerGeneration) {
+            await notifee.stopForegroundService();
+          }
+        }
       }
     });
   });
