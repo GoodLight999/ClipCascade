@@ -31,8 +31,8 @@ describe('native AsyncStorage bridge ownership', () => {
     expect(bridgeSource).toContain('JSONObject.quote(value)');
     expect(bridgeSource).toContain('JSONTokener(rawValue).nextValue()');
     expect(bridgeSource).toContain('is String -> decoded');
-    expect(bridgeSource).not.toContain('.replace("^\\\"|\\\"$".toRegex(), "")');
-    expect(bridgeSource).not.toContain('put(VALUE_COLUMN, "\\\"$value\\\"")');
+    expect(bridgeSource).not.toContain('.replace(');
+    expect(bridgeSource).not.toContain('put(VALUE_COLUMN, "');
   });
 
   test('writes fail closed when the shared database is unavailable', () => {
