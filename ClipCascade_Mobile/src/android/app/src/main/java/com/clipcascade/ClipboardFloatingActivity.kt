@@ -27,7 +27,7 @@ class ClipboardFloatingActivity : AppCompatActivity() {
     private var isViewAttached = false
     private var coordinatorCompleted = false
     private var triggerSource = "unknown"
-    private var readCompletedAtElapsedMs: Long? = null
+    private var readCompletedAtElapsedNanos: Long? = null
     private var globalLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,7 +71,6 @@ class ClipboardFloatingActivity : AppCompatActivity() {
             setBackgroundColor(Color.TRANSPARENT)
         }
 
-        // Register before addView so a fast first layout cannot be missed.
         globalLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
             try {
                 globalLayoutListener?.let {
@@ -112,9 +111,7 @@ class ClipboardFloatingActivity : AppCompatActivity() {
 
     private fun getClipboardContent() {
         val clip = clipboardManager.primaryClip
-        // The timestamp is captured immediately after the platform read returns,
-        // not when the activity later tears down or the JS event is delivered.
-        readCompletedAtElapsedMs = SystemClock.elapsedRealtime()
+        readCompletedAtElapsedNanos = SystemClock.elapsedRealtimeNanos()
 
         if (clip == null || clip.itemCount == 0) {
             CaptureDiagnostics.recordIgnored(diagnosticSource(), "clipboard_empty")
@@ -210,7 +207,7 @@ class ClipboardFloatingActivity : AppCompatActivity() {
         coordinatorCompleted = true
         BackgroundClipboardCapture.completeOverlay(
             this,
-            readCompletedAtElapsedMs
+            readCompletedAtElapsedNanos
         )
     }
 
