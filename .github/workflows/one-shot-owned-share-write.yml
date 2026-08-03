@@ -1,4 +1,4 @@
-name: One-shot app-owned share write
+name: One-shot app-owned clipboard writes
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ concurrency:
 jobs:
   apply-validate-commit:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 55
     steps:
       - name: Check out active branch
         uses: actions/checkout@v4
@@ -25,7 +25,7 @@ jobs:
           ref: stability-recovery
           fetch-depth: 0
 
-      - name: Apply exact two-file correction
+      - name: Apply exact owned-write and listener-lifecycle corrections
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -46,33 +46,50 @@ jobs:
               'PersistableBundle import',
           )
           marker = '''    @ReactMethod
-              fun copyBase64ImageToClipboardUsingCache(base64String: String, promise: Promise) {
-          '''.replace('              ', '')
+          fun copyBase64ImageToClipboardUsingCache(base64String: String, promise: Promise) {
+          '''
           method = '''    @ReactMethod
-              fun setAppOwnedTextClipboard(content: String, promise: Promise) {
-                  try {
-                      val clipData = ClipData.newPlainText("ClipCascade shared text", content).apply {
-                          description.extras = PersistableBundle().apply {
-                              putBoolean(ClipboardListenerModule.APP_OWNED_CLIP_MARKER, true)
-                          }
-                      }
-                      val clipboard = reactApplicationContext
-                          .getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                      clipboard.setPrimaryClip(clipData)
-                      promise.resolve(null)
-                  } catch (error: Exception) {
-                      promise.reject(
-                          "CLIPBOARD_WRITE_ERROR",
-                          "Failed to write app-owned shared text",
-                          error
-                      )
+          fun setAppOwnedTextClipboard(content: String, promise: Promise) {
+              try {
+                  val clipData = ClipData.newPlainText("ClipCascade text", content).apply {
+                      description.extras = appOwnedClipboardExtras()
                   }
+                  val clipboard = reactApplicationContext
+                      .getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                  clipboard.setPrimaryClip(clipData)
+                  promise.resolve(null)
+              } catch (error: Exception) {
+                  promise.reject(
+                      "CLIPBOARD_WRITE_ERROR",
+                      "Failed to write app-owned text to the clipboard",
+                      error
+                  )
+              }
+          }
+
+          private fun appOwnedClipboardExtras(): PersistableBundle =
+              PersistableBundle().apply {
+                  putBoolean(ClipboardListenerModule.APP_OWNED_CLIP_MARKER, true)
               }
 
-              @ReactMethod
-              fun copyBase64ImageToClipboardUsingCache(base64String: String, promise: Promise) {
-          '''.replace('              ', '')
+          @ReactMethod
+          fun copyBase64ImageToClipboardUsingCache(base64String: String, promise: Promise) {
+          '''
           bridge = once(bridge, marker, method, 'app-owned text method')
+          bridge = once(
+              bridge,
+              '''            val clipData = ClipData.newUri(reactApplicationContext.contentResolver, "Image", imageUri)
+          ''',
+              '''            val clipData = ClipData.newUri(
+                  reactApplicationContext.contentResolver,
+                  "Image",
+                  imageUri
+              ).apply {
+                  description.extras = appOwnedClipboardExtras()
+              }
+          ''',
+              'app-owned image marker',
+          )
           bridge_path.write_text(bridge, encoding='utf-8')
 
           service_path = Path('ClipCascade_Mobile/src/StartForegroundService.js')
@@ -85,13 +102,141 @@ jobs:
           )
           service = once(
               service,
+              '''function cleanupClipboardListeners() {
+            DeviceEventEmitter.removeAllListeners('SHARED_TEXT');
+            DeviceEventEmitter.removeAllListeners('SHARED_IMAGE');
+            DeviceEventEmitter.removeAllListeners('SHARED_FILES');
+            DeviceEventEmitter.removeAllListeners('onClipboardChange');
+          }
+          ''',
+              '''let clipboardOnChangeSubscription = null;
+
+          function cleanupClipboardListeners() {
+            DeviceEventEmitter.removeAllListeners('SHARED_TEXT');
+            DeviceEventEmitter.removeAllListeners('SHARED_IMAGE');
+            DeviceEventEmitter.removeAllListeners('SHARED_FILES');
+            clipboardOnChangeSubscription?.remove();
+            clipboardOnChangeSubscription = null;
+            NativeModules.ClipboardListener?.stopListening?.();
+          }
+          ''',
+              'listener cleanup',
+          )
+          service = once(
+              service,
+              '        let block_image_once = false;\n',
+              '',
+              'block_image_once declaration',
+          )
+          service = once(
+              service,
+              '''        // Event triggered when text content is shared with the app. (or) when text selection popup menu action is invoked
+          ''',
+              '''        // Clear subscriptions left by a previous foreground-service instance.
+          cleanupClipboardListeners();
+
+          // Event triggered when text content is shared with the app. (or) when text selection popup menu action is invoked
+          ''',
+              'pre-registration cleanup',
+          )
+          service = once(
+              service,
               '''              Clipboard.setString(clipContent);
-                            await sendClipBoard(clipContent, 'text');
-          '''.replace('                            ', ''),
+                        await sendClipBoard(clipContent, 'text');
+          ''',
               '''              await NativeBridgeModule.setAppOwnedTextClipboard(clipContent);
-                            await sendClipBoard(clipContent, 'text');
-          '''.replace('                            ', ''),
+                        await sendClipBoard(clipContent, 'text');
+          ''',
               'shared text write',
+          )
+          service = once(
+              service,
+              '        const clipboardOnChange = clipboardListener.addListener(\n',
+              '        clipboardOnChangeSubscription = clipboardListener.addListener(\n',
+              'native event subscription',
+          )
+          if service.count('Clipboard.setString(cb);') != 2:
+              raise SystemExit(
+                  'inbound text writes: expected 2 occurrences, found '
+                  + str(service.count('Clipboard.setString(cb);'))
+              )
+          service = service.replace(
+              'Clipboard.setString(cb);',
+              'await NativeBridgeModule.setAppOwnedTextClipboard(cb);',
+          )
+          if service.count('block_image_once = true;') != 2:
+              raise SystemExit(
+                  'inbound image block assignments: expected 2 occurrences, found '
+                  + str(service.count('block_image_once = true;'))
+              )
+          service = service.replace('            block_image_once = true;\n', '')
+          service = service.replace('                    block_image_once = true;\n', '')
+          for assignment in [
+              '              block_image_once = false;\n',
+              '              block_image_once = false;\n',
+              '              block_image_once = false;\n',
+              '              block_image_once = false;\n',
+          ]:
+              service = service.replace(assignment, '', 1)
+          service = service.replace('              block_image_once = false;\n', '')
+          guarded_publish = '''                if (block_image_once) {
+                  block_image_once = false;
+                } else {
+                  toggle = true;
+
+                  if (cipher_enabled === 'true') {
+                    clipContent = await encrypt(clipContent);
+                  }
+
+                  await setDataInAsyncStorage(
+                    'wsStatusMessage',
+                    '✅ Connected - Broadcasting',
+                  );
+
+                  stompClient.publish({
+                    destination: SEND_DESTINATION,
+                    body: JSON.stringify({
+                      payload: String(clipContent),
+                      type: type_,
+                    }),
+                  });
+                }
+          '''
+          direct_publish = '''                toggle = true;
+
+                if (cipher_enabled === 'true') {
+                  clipContent = await encrypt(clipContent);
+                }
+
+                await setDataInAsyncStorage(
+                  'wsStatusMessage',
+                  '✅ Connected - Broadcasting',
+                );
+
+                stompClient.publish({
+                  destination: SEND_DESTINATION,
+                  body: JSON.stringify({
+                    payload: String(clipContent),
+                    type: type_,
+                  }),
+                });
+          '''
+          service = once(
+              service,
+              guarded_publish,
+              direct_publish,
+              'image echo suppression branch',
+          )
+          if 'block_image_once' in service:
+              raise SystemExit('block_image_once remains after structural marker conversion')
+          service = service.replace(
+              '''              if (clipboardOnChange) {
+                clipboardOnChange.remove();
+              }
+          ''',
+              '''              clipboardOnChangeSubscription?.remove();
+              clipboardOnChangeSubscription = null;
+          ''',
           )
           service_path.write_text(service, encoding='utf-8')
 
@@ -103,20 +248,43 @@ jobs:
               "const mainActivity = read(kotlinRoot, 'MainActivity.kt');\nconst nativeBridge = read(kotlinRoot, 'NativeBridgeModule.kt');\nconst foregroundService = read(sourceRoot, 'StartForegroundService.js');\n",
               'test readers',
           )
-          insertion = '''  test('app-owned shared text cannot re-enter automatic capture', () => {
+          insertion = '''  test('all app-owned clipboard writes bypass automatic recapture', () => {
               expect(nativeBridge).toContain('fun setAppOwnedTextClipboard');
+              expect(nativeBridge).toContain('appOwnedClipboardExtras()');
               expect(nativeBridge).toContain('APP_OWNED_CLIP_MARKER');
               expect(nativeBridge).toContain('PersistableBundle');
               expect(foregroundService).toContain(
                 'await NativeBridgeModule.setAppOwnedTextClipboard(clipContent)',
               );
-              expect(foregroundService).not.toContain('Clipboard.setString(clipContent)');
+              expect(foregroundService).toContain(
+                'await NativeBridgeModule.setAppOwnedTextClipboard(cb)',
+              );
+              expect(foregroundService).not.toContain('Clipboard.setString');
               expect(foregroundService).not.toContain(
                 "import Clipboard from '@react-native-clipboard/clipboard'",
               );
+              expect(foregroundService).not.toContain('block_image_once');
             });
 
-          '''.replace('          ', '')
+            test('native clipboard subscriptions are removed on service cleanup', () => {
+              expect(foregroundService).toContain(
+                'let clipboardOnChangeSubscription = null',
+              );
+              expect(foregroundService).toContain(
+                'clipboardOnChangeSubscription?.remove()',
+              );
+              expect(foregroundService).toContain(
+                'NativeModules.ClipboardListener?.stopListening?.()',
+              );
+              expect(foregroundService).toContain(
+                'cleanupClipboardListeners();',
+              );
+              expect(foregroundService).not.toContain(
+                "DeviceEventEmitter.removeAllListeners('onClipboardChange')",
+              );
+            });
+
+          '''
           test = once(
               test,
               "  test('hidden clipboard API use is explicit and API-26-safe', () => {\n",
@@ -173,5 +341,5 @@ jobs:
             ClipCascade_Mobile/src/StartForegroundService.js \
             ClipCascade_Mobile/src/__tests__/AndroidNativeContracts.test.ts \
             ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/NativeBridgeModule.kt
-          git commit -m 'fix(android): mark shared-text clipboard writes as app-owned'
+          git commit -m 'fix(android): mark all app-owned clipboard writes'
           git push origin HEAD:stability-recovery
