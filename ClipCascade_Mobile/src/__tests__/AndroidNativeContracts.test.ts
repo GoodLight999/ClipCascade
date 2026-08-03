@@ -87,11 +87,14 @@ describe('Android native reliability contracts', () => {
     );
   });
 
-  test('cold-start shares are queued until React initialization', () => {
-    expect(mainActivity).toContain('pendingReactEvents.addLast(event)');
+  test('cold-start shares remain queued until the JS transport drains them', () => {
+    expect(mainActivity).toContain('PendingShareStore.enqueue(');
+    expect(mainActivity).toContain('PendingShareStore.EVENT_AVAILABLE');
     expect(mainActivity).toContain('ReactInstanceEventListener');
-    expect(mainActivity).toContain('flushPendingReactEvents(context)');
     expect(mainActivity).toContain('createReactContextInBackground()');
+    expect(mainActivity).toContain('EXTRA_SHARE_CONSUMED');
+    expect(mainActivity).not.toContain('pendingReactEvents');
+    expect(mainActivity).not.toContain('flushPendingReactEvents');
     expect(mainActivity).toContain('ExistingPeriodicWorkPolicy.KEEP');
     expect(mainActivity).toContain('cancelUniqueWork(WORK_NAME)');
     expect(mainActivity).not.toContain('getWorkInfosByTag(WORK_NAME).get()');

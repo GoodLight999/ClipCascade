@@ -4,6 +4,7 @@ package com.clipcascade
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -12,8 +13,6 @@ import androidx.work.WorkManager
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.ReactInstanceManager
-import com.facebook.react.bridge.Arguments
-import com.facebook.react.bridge.ReactContext
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 import com.facebook.react.devsupport.interfaces.DevSupportManager
@@ -21,18 +20,13 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ReactActivity() {
-    private data class PendingReactEvent(
-        val eventName: String,
-        val key: String,
-        val value: String
-    )
-
-    private val pendingReactEvents = ArrayDeque<PendingReactEvent>()
     private var reactInstanceListener: ReactInstanceManager.ReactInstanceEventListener? = null
 
     companion object {
         const val TAG = "ClipCascade"
         const val WORK_NAME = "schedule_work"
+        private const val EXTRA_SHARE_CONSUMED =
+            "com.clipcascade.extra.SHARE_INTENT_CONSUMED"
     }
 
     override fun getMainComponentName(): String = "ClipCascade"
@@ -93,40 +87,7 @@ class MainActivity : ReactActivity() {
     }
 
     private fun handleIntent(intent: Intent) {
-        if (Intent.ACTION_SEND == intent.action && "text/plain" == intent.type) {
-            intent.getStringExtra(Intent.EXTRA_TEXT)?.let {
-                sendToReactNative("SHARED_TEXT", "text", it)
-            }
-        } else if (
-            Intent.ACTION_PROCESS_TEXT == intent.action &&
-            "text/plain" == intent.type
-        ) {
-            intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.let {
-                sendToReactNative("SHARED_TEXT", "text", it.toString())
-            }
-        } else if (
-            Intent.ACTION_SEND == intent.action &&
-            intent.type?.startsWith("image/") == true
-        ) {
-            intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let {
-                sendToReactNative("SHARED_IMAGE", "image", it.toString())
-            }
-        } else if (Intent.ACTION_SEND == intent.action && intent.type != null) {
-            intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let {
-                sendToReactNative("SHARED_FILES", "files", it.toString())
-            }
-        } else if (
-            Intent.ACTION_SEND_MULTIPLE == intent.action &&
-            intent.type != null
-        ) {
-            intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris ->
-                sendToReactNative(
-                    "SHARED_FILES",
-                    "files",
-                    uris.joinToString(",") { it.toString() }
-                )
-            }
-        }
+        handleShareIntent(intent)
 
         if ("com.clipcascade.NOTIFICATION_ACTION" == intent.action) {
             if (intent.getStringExtra("action") == "foreground_service_stopped_running") {
@@ -144,18 +105,68 @@ class MainActivity : ReactActivity() {
         }
     }
 
-    private fun sendToReactNative(eventName: String, key: String, value: String) {
-        val event = PendingReactEvent(eventName, key, value)
-        val manager = reactNativeHost.reactInstanceManager
-        val reactContext = currentReactContextOrNull(manager)
-        if (reactContext != null) {
-            emitToReactNative(reactContext, event)
-            return
+    private fun handleShareIntent(intent: Intent) {
+        if (intent.getBooleanExtra(EXTRA_SHARE_CONSUMED, false)) return
+
+        val event = when {
+            Intent.ACTION_SEND == intent.action && intent.type == "text/plain" ->
+                intent.getStringExtra(Intent.EXTRA_TEXT)?.let {
+                    PendingShareStore.PendingShareEvent("SHARED_TEXT", "text", it)
+                }
+            Intent.ACTION_PROCESS_TEXT == intent.action && intent.type == "text/plain" ->
+                intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.let {
+                    PendingShareStore.PendingShareEvent("SHARED_TEXT", "text", it.toString())
+                }
+            Intent.ACTION_SEND == intent.action &&
+                intent.type?.startsWith("image/") == true ->
+                intent.streamUri()?.let {
+                    PendingShareStore.PendingShareEvent("SHARED_IMAGE", "image", it.toString())
+                }
+            Intent.ACTION_SEND == intent.action && intent.type != null ->
+                intent.streamUri()?.let {
+                    PendingShareStore.PendingShareEvent("SHARED_FILES", "files", it.toString())
+                }
+            Intent.ACTION_SEND_MULTIPLE == intent.action && intent.type != null ->
+                intent.streamUris()?.takeIf { it.isNotEmpty() }?.let { uris ->
+                    PendingShareStore.PendingShareEvent(
+                        "SHARED_FILES",
+                        "files",
+                        uris.joinToString(",") { it.toString() }
+                    )
+                }
+            else -> null
+        } ?: return
+
+        intent.putExtra(EXTRA_SHARE_CONSUMED, true)
+        val dropped = PendingShareStore.enqueue(event.eventName, event.key, event.value)
+        if (dropped) {
+            Log.w(TAG, "Pending share queue reached its bound; oldest event discarded")
+        }
+        signalPendingShares()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun Intent.streamUri(): Uri? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            getParcelableExtra(Intent.EXTRA_STREAM)
         }
 
-        // Cold-start share intents arrive before the React context exists.
-        // Retain them until ReactInstanceManager announces initialization.
-        pendingReactEvents.addLast(event)
+    @Suppress("DEPRECATION")
+    private fun Intent.streamUris(): ArrayList<Uri>? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+        }
+
+    private fun signalPendingShares() {
+        val manager = reactNativeHost.reactInstanceManager
+        currentReactContextOrNull(manager)?.let { context ->
+            emitPendingShareSignal(context)
+            return
+        }
         ensureReactInstanceListener(manager)
     }
 
@@ -165,7 +176,7 @@ class MainActivity : ReactActivity() {
         lateinit var listener: ReactInstanceManager.ReactInstanceEventListener
         listener = ReactInstanceManager.ReactInstanceEventListener { context ->
             runOnUiThread {
-                flushPendingReactEvents(context)
+                emitPendingShareSignal(context)
                 manager.removeReactInstanceEventListener(listener)
                 if (reactInstanceListener === listener) {
                     reactInstanceListener = null
@@ -178,7 +189,7 @@ class MainActivity : ReactActivity() {
         // Close the race where initialization completed between the first
         // context check and listener registration.
         currentReactContextOrNull(manager)?.let { context ->
-            flushPendingReactEvents(context)
+            emitPendingShareSignal(context)
             manager.removeReactInstanceEventListener(listener)
             if (reactInstanceListener === listener) {
                 reactInstanceListener = null
@@ -190,25 +201,16 @@ class MainActivity : ReactActivity() {
         }
     }
 
-    private fun flushPendingReactEvents(context: ReactContext) {
-        while (pendingReactEvents.isNotEmpty()) {
-            emitToReactNative(context, pendingReactEvents.removeFirst())
-        }
-    }
-
-    private fun emitToReactNative(context: ReactContext, event: PendingReactEvent) {
-        val params = Arguments.createMap().apply {
-            putString(event.key, event.value)
-        }
+    private fun emitPendingShareSignal(context: com.facebook.react.bridge.ReactContext) {
         context
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-            .emit(event.eventName, params)
+            .emit(PendingShareStore.EVENT_AVAILABLE, null)
     }
 
     @SuppressLint("VisibleForTests")
     private fun currentReactContextOrNull(
         manager: ReactInstanceManager
-    ): ReactContext? = manager.currentReactContext
+    ): com.facebook.react.bridge.ReactContext? = manager.currentReactContext
 
     override fun onDestroy() {
         reactInstanceListener?.let { listener ->

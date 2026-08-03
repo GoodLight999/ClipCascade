@@ -4,6 +4,7 @@ package com.clipcascade
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.Promise
 import androidx.work.WorkManager
@@ -131,6 +132,29 @@ class NativeBridgeModule(reactContext: ReactApplicationContext) : ReactContextBa
         
         // 3. Retrieve the PNG bytes
         return outputStream.toByteArray()
+    }
+
+    @ReactMethod
+    fun drainPendingShareEvents(promise: Promise) {
+        try {
+            val result = Arguments.createArray()
+            PendingShareStore.drain().forEach { event ->
+                result.pushMap(
+                    Arguments.createMap().apply {
+                        putString("eventName", event.eventName)
+                        putString("key", event.key)
+                        putString("value", event.value)
+                    }
+                )
+            }
+            promise.resolve(result)
+        } catch (error: Exception) {
+            promise.reject(
+                "PENDING_SHARE_DRAIN_ERROR",
+                "Failed to drain pending share events",
+                error
+            )
+        }
     }
 
     @ReactMethod

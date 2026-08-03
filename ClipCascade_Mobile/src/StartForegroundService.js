@@ -29,13 +29,13 @@ const {
 
 let clipboardListenerGeneration = 0;
 let activeClipboardOnChangeSubscription = null;
+let activeShareAvailabilitySubscription = null;
 
 function cleanupActiveClipboardListeners() {
-  DeviceEventEmitter.removeAllListeners('SHARED_TEXT');
-  DeviceEventEmitter.removeAllListeners('SHARED_IMAGE');
-  DeviceEventEmitter.removeAllListeners('SHARED_FILES');
   activeClipboardOnChangeSubscription?.remove();
   activeClipboardOnChangeSubscription = null;
+  activeShareAvailabilitySubscription?.remove();
+  activeShareAvailabilitySubscription = null;
   NativeModules.ClipboardListener?.stopListening?.();
 }
 
@@ -58,20 +58,29 @@ module.exports = async (inputData = null) => {
         cleanupActiveClipboardListeners();
         const listenerGeneration = ++clipboardListenerGeneration;
         let instanceClipboardOnChangeSubscription = null;
+        let instanceShareAvailabilitySubscription = null;
+        let sharedTransportReady = false;
+        let sharedDrainRequested = false;
+        let sharedDrainPromise = null;
         const cleanupClipboardListeners = () => {
           const subscription = instanceClipboardOnChangeSubscription;
           subscription?.remove();
           instanceClipboardOnChangeSubscription = null;
+          const shareSubscription = instanceShareAvailabilitySubscription;
+          shareSubscription?.remove();
+          instanceShareAvailabilitySubscription = null;
+          sharedTransportReady = false;
+          sharedDrainRequested = false;
 
           // A superseded service instance may clean up its own subscription,
           // but must not stop or remove listeners owned by the current instance.
           if (listenerGeneration !== clipboardListenerGeneration) return;
 
-          DeviceEventEmitter.removeAllListeners('SHARED_TEXT');
-          DeviceEventEmitter.removeAllListeners('SHARED_IMAGE');
-          DeviceEventEmitter.removeAllListeners('SHARED_FILES');
           if (activeClipboardOnChangeSubscription === subscription) {
             activeClipboardOnChangeSubscription = null;
+          }
+          if (activeShareAvailabilitySubscription === shareSubscription) {
+            activeShareAvailabilitySubscription = null;
           }
           NativeModules.ClipboardListener?.stopListening?.();
         };
@@ -289,54 +298,63 @@ module.exports = async (inputData = null) => {
           return false;
         };
 
-        // Event triggered when text content is shared with the app. (or) when text selection popup menu action is invoked
-        DeviceEventEmitter.addListener('SHARED_TEXT', async event => {
-          try {
-            const clipContent = event.text;
-            if (clipContent) {
-              // Write a marked local copy for user visibility while sending the
-              // shared payload directly through the existing transport. The native
-              // marker prevents automatic recapture of this app-owned write.
-              await NativeBridgeModule.setAppOwnedTextClipboard(clipContent);
-              await sendClipBoard(clipContent, 'text');
-            }
-          } catch (e) {
-            await setDataInAsyncStorage(
-              'wsStatusMessage',
-              '❌ Outbound Error: ' + e,
-            );
-          }
-        });
+        const processPendingShareEvent = async event => {
+          const clipContent = event?.value;
+          if (!clipContent) return;
 
-        // Event listener triggered when image is shared with the app.
-        DeviceEventEmitter.addListener('SHARED_IMAGE', async event => {
-          try {
-            const clipContent = event.image;
-            if (clipContent) {
-              await sendClipBoard(clipContent, 'image');
-            }
-          } catch (e) {
-            await setDataInAsyncStorage(
-              'wsStatusMessage',
-              '❌ Outbound Error: ' + e,
-            );
+          if (event.eventName === 'SHARED_TEXT') {
+            await NativeBridgeModule.setAppOwnedTextClipboard(clipContent);
+            await sendClipBoard(clipContent, 'text');
+          } else if (event.eventName === 'SHARED_IMAGE') {
+            await sendClipBoard(clipContent, 'image');
+          } else if (event.eventName === 'SHARED_FILES') {
+            await sendClipBoard(clipContent, 'files');
+          } else {
+            throw new Error(`Unsupported pending share event: ${event.eventName}`);
           }
-        });
+        };
 
-        // Event listener triggered when files are shared with the app.
-        DeviceEventEmitter.addListener('SHARED_FILES', async event => {
-          try {
-            const clipContent = event.files;
-            if (clipContent) {
-              await sendClipBoard(clipContent, 'files');
+        const requestPendingShareDrain = async () => {
+          sharedDrainRequested = true;
+          if (!sharedTransportReady) return;
+          if (sharedDrainPromise !== null) return sharedDrainPromise;
+
+          sharedDrainPromise = (async () => {
+            while (sharedDrainRequested) {
+              sharedDrainRequested = false;
+              const pendingEvents =
+                (await NativeBridgeModule.drainPendingShareEvents()) ?? [];
+              for (const event of pendingEvents) {
+                try {
+                  await processPendingShareEvent(event);
+                } catch (error) {
+                  await setDataInAsyncStorage(
+                    'wsStatusMessage',
+                    '❌ Outbound shared-content error: ' + error,
+                  );
+                }
+              }
             }
-          } catch (e) {
-            await setDataInAsyncStorage(
-              'wsStatusMessage',
-              '❌ Outbound Error: ' + e,
-            );
+          })();
+
+          try {
+            return await sharedDrainPromise;
+          } finally {
+            sharedDrainPromise = null;
+            if (sharedDrainRequested && sharedTransportReady) {
+              requestPendingShareDrain();
+            }
           }
-        });
+        };
+
+        instanceShareAvailabilitySubscription = DeviceEventEmitter.addListener(
+          'SHARED_EVENT_AVAILABLE',
+          () => {
+            requestPendingShareDrain();
+          },
+        );
+        activeShareAvailabilitySubscription =
+          instanceShareAvailabilitySubscription;
 
         //clipboard monitor
         const { ClipboardListener } = NativeModules;
@@ -1661,6 +1679,9 @@ module.exports = async (inputData = null) => {
             await sendClipBoardP2P(clipContent, type_);
           }
         };
+
+        sharedTransportReady = true;
+        await requestPendingShareDrain();
 
         // terminate service when wsIsRunning is false
         const stopServices = async () => {

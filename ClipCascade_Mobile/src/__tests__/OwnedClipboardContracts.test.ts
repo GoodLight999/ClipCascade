@@ -47,6 +47,26 @@ describe('app-owned clipboard writes', () => {
     expect(foregroundService).not.toContain('block_image_once');
   });
 
+  test('shared intents use one generation-owned wake subscription and atomic drain', () => {
+    expect(foregroundService).toContain(
+      'let activeShareAvailabilitySubscription = null',
+    );
+    expect(foregroundService).toContain(
+      "DeviceEventEmitter.addListener(\n          'SHARED_EVENT_AVAILABLE'",
+    );
+    expect(foregroundService).toContain(
+      'await NativeBridgeModule.drainPendingShareEvents()',
+    );
+    expect(foregroundService).toContain('sharedDrainRequested = true');
+    expect(foregroundService).toContain('sharedTransportReady = true');
+    expect(foregroundService).not.toContain(
+      "DeviceEventEmitter.removeAllListeners('SHARED_TEXT')",
+    );
+    expect(foregroundService).not.toContain(
+      "DeviceEventEmitter.addListener('SHARED_TEXT'",
+    );
+  });
+
   test('only the active service generation can stop native monitoring', () => {
     expect(foregroundService).toContain('let clipboardListenerGeneration = 0');
     expect(foregroundService).toContain(
