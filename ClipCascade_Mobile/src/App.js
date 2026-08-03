@@ -1,5 +1,6 @@
 import {
   PermissionsAndroid,
+  Platform,
   StyleSheet,
   Text,
   View,
@@ -230,9 +231,11 @@ export default function App() {
     // initialize
     const init = async () => {
       try {
-        await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
-        );
+        if (Platform.Version >= 33) {
+          await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+          );
+        }
         // enable websocket button
         await setDataInAsyncStorage('enableWSButton', 'true');
 
