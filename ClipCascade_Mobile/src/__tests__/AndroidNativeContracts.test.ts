@@ -12,6 +12,7 @@ const manifest = read(androidMain, 'AndroidManifest.xml');
 const backgroundCapture = read(kotlinRoot, 'BackgroundClipboardCapture.kt');
 const floatingActivity = read(kotlinRoot, 'ClipboardFloatingActivity.kt');
 const mainActivity = read(kotlinRoot, 'MainActivity.kt');
+const shizukuBridge = read(kotlinRoot, 'ShizukuClipboardBridge.kt');
 const shizukuUserService = read(
   kotlinRoot,
   'shizuku',
@@ -28,22 +29,63 @@ const lightStyles = read(androidMain, 'res', 'values', 'styles.xml');
 const darkStyles = read(androidMain, 'res', 'values-night', 'styles.xml');
 
 describe('Android native reliability contracts', () => {
-  test('overlay owns the unified request until teardown', () => {
+  test('capture coalescing follows actual read completion, not a time window', () => {
+    expect(backgroundCapture).toContain('requestedAtElapsedMs');
+    expect(backgroundCapture).toContain('SystemClock.elapsedRealtime()');
+    expect(backgroundCapture).toContain('coveredThroughElapsedMs');
+    expect(backgroundCapture).toContain(
+      'queued.requestedAtElapsedMs <= coveredThroughElapsedMs',
+    );
+    expect(backgroundCapture).toContain(
+      'covered_by_completed_clipboard_read',
+    );
+    expect(backgroundCapture).not.toContain('postDelayed');
+    expect(backgroundCapture).not.toContain('duplicateWindowMs');
+    expect(backgroundCapture).not.toMatch(/delay\(|debounce/i);
+  });
+
+  test('overlay owns capture through its exact platform read and teardown', () => {
     expect(backgroundCapture).toContain('var overlayOwnsCompletion = false');
     expect(backgroundCapture).toContain(
-      'ClipboardFloatingActivity.getIntent(appContext, source)',
+      'ClipboardFloatingActivity.getIntent(',
     );
     expect(backgroundCapture).toContain('overlayOwnsCompletion = true');
     expect(backgroundCapture).toContain('if (!overlayOwnsCompletion)');
-    expect(backgroundCapture).toContain('fun completeOverlay(context: Context)');
+    expect(backgroundCapture).toContain('readCompletedAtElapsedMs: Long?');
 
     expect(floatingActivity).toContain('EXTRA_TRIGGER_SOURCE');
+    expect(floatingActivity).toContain('readCompletedAtElapsedMs');
+    expect(floatingActivity).toContain(
+      'readCompletedAtElapsedMs = SystemClock.elapsedRealtime()',
+    );
     expect(floatingActivity).toContain('completeCoordinatorOnce()');
     expect(floatingActivity).toContain(
-      'BackgroundClipboardCapture.completeOverlay(this)',
+      'BackgroundClipboardCapture.completeOverlay(',
     );
     expect(floatingActivity).toMatch(
       /override fun onDestroy\(\)[\s\S]*completeCoordinatorOnce\(\)/,
+    );
+
+    const listenerRegistration = floatingActivity.indexOf(
+      'addOnGlobalLayoutListener',
+    );
+    const windowAttachment = floatingActivity.indexOf(
+      'windowManager.addView(floatingView, params)',
+    );
+    expect(listenerRegistration).toBeGreaterThan(-1);
+    expect(windowAttachment).toBeGreaterThan(listenerRegistration);
+    expect(floatingActivity).toContain(
+      'WindowManager.LayoutParams(\n            1,\n            1,',
+    );
+  });
+
+  test('Shizuku reports binding death and timestamps successful reads', () => {
+    expect(shizukuBridge).toContain('override fun onBindingDied');
+    expect(shizukuBridge).toContain('override fun onNullBinding');
+    expect(shizukuBridge).toContain('clearUserService(');
+    expect(shizukuBridge).toContain('readCompletedAtElapsedMs: Long?');
+    expect(shizukuBridge).toContain(
+      'readCompletedAtElapsedMs = SystemClock.elapsedRealtime()',
     );
   });
 
