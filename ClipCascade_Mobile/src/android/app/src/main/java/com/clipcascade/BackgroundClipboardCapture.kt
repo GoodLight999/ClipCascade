@@ -16,6 +16,9 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * Concurrent signals are coalesced. One latest pending signal is retained so a
  * second real copy that arrives during an in-flight read is not silently lost.
+ * The request remains in-flight until an overlay fallback has finished reading
+ * and destroyed its activity, preventing duplicate overlay launches when more
+ * than one trigger reports the same copy operation.
  */
 object BackgroundClipboardCapture {
     private const val TAG = "ClipboardCapture"
@@ -40,6 +43,7 @@ object BackgroundClipboardCapture {
 
         CaptureDiagnostics.recordShizukuAttempt(source)
         ShizukuClipboardBridge.readClipboard { result ->
+            var overlayOwnsCompletion = false
             try {
                 if (result.success && result.content != null && result.type != null) {
                     CaptureDiagnostics.recordShizukuSuccess(source)
@@ -64,7 +68,12 @@ object BackgroundClipboardCapture {
                 )
                 if (Settings.canDrawOverlays(appContext)) {
                     try {
-                        appContext.startActivity(ClipboardFloatingActivity.getIntent(appContext))
+                        appContext.startActivity(
+                            ClipboardFloatingActivity.getIntent(appContext, source)
+                        )
+                        // ClipboardFloatingActivity calls completeOverlay once
+                        // its read attempt and teardown have finished.
+                        overlayOwnsCompletion = true
                     } catch (error: Throwable) {
                         Log.e(TAG, "Overlay fallback failed for $source", error)
                         CaptureDiagnostics.recordFailure(source, "overlay_launch_failed", error)
@@ -74,9 +83,15 @@ object BackgroundClipboardCapture {
                     CaptureDiagnostics.recordIgnored(source, "overlay_permission_missing")
                 }
             } finally {
-                finishRequest(appContext)
+                if (!overlayOwnsCompletion) {
+                    finishRequest(appContext)
+                }
             }
         }
+    }
+
+    fun completeOverlay(context: Context) {
+        finishRequest(context.applicationContext)
     }
 
     private fun finishRequest(context: Context) {
