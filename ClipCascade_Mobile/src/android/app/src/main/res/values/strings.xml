@@ -4,6 +4,7 @@
     <string name="background_setup_short_label">バックグラウンド設定</string>
     <string name="background_setup_long_label">ClipCascade バックグラウンド取得を設定</string>
     <string name="background_setup_intro">前景・背景を区別せず、すべての自動コピー通知を同じ取得経路で処理します。Clipboard listener、ユーザー補助のACTION_COPY、READ_LOGSはトリガーだけを担当し、本文はShizuku UserServiceまたは既存オーバーレイで読み取ります。送信は既存のClipCascade前景サービスが担当します。</string>
+    <string name="background_setup_combined_status">%1$s\n\n%2$s</string>
     <string name="background_setup_status">Shizuku Binder: %1$s\nShizuku権限: %2$s\nShizuku読取サービス: %3$s\nユーザー補助 ACTION_COPY: %4$s\n他のアプリの上に表示（予備経路）: %5$s\nREAD_LOGS（ADBトリガー）: %6$s\nバッテリー最適化の除外: %7$s\nClipCascade前景サービス: %8$s\n直近のShizukuエラー: %9$s</string>
     <string name="capture_diagnostics_status">統一取得診断（内容は保存しません）\nトリガー: %1$d\n並行トリガーの集約: %2$d\nShizuku試行: %3$d\nShizuku成功: %4$d\nオーバーレイ移行: %5$d\nJS送出: %6$d\n無視・利用不能: %7$d\n直近ソース: %8$s\n直近段階: %9$s\n直近エラー: %10$s\n直近時刻: %11$s</string>
     <string name="status_enabled">有効</string>
