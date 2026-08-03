@@ -30,6 +30,24 @@ jobs:
       - name: Apply deterministic transformation
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tools/apply_pending_share_queue.py')
+          source = path.read_text(encoding='utf-8')
+          marker = 'for forbidden in [\n'
+          if source.count(marker) != 1:
+              raise SystemExit('helper forbidden-check marker mismatch')
+          insertion = '''service = once(
+              service,
+              "  DeviceEventEmitter.removeAllListeners('SHARED_TEXT');\\n"
+              "  DeviceEventEmitter.removeAllListeners('SHARED_IMAGE');\\n"
+              "  DeviceEventEmitter.removeAllListeners('SHARED_FILES');\\n",
+              '',
+              'global legacy shared-event cleanup',
+          )
+          '''
+          path.write_text(source.replace(marker, insertion + marker, 1), encoding='utf-8')
+          PY
           python -m py_compile tools/apply_pending_share_queue.py
           python tools/apply_pending_share_queue.py "$GITHUB_WORKSPACE"
           git diff --check
