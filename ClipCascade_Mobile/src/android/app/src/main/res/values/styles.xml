@@ -1,8 +1,11 @@
 <resources>
 
-    <!-- Explicit application palette. React Native views that do not set their
-         own background/text color inherit predictable high-contrast defaults. -->
-    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <!--
+         Shared application palette. API-specific system-bar attributes are
+         layered in values-v27 and values-v29 so API 26 never inflates unknown
+         framework attributes.
+    -->
+    <style name="AppTheme.Base" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
         <item name="android:windowBackground">@color/background_setup_surface</item>
         <item name="android:colorBackground">@color/background_setup_surface</item>
@@ -15,10 +18,9 @@
         <item name="android:statusBarColor">@color/background_setup_chrome</item>
         <item name="android:navigationBarColor">@color/background_setup_surface</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
-        <item name="android:forceDarkAllowed">false</item>
     </style>
 
+    <style name="AppTheme" parent="AppTheme.Base" />
     <style name="Theme.ClipCascade.BackgroundSetup" parent="AppTheme" />
 
     <style name="Theme.TransparentActivity" parent="Theme.AppCompat.NoActionBar">
