@@ -1,91 +1,88 @@
 // android\app\src\main\java\com\clipcascade\MainActivity.kt
 package com.clipcascade
 
+import android.annotation.SuppressLint
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.util.Log
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
-import com.facebook.react.bridge.ReactContext
 import com.facebook.react.ReactInstanceManager
-import com.facebook.react.devsupport.interfaces.DevSupportManager
 import com.facebook.react.bridge.Arguments
-import com.facebook.react.modules.core.DeviceEventManagerModule
-import com.facebook.react.defaults.DefaultReactActivityDelegate
+import com.facebook.react.bridge.ReactContext
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
-import androidx.work.WorkManager
-import androidx.work.PeriodicWorkRequestBuilder
+import com.facebook.react.defaults.DefaultReactActivityDelegate
+import com.facebook.react.devsupport.interfaces.DevSupportManager
+import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.util.concurrent.TimeUnit
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequest
-import android.util.Log
-import android.net.Uri
-
 
 class MainActivity : ReactActivity() {
+    private data class PendingReactEvent(
+        val eventName: String,
+        val key: String,
+        val value: String
+    )
+
+    private val pendingReactEvents = ArrayDeque<PendingReactEvent>()
+    private var reactInstanceListener: ReactInstanceManager.ReactInstanceEventListener? = null
+
     companion object {
         const val TAG = "ClipCascade"
         const val WORK_NAME = "schedule_work"
     }
 
-    /**
-    * Returns the name of the main component registered from JavaScript. This is used to schedule
-    * rendering of the component.
-    */
     override fun getMainComponentName(): String = "ClipCascade"
 
-    /**
-    * Returns the instance of the [ReactActivityDelegate]. We use [DefaultReactActivityDelegate]
-    * which allows you to enable New Architecture with a single boolean flags [fabricEnabled]
-    */
     override fun createReactActivityDelegate(): ReactActivityDelegate =
-      DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
+        DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         intent?.let { handleIntent(it) }
 
-        try{
+        try {
             val bridgeData = AsyncStorageBridge(applicationContext)
-            val enablePeriodicChecks = bridgeData.getValue("enable_periodic_checks")?.toBoolean() ?: true
-            if(enablePeriodicChecks) { 
+            val enablePeriodicChecks =
+                bridgeData.getValue("enable_periodic_checks")?.toBoolean() ?: true
+            if (enablePeriodicChecks) {
                 scheduleJob()
-                if(ScheduleService.hasNotificationPermission(applicationContext) == true) {
+                if (ScheduleService.hasNotificationPermission(applicationContext)) {
                     ScheduleService.removeNotificationIfPresent(applicationContext)
                 }
             } else {
-                WorkManager.getInstance(applicationContext).cancelAllWorkByTag(WORK_NAME)
+                WorkManager.getInstance(applicationContext).cancelUniqueWork(WORK_NAME)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error scheduling job", e)
+        } catch (error: Exception) {
+            Log.e(TAG, "Error scheduling job", error)
         }
     }
 
     private fun scheduleJob() {
-        // Check if the work is already scheduled
-        val workInfos = WorkManager.getInstance(applicationContext).getWorkInfosByTag(WORK_NAME).get()
-        if (workInfos.isEmpty() || 
-            (workInfos[0].state != androidx.work.WorkInfo.State.RUNNING && 
-            workInfos[0].state != androidx.work.WorkInfo.State.ENQUEUED)) {
-            // Periodic work request to run every 15 minutes
-            val periodicWorkRequest: PeriodicWorkRequest = PeriodicWorkRequestBuilder<ScheduleService>(15, TimeUnit.MINUTES)
+        val periodicWorkRequest =
+            PeriodicWorkRequestBuilder<ScheduleService>(15, TimeUnit.MINUTES)
                 .addTag(WORK_NAME)
                 .build()
 
-            WorkManager.getInstance(applicationContext)
-                .enqueueUniquePeriodicWork(
-                    WORK_NAME, 
-                    ExistingPeriodicWorkPolicy.REPLACE, 
-                    periodicWorkRequest
-                )
-        }
+        // KEEP is the WorkManager-native equivalent of "create it only when no
+        // existing unique periodic work is active" and avoids blocking the UI
+        // thread on getWorkInfosByTag(...).get().
+        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+            WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            periodicWorkRequest
+        )
     }
 
     override fun onPause() {
         super.onPause()
-        val rm: ReactInstanceManager = reactNativeHost.reactInstanceManager
-        val dsm: DevSupportManager = rm.devSupportManager
-        if (dsm.devSupportEnabled) {
-          dsm.hideRedboxDialog()
+        val manager: ReactInstanceManager = reactNativeHost.reactInstanceManager
+        val devSupportManager: DevSupportManager = manager.devSupportManager
+        if (devSupportManager.devSupportEnabled) {
+            devSupportManager.hideRedboxDialog()
         }
     }
 
@@ -96,69 +93,128 @@ class MainActivity : ReactActivity() {
     }
 
     private fun handleIntent(intent: Intent) {
-        // Handle single shared text
         if (Intent.ACTION_SEND == intent.action && "text/plain" == intent.type) {
-            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-            sharedText?.let {
+            intent.getStringExtra(Intent.EXTRA_TEXT)?.let {
                 sendToReactNative("SHARED_TEXT", "text", it)
             }
-        }
-
-        // Handle text via text-selection popup (PROCESS_TEXT)
-        else if (Intent.ACTION_PROCESS_TEXT == intent.action && "text/plain" == intent.type) {
-            val sharedText = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)
-            sharedText?.let {
+        } else if (
+            Intent.ACTION_PROCESS_TEXT == intent.action &&
+            "text/plain" == intent.type
+        ) {
+            intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.let {
                 sendToReactNative("SHARED_TEXT", "text", it.toString())
             }
-        }
-
-        // Handle single image
-        else if (Intent.ACTION_SEND == intent.action && intent.type?.startsWith("image/") == true) {
-            val imageUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
-            imageUri?.let {
+        } else if (
+            Intent.ACTION_SEND == intent.action &&
+            intent.type?.startsWith("image/") == true
+        ) {
+            intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let {
                 sendToReactNative("SHARED_IMAGE", "image", it.toString())
             }
-        }
-        
-        // Handle single file (any type)
-        else if (Intent.ACTION_SEND == intent.action && intent.type != null) {
-            val fileUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
-            fileUri?.let {
+        } else if (Intent.ACTION_SEND == intent.action && intent.type != null) {
+            intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.let {
                 sendToReactNative("SHARED_FILES", "files", it.toString())
             }
-        }
-
-        // Handle multiple files (any type)
-        else if (Intent.ACTION_SEND_MULTIPLE == intent.action && intent.type != null) {
-            val fileUris = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
-            fileUris?.let {
-                val uriList = it.map(Uri::toString).joinToString(",")
-                sendToReactNative("SHARED_FILES", "files", uriList)
+        } else if (
+            Intent.ACTION_SEND_MULTIPLE == intent.action &&
+            intent.type != null
+        ) {
+            intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris ->
+                sendToReactNative(
+                    "SHARED_FILES",
+                    "files",
+                    uris.joinToString(",") { it.toString() }
+                )
             }
         }
 
-        // custom notification action
         if ("com.clipcascade.NOTIFICATION_ACTION" == intent.action) {
-            val action = intent.getStringExtra("action")
-            if (action == "foreground_service_stopped_running") {
+            if (intent.getStringExtra("action") == "foreground_service_stopped_running") {
                 try {
                     AsyncStorageBridge(applicationContext)
                         .setValue("foreground_service_stopped_running", "true")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error connecting/initializing values to AsyncStorageBridge", e)
+                } catch (error: Exception) {
+                    Log.e(
+                        TAG,
+                        "Error connecting/initializing values to AsyncStorageBridge",
+                        error
+                    )
                 }
             }
         }
     }
 
-    // Send data to React Native
     private fun sendToReactNative(eventName: String, key: String, value: String) {
-        val reactContext = reactInstanceManager.currentReactContext
-        reactContext?.let {
-            val params = Arguments.createMap().apply { putString(key, value) }
-            it
-                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                .emit(eventName, params)
+        val event = PendingReactEvent(eventName, key, value)
+        val manager = reactNativeHost.reactInstanceManager
+        val reactContext = currentReactContextOrNull(manager)
+        if (reactContext != null) {
+            emitToReactNative(reactContext, event)
+            return
         }
+
+        // Cold-start share intents arrive before the React context exists.
+        // Retain them until ReactInstanceManager announces initialization.
+        pendingReactEvents.addLast(event)
+        ensureReactInstanceListener(manager)
+    }
+
+    private fun ensureReactInstanceListener(manager: ReactInstanceManager) {
+        if (reactInstanceListener != null) return
+
+        lateinit var listener: ReactInstanceManager.ReactInstanceEventListener
+        listener = ReactInstanceManager.ReactInstanceEventListener { context ->
+            runOnUiThread {
+                flushPendingReactEvents(context)
+                manager.removeReactInstanceEventListener(listener)
+                if (reactInstanceListener === listener) {
+                    reactInstanceListener = null
+                }
+            }
+        }
+        reactInstanceListener = listener
+        manager.addReactInstanceEventListener(listener)
+
+        // Close the race where initialization completed between the first
+        // context check and listener registration.
+        currentReactContextOrNull(manager)?.let { context ->
+            flushPendingReactEvents(context)
+            manager.removeReactInstanceEventListener(listener)
+            if (reactInstanceListener === listener) {
+                reactInstanceListener = null
+            }
+        }
+
+        if (!manager.hasStartedCreatingInitialContext()) {
+            manager.createReactContextInBackground()
+        }
+    }
+
+    private fun flushPendingReactEvents(context: ReactContext) {
+        while (pendingReactEvents.isNotEmpty()) {
+            emitToReactNative(context, pendingReactEvents.removeFirst())
+        }
+    }
+
+    private fun emitToReactNative(context: ReactContext, event: PendingReactEvent) {
+        val params = Arguments.createMap().apply {
+            putString(event.key, event.value)
+        }
+        context
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit(event.eventName, params)
+    }
+
+    @SuppressLint("VisibleForTests")
+    private fun currentReactContextOrNull(
+        manager: ReactInstanceManager
+    ): ReactContext? = manager.currentReactContext
+
+    override fun onDestroy() {
+        reactInstanceListener?.let { listener ->
+            reactNativeHost.reactInstanceManager.removeReactInstanceEventListener(listener)
+        }
+        reactInstanceListener = null
+        super.onDestroy()
     }
 }
