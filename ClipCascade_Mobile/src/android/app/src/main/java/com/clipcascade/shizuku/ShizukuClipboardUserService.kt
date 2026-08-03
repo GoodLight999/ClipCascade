@@ -81,7 +81,7 @@ class ShizukuClipboardUserService : IShizukuClipboardService.Stub {
     private object HiddenClipboardReader {
         private const val SHELL_PACKAGE = "com.android.shell"
         private const val ROOT_PACKAGE = "root"
-        // AOSP Context.DEVICE_ID_DEFAULT is the inlined integer value 0.
+        // AOSP's default device identifier is the inlined integer value 0.
         private const val DEFAULT_DEVICE_ID = 0
 
         /**
