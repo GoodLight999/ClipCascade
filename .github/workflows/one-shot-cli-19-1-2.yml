@@ -1,0 +1,117 @@
+name: One-shot compatible dependency adoption
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/one-shot-cli-19-1-2.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-shot-cli-19-1-2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-validate-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: bash
+        working-directory: ClipCascade_Mobile/src
+
+    steps:
+      - name: Check out active branch
+        uses: actions/checkout@v4
+        with:
+          ref: stability-recovery
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Apply bounded compatible dependency changes
+        run: |
+          set -euo pipefail
+          npm pkg set devDependencies.@react-native-community/cli=19.1.2
+          npm pkg set devDependencies.@react-native-community/cli-platform-android=19.1.2
+          npm pkg set devDependencies.@react-native-community/cli-platform-ios=19.1.2
+          npm pkg delete dependencies.@react-native-clipboard/clipboard
+          npm install --package-lock-only --ignore-scripts
+          # Apply only fixes available inside this selected dependency graph.
+          # Never cross the React Native CLI 20 major boundary and never use --force.
+          npm audit fix --package-lock-only --omit=dev || true
+          git diff --check
+          git diff -- package.json package-lock.json
+          node - <<'NODE'
+          const p = require('./package.json');
+          for (const name of [
+            '@react-native-community/cli',
+            '@react-native-community/cli-platform-android',
+            '@react-native-community/cli-platform-ios',
+          ]) {
+            if (p.devDependencies[name] !== '19.1.2') {
+              throw new Error(`${name} was not pinned to 19.1.2`);
+            }
+          }
+          if (p.dependencies['react-native'] !== '0.80.2') {
+            throw new Error('React Native changed outside the approved 0.80.2 baseline');
+          }
+          if (p.dependencies['@react-native-clipboard/clipboard']) {
+            throw new Error('Unused clipboard package was not removed');
+          }
+          NODE
+
+      - name: Install exact candidate tree
+        run: npm ci
+
+      - name: Enforce production high-or-higher audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Validate JavaScript and source contracts
+        run: |
+          set -euo pipefail
+          node --check App.js
+          node --check StartForegroundService.js
+          node --check HeadlessTask.js
+          npm run lint -- --max-warnings=0
+          npm test -- --runInBand
+
+      - name: Validate Android lint, JVM tests, and standalone APK
+        run: |
+          set -euo pipefail
+          chmod +x android/gradlew
+          cd android
+          ./gradlew --no-daemon --stacktrace \
+            :app:lintStandalone \
+            :app:testDebugUnitTest \
+            :app:assembleStandalone
+          apk=app/build/outputs/apk/standalone/app-standalone.apk
+          test -f "$apk"
+          unzip -Z1 "$apk" | grep -Fxq assets/index.android.bundle
+          unzip -tq "$apk"
+          sha256sum "$apk"
+
+      - name: Commit only validated dependency files
+        working-directory: .
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add ClipCascade_Mobile/src/package.json ClipCascade_Mobile/src/package-lock.json
+          git commit -m 'fix(mobile): update compatible CLI dependencies'
+          git push origin HEAD:stability-recovery
