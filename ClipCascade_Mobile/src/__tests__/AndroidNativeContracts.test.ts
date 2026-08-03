@@ -29,12 +29,12 @@ const lightStyles = read(androidMain, 'res', 'values', 'styles.xml');
 const darkStyles = read(androidMain, 'res', 'values-night', 'styles.xml');
 
 describe('Android native reliability contracts', () => {
-  test('capture coalescing follows actual read completion, not a time window', () => {
-    expect(backgroundCapture).toContain('requestedAtElapsedMs');
-    expect(backgroundCapture).toContain('SystemClock.elapsedRealtime()');
-    expect(backgroundCapture).toContain('coveredThroughElapsedMs');
+  test('capture coalescing follows exact read completion, not a time window', () => {
+    expect(backgroundCapture).toContain('requestedAtElapsedNanos');
+    expect(backgroundCapture).toContain('SystemClock.elapsedRealtimeNanos()');
+    expect(backgroundCapture).toContain('coveredThroughElapsedNanos');
     expect(backgroundCapture).toContain(
-      'queued.requestedAtElapsedMs <= coveredThroughElapsedMs',
+      'queued.requestedAtElapsedNanos <= coveredThroughElapsedNanos',
     );
     expect(backgroundCapture).toContain(
       'covered_by_completed_clipboard_read',
@@ -46,17 +46,15 @@ describe('Android native reliability contracts', () => {
 
   test('overlay owns capture through its exact platform read and teardown', () => {
     expect(backgroundCapture).toContain('var overlayOwnsCompletion = false');
-    expect(backgroundCapture).toContain(
-      'ClipboardFloatingActivity.getIntent(',
-    );
+    expect(backgroundCapture).toContain('ClipboardFloatingActivity.getIntent(');
     expect(backgroundCapture).toContain('overlayOwnsCompletion = true');
     expect(backgroundCapture).toContain('if (!overlayOwnsCompletion)');
-    expect(backgroundCapture).toContain('readCompletedAtElapsedMs: Long?');
+    expect(backgroundCapture).toContain('readCompletedAtElapsedNanos: Long?');
 
     expect(floatingActivity).toContain('EXTRA_TRIGGER_SOURCE');
-    expect(floatingActivity).toContain('readCompletedAtElapsedMs');
+    expect(floatingActivity).toContain('readCompletedAtElapsedNanos');
     expect(floatingActivity).toContain(
-      'readCompletedAtElapsedMs = SystemClock.elapsedRealtime()',
+      'readCompletedAtElapsedNanos = SystemClock.elapsedRealtimeNanos()',
     );
     expect(floatingActivity).toContain('completeCoordinatorOnce()');
     expect(floatingActivity).toContain(
@@ -83,9 +81,9 @@ describe('Android native reliability contracts', () => {
     expect(shizukuBridge).toContain('override fun onBindingDied');
     expect(shizukuBridge).toContain('override fun onNullBinding');
     expect(shizukuBridge).toContain('clearUserService(');
-    expect(shizukuBridge).toContain('readCompletedAtElapsedMs: Long?');
+    expect(shizukuBridge).toContain('readCompletedAtElapsedNanos: Long?');
     expect(shizukuBridge).toContain(
-      'readCompletedAtElapsedMs = SystemClock.elapsedRealtime()',
+      'readCompletedAtElapsedNanos = SystemClock.elapsedRealtimeNanos()',
     );
   });
 
