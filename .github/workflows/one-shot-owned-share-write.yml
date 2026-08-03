@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - '.github/workflows/one-shot-owned-share-write.yml'
+      - 'ClipCascade_Mobile/src/__tests__/OwnedClipboardContracts.test.ts'
 
 permissions:
   contents: write
@@ -25,274 +26,18 @@ jobs:
           ref: stability-recovery
           fetch-depth: 0
 
-      - name: Apply exact owned-write and listener-lifecycle corrections
+      - name: Restore and apply the locally checked patch
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          def once(text, old, new, label):
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected 1 occurrence, found {count}')
-              return text.replace(old, new, 1)
-
-          bridge_path = Path('ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/NativeBridgeModule.kt')
-          bridge = bridge_path.read_text(encoding='utf-8')
-          bridge = once(
-              bridge,
-              'import android.graphics.BitmapFactory\n',
-              'import android.graphics.BitmapFactory\nimport android.os.PersistableBundle\n',
-              'PersistableBundle import',
-          )
-          marker = '''    @ReactMethod
-          fun copyBase64ImageToClipboardUsingCache(base64String: String, promise: Promise) {
-          '''
-          method = '''    @ReactMethod
-          fun setAppOwnedTextClipboard(content: String, promise: Promise) {
-              try {
-                  val clipData = ClipData.newPlainText("ClipCascade text", content).apply {
-                      description.extras = appOwnedClipboardExtras()
-                  }
-                  val clipboard = reactApplicationContext
-                      .getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                  clipboard.setPrimaryClip(clipData)
-                  promise.resolve(null)
-              } catch (error: Exception) {
-                  promise.reject(
-                      "CLIPBOARD_WRITE_ERROR",
-                      "Failed to write app-owned text to the clipboard",
-                      error
-                  )
-              }
-          }
-
-          private fun appOwnedClipboardExtras(): PersistableBundle =
-              PersistableBundle().apply {
-                  putBoolean(ClipboardListenerModule.APP_OWNED_CLIP_MARKER, true)
-              }
-
-          @ReactMethod
-          fun copyBase64ImageToClipboardUsingCache(base64String: String, promise: Promise) {
-          '''
-          bridge = once(bridge, marker, method, 'app-owned text method')
-          bridge = once(
-              bridge,
-              '''            val clipData = ClipData.newUri(reactApplicationContext.contentResolver, "Image", imageUri)
-          ''',
-              '''            val clipData = ClipData.newUri(
-                  reactApplicationContext.contentResolver,
-                  "Image",
-                  imageUri
-              ).apply {
-                  description.extras = appOwnedClipboardExtras()
-              }
-          ''',
-              'app-owned image marker',
-          )
-          bridge_path.write_text(bridge, encoding='utf-8')
-
-          service_path = Path('ClipCascade_Mobile/src/StartForegroundService.js')
-          service = service_path.read_text(encoding='utf-8')
-          service = once(
-              service,
-              "import Clipboard from '@react-native-clipboard/clipboard';\n\n",
-              '',
-              'Clipboard import',
-          )
-          service = once(
-              service,
-              '''function cleanupClipboardListeners() {
-            DeviceEventEmitter.removeAllListeners('SHARED_TEXT');
-            DeviceEventEmitter.removeAllListeners('SHARED_IMAGE');
-            DeviceEventEmitter.removeAllListeners('SHARED_FILES');
-            DeviceEventEmitter.removeAllListeners('onClipboardChange');
-          }
-          ''',
-              '''let clipboardOnChangeSubscription = null;
-
-          function cleanupClipboardListeners() {
-            DeviceEventEmitter.removeAllListeners('SHARED_TEXT');
-            DeviceEventEmitter.removeAllListeners('SHARED_IMAGE');
-            DeviceEventEmitter.removeAllListeners('SHARED_FILES');
-            clipboardOnChangeSubscription?.remove();
-            clipboardOnChangeSubscription = null;
-            NativeModules.ClipboardListener?.stopListening?.();
-          }
-          ''',
-              'listener cleanup',
-          )
-          service = once(
-              service,
-              '        let block_image_once = false;\n',
-              '',
-              'block_image_once declaration',
-          )
-          service = once(
-              service,
-              '''        // Event triggered when text content is shared with the app. (or) when text selection popup menu action is invoked
-          ''',
-              '''        // Clear subscriptions left by a previous foreground-service instance.
-          cleanupClipboardListeners();
-
-          // Event triggered when text content is shared with the app. (or) when text selection popup menu action is invoked
-          ''',
-              'pre-registration cleanup',
-          )
-          service = once(
-              service,
-              '''              Clipboard.setString(clipContent);
-                        await sendClipBoard(clipContent, 'text');
-          ''',
-              '''              await NativeBridgeModule.setAppOwnedTextClipboard(clipContent);
-                        await sendClipBoard(clipContent, 'text');
-          ''',
-              'shared text write',
-          )
-          service = once(
-              service,
-              '        const clipboardOnChange = clipboardListener.addListener(\n',
-              '        clipboardOnChangeSubscription = clipboardListener.addListener(\n',
-              'native event subscription',
-          )
-          if service.count('Clipboard.setString(cb);') != 2:
-              raise SystemExit(
-                  'inbound text writes: expected 2 occurrences, found '
-                  + str(service.count('Clipboard.setString(cb);'))
-              )
-          service = service.replace(
-              'Clipboard.setString(cb);',
-              'await NativeBridgeModule.setAppOwnedTextClipboard(cb);',
-          )
-          if service.count('block_image_once = true;') != 2:
-              raise SystemExit(
-                  'inbound image block assignments: expected 2 occurrences, found '
-                  + str(service.count('block_image_once = true;'))
-              )
-          service = service.replace('            block_image_once = true;\n', '')
-          service = service.replace('                    block_image_once = true;\n', '')
-          for assignment in [
-              '              block_image_once = false;\n',
-              '              block_image_once = false;\n',
-              '              block_image_once = false;\n',
-              '              block_image_once = false;\n',
-          ]:
-              service = service.replace(assignment, '', 1)
-          service = service.replace('              block_image_once = false;\n', '')
-          guarded_publish = '''                if (block_image_once) {
-                  block_image_once = false;
-                } else {
-                  toggle = true;
-
-                  if (cipher_enabled === 'true') {
-                    clipContent = await encrypt(clipContent);
-                  }
-
-                  await setDataInAsyncStorage(
-                    'wsStatusMessage',
-                    '✅ Connected - Broadcasting',
-                  );
-
-                  stompClient.publish({
-                    destination: SEND_DESTINATION,
-                    body: JSON.stringify({
-                      payload: String(clipContent),
-                      type: type_,
-                    }),
-                  });
-                }
-          '''
-          direct_publish = '''                toggle = true;
-
-                if (cipher_enabled === 'true') {
-                  clipContent = await encrypt(clipContent);
-                }
-
-                await setDataInAsyncStorage(
-                  'wsStatusMessage',
-                  '✅ Connected - Broadcasting',
-                );
-
-                stompClient.publish({
-                  destination: SEND_DESTINATION,
-                  body: JSON.stringify({
-                    payload: String(clipContent),
-                    type: type_,
-                  }),
-                });
-          '''
-          service = once(
-              service,
-              guarded_publish,
-              direct_publish,
-              'image echo suppression branch',
-          )
-          if 'block_image_once' in service:
-              raise SystemExit('block_image_once remains after structural marker conversion')
-          service = service.replace(
-              '''              if (clipboardOnChange) {
-                clipboardOnChange.remove();
-              }
-          ''',
-              '''              clipboardOnChangeSubscription?.remove();
-              clipboardOnChangeSubscription = null;
-          ''',
-          )
-          service_path.write_text(service, encoding='utf-8')
-
-          test_path = Path('ClipCascade_Mobile/src/__tests__/AndroidNativeContracts.test.ts')
-          test = test_path.read_text(encoding='utf-8')
-          test = once(
-              test,
-              "const mainActivity = read(kotlinRoot, 'MainActivity.kt');\n",
-              "const mainActivity = read(kotlinRoot, 'MainActivity.kt');\nconst nativeBridge = read(kotlinRoot, 'NativeBridgeModule.kt');\nconst foregroundService = read(sourceRoot, 'StartForegroundService.js');\n",
-              'test readers',
-          )
-          insertion = '''  test('all app-owned clipboard writes bypass automatic recapture', () => {
-              expect(nativeBridge).toContain('fun setAppOwnedTextClipboard');
-              expect(nativeBridge).toContain('appOwnedClipboardExtras()');
-              expect(nativeBridge).toContain('APP_OWNED_CLIP_MARKER');
-              expect(nativeBridge).toContain('PersistableBundle');
-              expect(foregroundService).toContain(
-                'await NativeBridgeModule.setAppOwnedTextClipboard(clipContent)',
-              );
-              expect(foregroundService).toContain(
-                'await NativeBridgeModule.setAppOwnedTextClipboard(cb)',
-              );
-              expect(foregroundService).not.toContain('Clipboard.setString');
-              expect(foregroundService).not.toContain(
-                "import Clipboard from '@react-native-clipboard/clipboard'",
-              );
-              expect(foregroundService).not.toContain('block_image_once');
-            });
-
-            test('native clipboard subscriptions are removed on service cleanup', () => {
-              expect(foregroundService).toContain(
-                'let clipboardOnChangeSubscription = null',
-              );
-              expect(foregroundService).toContain(
-                'clipboardOnChangeSubscription?.remove()',
-              );
-              expect(foregroundService).toContain(
-                'NativeModules.ClipboardListener?.stopListening?.()',
-              );
-              expect(foregroundService).toContain(
-                'cleanupClipboardListeners();',
-              );
-              expect(foregroundService).not.toContain(
-                "DeviceEventEmitter.removeAllListeners('onClipboardChange')",
-              );
-            });
-
-          '''
-          test = once(
-              test,
-              "  test('hidden clipboard API use is explicit and API-26-safe', () => {\n",
-              insertion + "  test('hidden clipboard API use is explicit and API-26-safe', () => {\n",
-              'contract insertion',
-          )
-          test_path.write_text(test, encoding='utf-8')
-          PY
+          cat > /tmp/app-owned-clipboard.patch.gz.b64 <<'EOF'
+          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
+          EOF
+          tr -d '[:space:]' < /tmp/app-owned-clipboard.patch.gz.b64 \
+            | base64 -d \
+            | gzip -d \
+            > /tmp/app-owned-clipboard.patch
+          git apply --check /tmp/app-owned-clipboard.patch
+          git apply /tmp/app-owned-clipboard.patch
           git diff --check
 
       - name: Set up Node.js
@@ -339,7 +84,6 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add \
             ClipCascade_Mobile/src/StartForegroundService.js \
-            ClipCascade_Mobile/src/__tests__/AndroidNativeContracts.test.ts \
             ClipCascade_Mobile/src/android/app/src/main/java/com/clipcascade/NativeBridgeModule.kt
           git commit -m 'fix(android): mark all app-owned clipboard writes'
           git push origin HEAD:stability-recovery
