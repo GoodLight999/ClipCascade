@@ -4,16 +4,16 @@ import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.res.ColorStateList
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
 import android.os.PersistableBundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.ViewGroup
 import android.view.accessibility.AccessibilityManager
@@ -201,7 +201,11 @@ class BackgroundSetupActivity : AppCompatActivity() {
             lastEvent
         )
 
-        statusView.text = "$capabilityStatus\n\n$diagnosticsStatus"
+        statusView.text = getString(
+            R.string.background_setup_combined_status,
+            capabilityStatus,
+            diagnosticsStatus
+        )
     }
 
     private fun shareDiagnosticReport() {
