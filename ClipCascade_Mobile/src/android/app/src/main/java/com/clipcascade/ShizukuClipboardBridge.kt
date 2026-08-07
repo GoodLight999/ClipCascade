@@ -28,6 +28,15 @@ object ShizukuClipboardBridge {
     private const val REQUEST_PERMISSION_CODE = 5107
     private const val PER_USER_RANGE = 100_000
 
+    // Shizuku uses UserServiceArgs.version to replace an already-running
+    // UserService when its implementation changes. This must be independent of
+    // the app versionCode: engineering APKs can keep the same product version
+    // while the privileged service implementation changes between tests.
+    // Previous builds passed BuildConfig.VERSION_CODE (30200). Any different
+    // value forces that stale service to be destroyed and recreated.
+    private const val USER_SERVICE_IMPLEMENTATION_VERSION = 4
+    private const val USER_SERVICE_TAG = "clipcascade-clipboard-read-v3"
+
     private val initialized = AtomicBoolean(false)
     private val binding = AtomicBoolean(false)
     private val executor = Executors.newSingleThreadExecutor { runnable ->
@@ -342,10 +351,10 @@ object ShizukuClipboardBridge {
             ComponentName(context.packageName, ShizukuClipboardUserService::class.java.name)
         )
             .daemon(false)
-            .tag("clipcascade-clipboard-read-v3")
+            .tag(USER_SERVICE_TAG)
             .processNameSuffix("shizuku_clipboard")
             .debuggable(BuildConfig.DEBUG)
-            .version(BuildConfig.VERSION_CODE)
+            .version(USER_SERVICE_IMPLEMENTATION_VERSION)
 
     private fun decodeResult(json: String): CaptureResult {
         val data = JSONObject(json)
