@@ -77,7 +77,7 @@ describe('Android native reliability contracts', () => {
     );
   });
 
-  test('Shizuku reports binding death and timestamps successful reads', () => {
+  test('Shizuku reports binding death and refreshes changed UserService code', () => {
     expect(shizukuBridge).toContain('override fun onBindingDied');
     expect(shizukuBridge).toContain('override fun onNullBinding');
     expect(shizukuBridge).toContain('clearUserService(');
@@ -85,6 +85,13 @@ describe('Android native reliability contracts', () => {
     expect(shizukuBridge).toContain(
       'readCompletedAtElapsedNanos = SystemClock.elapsedRealtimeNanos()',
     );
+    expect(shizukuBridge).toContain(
+      'private const val USER_SERVICE_IMPLEMENTATION_VERSION = 4',
+    );
+    expect(shizukuBridge).toContain(
+      '.version(USER_SERVICE_IMPLEMENTATION_VERSION)',
+    );
+    expect(shizukuBridge).not.toContain('.version(BuildConfig.VERSION_CODE)');
   });
 
   test('Shizuku delegates OEM clipboard Binder details to device framework', () => {
