@@ -1,15 +1,16 @@
 # ClipCascade Stability Recovery Handoff
 
-Last updated: 2026-08-04 (Asia/Tokyo)
+Last updated: 2026-08-08 (Asia/Tokyo)
 
 ## Read first
 
 1. `docs/HANDOFF.md`
 2. `docs/EXPERIMENT_LOG.md`
-3. `docs/EXPERIMENT_LOG_2026-08-03_STATIC_AUDIT_AND_UNIFIED_CAPTURE.md`
-4. `docs/EXPERIMENT_LOG_2026-08-04_FINAL_STATIC_VERIFICATION.md`
-5. `docs/ANDROID_SETUP.md`
-6. Draft PR `#4` and its latest Actions runs
+3. `docs/EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`
+4. `docs/EXPERIMENT_LOG_2026-08-03_STATIC_AUDIT_AND_UNIFIED_CAPTURE.md`
+5. `docs/EXPERIMENT_LOG_2026-08-04_FINAL_STATIC_VERIFICATION.md`
+6. `docs/ANDROID_SETUP.md`
+7. Draft PR `#4` and its latest Actions runs
 
 Older detailed records remain authoritative history for their individual experiments.
 
@@ -19,11 +20,40 @@ Older detailed records remain authoritative history for their individual experim
 - Baseline and `main`: `fd2cbbce69d5e5fa6b9b758d13a7dc6efdcb8a39`
 - Active branch: `stability-recovery`
 - Draft PR: `#4`
-- Latest artifact-verified head: `4a169516e2c5f87f3a4175a683ea7aff50b464c9`
-- Android verification run: `30819520542` — success
-- Desktop verification run: `30819520353` — success
+- Previous artifact-verified product head: `4a169516e2c5f87f3a4175a683ea7aff50b464c9`
+- HONOR vendor-ABI correction: `744f0efff09d245f0dd5b0a0ec4073e4d1c28e85`
+- Regression contract: `7af159555a61653953ed26817500d53b94c0a23e`
 
-Documentation-only commits follow the verified head. Do not treat them as product-code changes. If product files change, generate and inspect new artifacts before replacing the evidence below.
+The 2026-08-04 APK is **not** the target for the next HONOR Shizuku test. It contains the now-proven-incompatible direct hidden-`IClipboard` implementation. Generate/inspect a new APK containing `7af159555...` or later before retesting.
+
+## Latest real-device result — 2026-08-08
+
+Target:
+
+- HONOR DNP-NX9;
+- Android 16 / API 36;
+- ClipCascade 3.2.0 standalone.
+
+The diagnostic proved the following stages work on that device/build:
+
+- Shizuku Binder available;
+- Shizuku permission granted;
+- Shizuku UserService running;
+- UserService UID 2000;
+- Accessibility ACTION_COPY trigger enabled;
+- overlay fallback capability enabled;
+- ClipCascade runtime active;
+- P2P connection connected.
+
+The blocking failure was exact and later than all of those stages:
+
+```text
+Unsupported IClipboard#getPrimaryClip signature: (java.lang.String, java.lang.String, int, int, java.lang.String)
+```
+
+Counters showed 3 Shizuku attempts, 0 Shizuku successes, and 0 emissions to JavaScript.
+
+Current AOSP `IClipboard#getPrimaryClip` uses four parameters. HONOR exposes a vendor-extended five-parameter hidden interface. The prior implementation incorrectly treated enumerated AOSP hidden Binder signatures as a portable OEM boundary.
 
 ## Absolute constraints
 
@@ -38,6 +68,8 @@ Documentation-only commits follow the verified head. Do not treat them as produc
 - Record failed attempts and corrections; do not silently rewrite history.
 - Remove every temporary write workflow, transformation helper, patch, and scratch file after use.
 - Do not restore closed-PR scaffolding or reintroduce a parallel capture/send backend.
+- Do not directly reflect/invoke hidden `IClipboard` from the Shizuku UserService again.
+- Do not guess OEM Binder arguments from parameter types.
 
 ## Current Android automatic-capture architecture
 
@@ -65,28 +97,61 @@ The ordinary listener is trigger-only. It does not read the clipboard payload di
 
 Explicit Android Sharesheet / PROCESS_TEXT inputs remain direct user-provided content, but delivery is protected by a native pending-share queue until JavaScript transport listeners are ready.
 
-## Shizuku implementation
+## Current Shizuku clipboard implementation
 
-Retained official/API-backed model:
+Retained official/API-backed lifecycle:
 
 - manifest provider `rikka.shizuku.ShizukuProvider`;
 - sticky Binder-received listener;
 - Binder-dead and permission-result listeners;
 - official permission request;
 - `Shizuku.bindUserService` and explicit unbind;
+- Shizuku API/provider 13.1.5;
 - read-only text UserService;
-- explicit supported AOSP `IClipboard#getPrimaryClip` signatures only;
-- Android user ID derived from the AOSP UID/user relation;
-- shell UID 2000 uses `com.android.shell`; root UID 0 uses `root`;
-- unknown signatures and unsupported UIDs fail closed.
+- Android user ID checks;
+- shell/root UserService UID validation.
 
-Rejected and removed:
+### OEM-compatible clipboard boundary
+
+The UserService no longer calls hidden `android.content.IClipboard` itself.
+
+Current flow:
+
+```text
+Shizuku v13 supplied Context
+    -> verify requested Android user
+    -> create same-user `com.android.shell` package Context
+    -> Context.getSystemService(ClipboardManager)
+    -> ClipboardManager.primaryClip
+```
+
+Why:
+
+- Shizuku started through ADB runs UserService as shell UID 2000;
+- the platform shell package is the matching package identity;
+- the device framework `ClipboardManager` is compiled against that device's own clipboard Binder ABI;
+- therefore HONOR/vendor-specific hidden arguments are supplied by HONOR's framework rather than invented by ClipCascade.
+
+The source-contract test now forbids in this UserService path:
+
+- `Class.forName` hidden Binder reflection;
+- `IClipboard$Stub`;
+- hard-coded `DEFAULT_DEVICE_ID` argument construction;
+- overload selection by signature;
+- synthesized `argumentsFor(...)` logic.
+
+### Rejected Shizuku designs
+
+Do not restore:
 
 - manual `rikka.shizuku.intent.action.REQUEST_BINDER` broadcast;
 - manager package/launcher/label/fork-name scanning;
 - official-manager hard-coding;
 - Shizuku download URL in the product;
-- generic hidden-API overload selection and invented arguments.
+- direct hidden `IClipboard` reflection;
+- exact AOSP hidden-overload enumeration as an OEM compatibility strategy;
+- largest-overload selection;
+- guessed fifth HONOR `String` argument (`null`, empty string, package name, shell name, or anything else without vendor contract evidence).
 
 ## Accessibility implementation
 
@@ -166,20 +231,20 @@ P2S text keeps the existing durable bounded FIFO outbox:
 
 P2P, images, and files do not use the P2S text outbox.
 
-## Other concrete static fixes
+## Other concrete static fixes retained
 
-- strict JavaScript syntax and ESLint gate added;
+- strict JavaScript syntax and ESLint gate;
 - undeclared variables and wrong-password-variable defect fixed;
 - erroneous assignment expression in `clearFiles` fixed;
 - fetch abort timer cleared;
-- render-time notification permission request moved to initialization and limited to API 33+;
+- render-time notification permission moved to initialization and limited to API 33+;
 - native AsyncStorage bridge no longer closes the process-wide database;
 - native AsyncStorage strings use `JSONObject.quote` / `JSONTokener`;
 - application version corrected to `3.2.0`, APK versionCode `30200`;
 - direct battery-allowlist request permission removed;
 - backup/device-transfer rules exclude application state;
 - old storage permissions removed;
-- high-contrast light/dark palettes applied;
+- high-contrast light/dark palettes;
 - server-supplied DONATE link and upstream product-navigation links removed;
 - visible Windows Tk status GUI retained with tray integration.
 
@@ -189,10 +254,10 @@ P2P, images, and files do not use the P2S text outbox.
 - React Native Community CLI: `19.1.2`;
 - unused `@react-native-clipboard/clipboard` removed;
 - nonbreaking lockfile fixes applied without `--force`;
-- full audit: no high or critical findings;
-- production audit: no high or critical findings;
-- seven moderate `fast-xml-parser` findings remain through CLI 19;
-- npm proposes CLI 20.2.0, a breaking major update, so it was not forced into this stability branch.
+- full audit: no high or critical findings at last verification;
+- production audit: no high or critical findings at last verification;
+- seven moderate `fast-xml-parser` findings remained through CLI 19;
+- npm proposed CLI 20.2.0, a breaking major update, so it was not forced into this stability branch.
 
 ## Permanent CI gates
 
@@ -218,65 +283,44 @@ Desktop:
 - extracted Linux package compile/tests;
 - archive integrity and SHA-256.
 
-Permanent workflows have read-only repository permissions. Temporary write workflows/helpers are absent.
+Permanent workflows have read-only repository permissions. Temporary write workflows/helpers must remain absent.
 
-## Latest verified artifacts
+## Previous artifact evidence — historical only for Android Shizuku
 
-### Android
+The 2026-08-04 product artifact remains useful as static-history evidence but **must not be used to retest the HONOR clipboard bug** because it predates `744f0eff...`.
 
-- run: `30819520542`
-- job: `91705653947`
-- artifact: `8858357801`
-- build-log artifact: `8858355884`
-- file: `ClipCascade-Android-stability-standalone.apk`
-- size: `93,543,179` bytes
-- SHA-256: `f0e6bee697d3304e6804ae3bab77369868144dd3ae869005b5fa806b6d720c4b`
-- entries: 538
-- Jest: 11 suites / 61 tests
-- Gradle: `BUILD SUCCESSFUL in 3m 46s`
-- Gradle tasks: 480 executed
-- exact embedded bundle: present
-- APK integrity and checksum: passed
+Previous Android:
 
-Independent binary Manifest inspection confirmed:
+- run `30819520542`;
+- artifact `8858357801`;
+- SHA-256 `f0e6bee697d3304e6804ae3bab77369868144dd3ae869005b5fa806b6d720c4b`;
+- 11 Jest suites / 61 tests;
+- Android lint 0 errors / 18 reviewed warnings;
+- standalone APK/package gates passed.
 
-- package `com.clipcascade`;
-- `3.2.0 / 30200`;
-- minSdk 26 / targetSdk 35;
-- official Shizuku provider and authority;
-- Accessibility exported and protected by system binding permission;
-- battery allowlist-request permission absent.
+Desktop product code was not changed by the 2026-08-08 HONOR correction. Previous verified artifacts remain:
 
-Android lint: 0 errors / 18 reviewed warnings. Do not claim warning-free Android lint.
+Windows:
 
-### Windows
+- run `30819520353`;
+- artifact `8858276449`;
+- SHA-256 `bf12b82fff45447d6a8c4d01d65b7bcb9f144176a711143a4529a3a0c673ce09`.
 
-- run: `30819520353`
-- job: `91705767761`
-- artifact: `8858276449`
-- file: `ClipCascade-Windows-stability.exe`
-- size: `57,490,611` bytes
-- SHA-256: `bf12b82fff45447d6a8c4d01d65b7bcb9f144176a711143a4529a3a0c673ce09`
-- PE32+ Windows GUI x86-64
-- checksum passed.
+Linux:
 
-### Linux
-
-- run: `30819520353`
-- job: `91705767804`
-- artifact: `8858226619`
-- file: `ClipCascade-Linux-stability.tar.gz`
-- size: `61,873` bytes
-- SHA-256: `60187d87a11ce399fec366419264a808b9994f74bfe5631f807e6929693cc925`
-- 60 tar entries
-- extracted package compile/tests, archive integrity, and checksum passed.
+- run `30819520353`;
+- artifact `8858226619`;
+- SHA-256 `60187d87a11ce399fec366419264a808b9994f74bfe5631f807e6929693cc925`.
 
 ## Failed attempts that must remain rejected
 
 - manual Binder reprobe/manager scanning product head `3ea70722...`;
 - independent foreground payload-read path;
-- accessibility text/label/toast heuristics;
+- Accessibility text/label/toast heuristics;
+- direct hidden `IClipboard` reflection as an OEM-stable API;
+- explicit AOSP hidden-signature enumeration as an OEM compatibility layer;
 - largest-overload hidden API invocation;
+- synthetic unknown Binder arguments;
 - short-window duplicate gates;
 - callback-count suppression;
 - global event-listener cleanup;
@@ -285,19 +329,28 @@ Android lint: 0 errors / 18 reviewed warnings. Do not claim warning-free Android
 - forced CLI 20 upgrade;
 - old gray UI, upstream links, and tray-only Windows result.
 
-Detailed failures, temporary workflow mistakes, contract-test false positives, and cleanup are recorded in the 2026-08-03 campaign log.
+## Immediate next acceptance sequence
+
+1. Let permanent CI compile/test/package `7af159555...` or later.
+2. Download and independently inspect the new standalone APK.
+3. Install that APK on HONOR DNP-NX9.
+4. With Shizuku running and permission granted, run the manual Shizuku read test.
+5. Require `Shizuku successes` to increment and the five-argument unsupported-signature error to disappear before calling the correction successful.
+6. Copy fresh text in foreground and confirm Android-to-Windows delivery.
+7. Background ClipCascade and test actual ACTION_COPY-triggered delivery.
+8. Disable/stop Shizuku and test overlay fallback separately.
+9. Record exact diagnostics and preceding action for any failure.
 
 ## Remaining real-device acceptance
 
-Static work does not prove:
+Still unproved after the 2026-08-08 source correction:
 
-1. Shizuku Binder acquisition with the user's installed fork.
-2. Hidden clipboard read under HONOR/MagicOS.
-3. ACTION_COPY coverage in each source application.
-4. Overlay focus behavior.
-5. Foreground and background Android-to-Windows delivery.
-6. Duplicate behavior under overlapping real triggers.
-7. Reconnect, retry, ordering, visible GUI, tray, and battery behavior.
-8. Binder liveness if a vendor transaction never returns.
+1. Framework `ClipboardManager.primaryClip` succeeds from this Shizuku shell UserService Context on HONOR/MagicOS.
+2. ACTION_COPY coverage in each source application.
+3. Overlay focus behavior.
+4. Foreground and background Android-to-Windows delivery.
+5. Duplicate behavior under overlapping real triggers.
+6. Reconnect, retry, ordering, visible GUI, tray, and battery behavior.
+7. Binder/framework liveness if a vendor transaction never returns.
 
-No guessed Binder timeout was added. Use the payload-free setup diagnostic and record the exact preceding action for every failure.
+No guessed Binder timeout or guessed vendor argument was added. Use the payload-free setup diagnostic and record the exact preceding action for every failure.
