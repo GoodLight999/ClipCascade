@@ -150,7 +150,7 @@ describe('App canonical product contract', () => {
     expect(shizukuBridgeSource).not.toContain('queryBroadcastReceivers');
   });
 
-  test('passes the client Android user to explicit AOSP clipboard signatures', () => {
+  test('passes the client Android user while the device framework owns clipboard Binder ABI', () => {
     expect(shizukuAidlSource).toContain('String readClipboard(int userId)');
     expect(shizukuBridgeSource).toContain(
       'clientUserId = Process.myUid() / PER_USER_RANGE',
@@ -158,24 +158,36 @@ describe('App canonical product contract', () => {
     expect(shizukuBridgeSource).toContain(
       'service.readClipboard(requestedUserId)',
     );
+    expect(shizukuBridgeSource).toContain(
+      'private const val USER_SERVICE_IMPLEMENTATION_VERSION = 4',
+    );
+    expect(shizukuBridgeSource).toContain(
+      '.version(USER_SERVICE_IMPLEMENTATION_VERSION)',
+    );
+    expect(shizukuBridgeSource).not.toContain('.version(BuildConfig.VERSION_CODE)');
+
     expect(shizukuUserServiceSource).toContain(
-      'private fun isAndroid14PlusSignature',
+      'context.createPackageContext(SHELL_PACKAGE, 0)',
     );
     expect(shizukuUserServiceSource).toContain(
-      'private const val DEFAULT_DEVICE_ID = 0',
+      'getSystemService(ClipboardManager::class.java)',
     );
     expect(shizukuUserServiceSource).toContain(
-      'arrayOf(packageName, null, userId, DEFAULT_DEVICE_ID)',
+      'return clipboardManager.primaryClip',
+    );
+    expect(shizukuUserServiceSource).toContain(
+      'private const val SHELL_PACKAGE = "com.android.shell"',
+    );
+    expect(shizukuUserServiceSource).not.toContain('Class.forName');
+    expect(shizukuUserServiceSource).not.toContain('IClipboard$Stub');
+    expect(shizukuUserServiceSource).not.toContain('DEFAULT_DEVICE_ID');
+    expect(shizukuUserServiceSource).not.toContain(
+      'isAndroid14PlusSignature',
     );
     expect(shizukuUserServiceSource).not.toContain(
-      'Context.DEVICE_ID_DEFAULT',
+      'findSupportedGetPrimaryClip',
     );
-    expect(shizukuUserServiceSource).toContain('0 -> ROOT_PACKAGE');
-    expect(shizukuUserServiceSource).toContain('2_000 -> SHELL_PACKAGE');
-    expect(shizukuUserServiceSource).not.toContain('maxByOrNull');
-    expect(shizukuUserServiceSource).not.toContain(
-      'val userId = Process.myUid() / PER_USER_RANGE',
-    );
+    expect(shizukuUserServiceSource).not.toContain('argumentsFor(');
   });
 
   test('routes every automatic trigger through the same acquisition coordinator', () => {
