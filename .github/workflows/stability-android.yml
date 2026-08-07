@@ -59,7 +59,7 @@ jobs:
         run: |
           mkdir -p ci-logs/android
           set -o pipefail
-          npm audit --audit-level=high \
+          node ci/check-npm-audit.cjs full \
             2>&1 | tee ci-logs/android/npm-audit-full.log
 
       - name: Audit production JavaScript dependencies
@@ -68,7 +68,7 @@ jobs:
         run: |
           mkdir -p ci-logs/android
           set -o pipefail
-          npm audit --omit=dev --audit-level=high \
+          node ci/check-npm-audit.cjs production \
             2>&1 | tee ci-logs/android/npm-audit-production.log
 
       - name: Run JavaScript syntax and static analysis
@@ -81,6 +81,7 @@ jobs:
             node --check App.js
             node --check StartForegroundService.js
             node --check HeadlessTask.js
+            node --check ci/check-npm-audit.cjs
             npm run lint -- --max-warnings=0
           } 2>&1 | tee ci-logs/android/eslint.log
 
