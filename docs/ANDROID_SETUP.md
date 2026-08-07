@@ -1,6 +1,6 @@
 # ClipCascade Android setup and acceptance guide
 
-Last updated: 2026-08-03 (Asia/Tokyo)
+Last updated: 2026-08-08 (Asia/Tokyo)
 
 This guide applies to the `stability-recovery` engineering APK. It preserves the existing ClipCascade server protocol and STOMP destinations, uses debug signing, and does not require root.
 
@@ -21,6 +21,8 @@ This guide applies to the `stability-recovery` engineering APK. It preserves the
 9. Enable ClipCascade's Accessibility service. Android can bind it because the service is exported while protected by `android.permission.BIND_ACCESSIBILITY_SERVICE`.
 10. Keep overlay permission enabled for the fallback path.
 11. On ROMs that aggressively stop background services, open the system battery-optimization settings and exempt ClipCascade and the selected Shizuku manager manually.
+
+If updating from an earlier 3.2.0 engineering APK, open/refresh ClipCascade after installation so the Shizuku UserService is rebound. The current build uses a dedicated UserService implementation version; it is intentionally independent of the unchanged application versionCode.
 
 ## One automatic capture coordinator
 
@@ -53,7 +55,8 @@ ClipCascade uses the official Shizuku client lifecycle:
 - Binder-dead listener;
 - official permission request;
 - `Shizuku.bindUserService`;
-- explicit UserService disconnect, binding-death, and null-binding handling.
+- explicit UserService disconnect, binding-death, and null-binding handling;
+- a dedicated UserService implementation version so changed privileged code replaces an already-running older service even when the app versionCode is unchanged.
 
 It does **not**:
 
@@ -61,9 +64,29 @@ It does **not**:
 - identify forks by product text;
 - send `rikka.shizuku.intent.action.REQUEST_BINDER` manually;
 - use a private manager broadcast;
-- open a hard-coded Shizuku download URL.
+- open a hard-coded Shizuku download URL;
+- directly reflect or invoke hidden `android.content.IClipboard` from the UserService;
+- guess OEM Binder arguments or select hidden overloads by shape.
 
-The UserService accepts only explicit AOSP `IClipboard#getPrimaryClip` signatures known to the implementation. Unknown signatures fail closed and appear in diagnostics. The calling Android user ID is derived in the client process from the AOSP UID/user relation. Direct Shizuku output is currently text-only; images and files fall back to the app-process overlay path.
+### Clipboard read boundary
+
+The privileged UserService delegates clipboard Binder details to the framework installed on the device:
+
+```text
+Shizuku v13 supplied Context
+    -> verify Android user
+    -> create same-user `com.android.shell` package Context
+    -> get framework ClipboardManager
+    -> ClipboardManager.primaryClip
+```
+
+This is deliberate. A 2026-08-08 HONOR DNP-NX9 / Android 16 test proved that the device exposes a vendor-extended hidden `IClipboard#getPrimaryClip(String, String, int, int, String)` method while current AOSP uses four parameters. The previous exact-AOSP-signature reflection therefore failed with 3 attempts / 0 successes.
+
+The current implementation does not infer the meaning of HONOR's fifth `String`. The device's own framework is responsible for its private Binder ABI.
+
+The Shizuku shell UserService normally runs as UID 2000. The shell package Context is used so clipboard package identity matches the shell privilege model. Direct Shizuku output remains text-only; images and files fall back to the app-process overlay path.
+
+Shizuku's official guide warns that UserService Context is not identical to a normal application process Context. Therefore compilation and CI are not sufficient: the framework `ClipboardManager.primaryClip` call must still be proven on the target ROM with **Shizuku読み取りをテスト**.
 
 ## Accessibility
 
@@ -128,6 +151,7 @@ Run each case separately and record the exact preceding action and resulting dia
 
 | Case | Expected result |
 |---|---|
+| Manual **Shizuku読み取りをテスト** after installing the latest APK | `Shizuku successes` increments; no hidden-signature error |
 | App visible, fresh text copied in another app | Unified coordinator runs and exactly one outbound send occurs |
 | App background, Shizuku running, Accessibility enabled | `ACTION_COPY → Shizuku read → existing sender`, without overlay focus change |
 | ClipCascade starts after the manager | Official Provider/listener lifecycle receives the Binder or reports the actual failure |
@@ -161,8 +185,8 @@ Do not include clipboard content. Record:
 ## Current limitations
 
 - The engineering APK uses debug signing.
-- Shizuku hidden clipboard invocation is build-verified but still needs real-device coverage across Android/vendor implementations.
-- A Binder transaction that never returns has no arbitrary timeout; this remains a real-device liveness test item rather than a guessed constant.
+- The framework-delegated Shizuku clipboard read is source/CI-testable but remains target-ROM runtime work until the new HONOR manual read succeeds.
+- A Binder/framework transaction that never returns has no arbitrary timeout; this remains a real-device liveness test item rather than a guessed constant.
 - Shizuku direct output is text-only.
 - P2S text has a persistent bounded FIFO outbox; P2P, images, files, and pending Android share intents do not use that durable outbox.
 - The current server protocol has no explicit remote-application delivery receipt.
