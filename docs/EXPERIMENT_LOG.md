@@ -30,6 +30,7 @@ Detailed files retain hypotheses, source inspection, failed attempts, correction
 - `docs/EXPERIMENT_LOG_2026-08-02_OFFICIAL_SHIZUKU_AND_GUI.md`
 - `docs/EXPERIMENT_LOG_2026-08-03_STATIC_AUDIT_AND_UNIFIED_CAPTURE.md`
 - `docs/EXPERIMENT_LOG_2026-08-04_FINAL_STATIC_VERIFICATION.md`
+- `docs/EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`
 
 ## Chronology
 
@@ -147,4 +148,32 @@ Desktop run `30819520353` succeeded:
 
 Android lint is not warning-free: 0 errors / 18 reviewed warnings. Seven moderate CLI dependency findings remain; no high or critical findings remain.
 
-Static verification does not prove target-device Shizuku, HONOR/MagicOS clipboard access, ACTION_COPY coverage, overlay focus behavior, live transport, tray/UI behavior, or battery performance.
+Static verification did not prove target-device Shizuku, HONOR/MagicOS clipboard access, ACTION_COPY coverage, overlay focus behavior, live transport, tray/UI behavior, or battery performance.
+
+### 2026-08-08 — HONOR Android 16 vendor clipboard ABI failure
+
+First target-device test after the static campaign reached Shizuku Binder, permission, and UserService UID 2000 successfully, but every clipboard read failed before emission.
+
+Observed HONOR runtime hidden signature:
+
+```text
+IClipboard#getPrimaryClip(String, String, int, int, String)
+```
+
+Current AOSP uses four parameters. The previous implementation's exact AOSP hidden-signature enumeration therefore failed on the HONOR vendor extension.
+
+Correction:
+
+- do not guess the fifth vendor argument;
+- remove application-side direct hidden `IClipboard` reflection from the UserService;
+- use the Shizuku v13 supplied Context and a same-user `com.android.shell` package Context;
+- acquire the device framework `ClipboardManager` and call `primaryClip`;
+- let the device's own framework adapt to its vendor Binder ABI;
+- add a regression contract forbidding direct hidden Binder reflection/overload synthesis in this path.
+
+Code commits:
+
+- `744f0efff09d245f0dd5b0a0ec4073e4d1c28e85` — framework ClipboardManager delegation;
+- `7af159555a61653953ed26817500d53b94c0a23e` — regression contract.
+
+This correction is source-backed but must not be called fixed until a new APK passes the same manual Shizuku test on the HONOR DNP-NX9. Full details are in `EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`.
