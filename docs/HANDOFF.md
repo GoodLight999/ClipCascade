@@ -22,9 +22,11 @@ Older detailed records remain authoritative history for their individual experim
 - Draft PR: `#4`
 - Previous artifact-verified product head: `4a169516e2c5f87f3a4175a683ea7aff50b464c9`
 - HONOR vendor-ABI correction: `744f0efff09d245f0dd5b0a0ec4073e4d1c28e85`
-- Regression contract: `7af159555a61653953ed26817500d53b94c0a23e`
+- OEM-boundary regression contract: `7af159555a61653953ed26817500d53b94c0a23e`
+- UserService implementation-version fix: `2fc18d16269287ce3c54c72c3e5a20ca28ebcdfa`
+- UserService refresh regression contract: `5d2f99c3ff591195f71b6179d5f19528645e5c4d`
 
-The 2026-08-04 APK is **not** the target for the next HONOR Shizuku test. It contains the now-proven-incompatible direct hidden-`IClipboard` implementation. Generate/inspect a new APK containing `7af159555...` or later before retesting.
+The 2026-08-04 APK is **not** the target for the next HONOR Shizuku test. It contains the now-proven-incompatible direct hidden-`IClipboard` implementation. Generate and inspect a new APK containing `5d2f99c3...` or later before retesting.
 
 ## Latest real-device result — 2026-08-08
 
@@ -70,6 +72,7 @@ Current AOSP `IClipboard#getPrimaryClip` uses four parameters. HONOR exposes a v
 - Do not restore closed-PR scaffolding or reintroduce a parallel capture/send backend.
 - Do not directly reflect/invoke hidden `IClipboard` from the Shizuku UserService again.
 - Do not guess OEM Binder arguments from parameter types.
+- When privileged UserService behavior changes, bump `USER_SERVICE_IMPLEMENTATION_VERSION`; do not rely on the app versionCode to refresh it.
 
 ## Current Android automatic-capture architecture
 
@@ -128,17 +131,35 @@ Shizuku v13 supplied Context
 Why:
 
 - Shizuku started through ADB runs UserService as shell UID 2000;
-- the platform shell package is the matching package identity;
+- AOSP Android 16's `com.android.shell` package uses the shell UID and has `READ_CLIPBOARD_IN_BACKGROUND`;
+- Android 16 ClipboardService explicitly permits a package with that permission to read the clipboard;
 - the device framework `ClipboardManager` is compiled against that device's own clipboard Binder ABI;
 - therefore HONOR/vendor-specific hidden arguments are supplied by HONOR's framework rather than invented by ClipCascade.
 
-The source-contract test now forbids in this UserService path:
+Shizuku's official guide warns that a UserService is not a normal Android application process and that not every Context API works. Therefore this design remains unproved on HONOR until the real-device manual read succeeds.
+
+The source-contract test forbids in this UserService path:
 
 - `Class.forName` hidden Binder reflection;
 - `IClipboard$Stub`;
 - hard-coded `DEFAULT_DEVICE_ID` argument construction;
 - overload selection by signature;
 - synthesized `argumentsFor(...)` logic.
+
+### UserService code refresh
+
+The old bridge used `.version(BuildConfig.VERSION_CODE)`. Because engineering APKs can keep `3.2.0 / 30200` while privileged service code changes, installing a new APK could reconnect to an already-running stale UserService.
+
+Current bridge uses:
+
+```text
+USER_SERVICE_IMPLEMENTATION_VERSION = 4
+.version(USER_SERVICE_IMPLEMENTATION_VERSION)
+```
+
+The existing logical service tag remains stable. The version now differs from the previous `30200`, so Shizuku can destroy/recreate the old service rather than silently reusing the hidden-`IClipboard` implementation.
+
+Future privileged-service implementation changes must bump this dedicated constant. A regression contract forbids returning to `.version(BuildConfig.VERSION_CODE)`.
 
 ### Rejected Shizuku designs
 
@@ -151,7 +172,8 @@ Do not restore:
 - direct hidden `IClipboard` reflection;
 - exact AOSP hidden-overload enumeration as an OEM compatibility strategy;
 - largest-overload selection;
-- guessed fifth HONOR `String` argument (`null`, empty string, package name, shell name, or anything else without vendor contract evidence).
+- guessed fifth HONOR `String` argument (`null`, empty string, package name, shell name, or anything else without vendor contract evidence);
+- UserService implementation freshness tied only to product versionCode.
 
 ## Accessibility implementation
 
@@ -287,7 +309,7 @@ Permanent workflows have read-only repository permissions. Temporary write workf
 
 ## Previous artifact evidence — historical only for Android Shizuku
 
-The 2026-08-04 product artifact remains useful as static-history evidence but **must not be used to retest the HONOR clipboard bug** because it predates `744f0eff...`.
+The 2026-08-04 product artifact remains useful as static-history evidence but **must not be used to retest the HONOR clipboard bug** because it predates the 2026-08-08 corrections.
 
 Previous Android:
 
@@ -321,6 +343,7 @@ Linux:
 - explicit AOSP hidden-signature enumeration as an OEM compatibility layer;
 - largest-overload hidden API invocation;
 - synthetic unknown Binder arguments;
+- stale UserService reuse caused by app-version-only service versioning;
 - short-window duplicate gates;
 - callback-count suppression;
 - global event-listener cleanup;
@@ -331,26 +354,28 @@ Linux:
 
 ## Immediate next acceptance sequence
 
-1. Let permanent CI compile/test/package `7af159555...` or later.
+1. Let permanent CI compile/test/package `5d2f99c3...` or later.
 2. Download and independently inspect the new standalone APK.
 3. Install that APK on HONOR DNP-NX9.
-4. With Shizuku running and permission granted, run the manual Shizuku read test.
-5. Require `Shizuku successes` to increment and the five-argument unsupported-signature error to disappear before calling the correction successful.
-6. Copy fresh text in foreground and confirm Android-to-Windows delivery.
-7. Background ClipCascade and test actual ACTION_COPY-triggered delivery.
-8. Disable/stop Shizuku and test overlay fallback separately.
-9. Record exact diagnostics and preceding action for any failure.
+4. Open/refresh ClipCascade with Shizuku running and permission granted; the dedicated UserService implementation-version mismatch should replace the stale service.
+5. Run the manual Shizuku read test.
+6. Require `Shizuku successes` to increment and the five-argument unsupported-signature error to disappear before calling the correction successful.
+7. Copy fresh text in foreground and confirm Android-to-Windows delivery.
+8. Background ClipCascade and test actual ACTION_COPY-triggered delivery.
+9. Disable/stop Shizuku and test overlay fallback separately.
+10. Record exact diagnostics and preceding action for any failure.
 
 ## Remaining real-device acceptance
 
 Still unproved after the 2026-08-08 source correction:
 
 1. Framework `ClipboardManager.primaryClip` succeeds from this Shizuku shell UserService Context on HONOR/MagicOS.
-2. ACTION_COPY coverage in each source application.
-3. Overlay focus behavior.
-4. Foreground and background Android-to-Windows delivery.
-5. Duplicate behavior under overlapping real triggers.
-6. Reconnect, retry, ordering, visible GUI, tray, and battery behavior.
-7. Binder/framework liveness if a vendor transaction never returns.
+2. The implementation-version mismatch actually replaces the stale service on the installed Shizuku backend.
+3. ACTION_COPY coverage in each source application.
+4. Overlay focus behavior.
+5. Foreground and background Android-to-Windows delivery.
+6. Duplicate behavior under overlapping real triggers.
+7. Reconnect, retry, ordering, visible GUI, tray, and battery behavior.
+8. Binder/framework liveness if a vendor transaction never returns.
 
 No guessed Binder timeout or guessed vendor argument was added. Use the payload-free setup diagnostic and record the exact preceding action for every failure.
