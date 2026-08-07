@@ -87,6 +87,24 @@ describe('Android native reliability contracts', () => {
     );
   });
 
+  test('Shizuku delegates OEM clipboard Binder details to device framework', () => {
+    expect(shizukuUserService).toContain(
+      'context.createPackageContext(SHELL_PACKAGE, 0)',
+    );
+    expect(shizukuUserService).toContain(
+      'getSystemService(ClipboardManager::class.java)',
+    );
+    expect(shizukuUserService).toContain('return clipboardManager.primaryClip');
+    expect(shizukuUserService).toContain(
+      'private const val SHELL_PACKAGE = "com.android.shell"',
+    );
+    expect(shizukuUserService).not.toContain('Class.forName');
+    expect(shizukuUserService).not.toContain('IClipboard$Stub');
+    expect(shizukuUserService).not.toContain('DEFAULT_DEVICE_ID');
+    expect(shizukuUserService).not.toContain('findSupportedGetPrimaryClip');
+    expect(shizukuUserService).not.toContain('argumentsFor(');
+  });
+
   test('cold-start shares remain queued until the JS transport drains them', () => {
     expect(mainActivity).toContain('PendingShareStore.enqueue(');
     expect(mainActivity).toContain('PendingShareStore.EVENT_AVAILABLE');
@@ -123,14 +141,6 @@ describe('Android native reliability contracts', () => {
     }
     expect(extractionRules).toContain('<cloud-backup>');
     expect(extractionRules).toContain('<device-transfer>');
-  });
-
-  test('hidden clipboard API use is explicit and API-26-safe', () => {
-    expect(shizukuUserService).toContain('@SuppressLint("PrivateApi")');
-    expect(shizukuUserService).toContain(
-      'private const val DEFAULT_DEVICE_ID = 0',
-    );
-    expect(shizukuUserService).not.toContain('Context.DEVICE_ID_DEFAULT');
   });
 
   test('themes no longer reference private AppCompat edit resources', () => {
