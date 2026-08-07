@@ -169,11 +169,14 @@ Correction:
 - use the Shizuku v13 supplied Context and a same-user `com.android.shell` package Context;
 - acquire the device framework `ClipboardManager` and call `primaryClip`;
 - let the device's own framework adapt to its vendor Binder ABI;
-- add a regression contract forbidding direct hidden Binder reflection/overload synthesis in this path.
+- add a regression contract forbidding direct hidden Binder reflection/overload synthesis in this path;
+- separate Shizuku UserService implementation version from the unchanged app versionCode so a new engineering APK cannot silently reconnect to the old privileged implementation.
 
 Code commits:
 
 - `744f0efff09d245f0dd5b0a0ec4073e4d1c28e85` — framework ClipboardManager delegation;
-- `7af159555a61653953ed26817500d53b94c0a23e` — regression contract.
+- `7af159555a61653953ed26817500d53b94c0a23e` — OEM-boundary regression contract;
+- `2fc18d16269287ce3c54c72c3e5a20ca28ebcdfa` — independent UserService implementation version;
+- `5d2f99c3ff591195f71b6179d5f19528645e5c4d` — stale-service regression contract.
 
-This correction is source-backed but must not be called fixed until a new APK passes the same manual Shizuku test on the HONOR DNP-NX9. Full details are in `EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`.
+The correction is source-backed but must not be called fixed until a new APK passes the same manual Shizuku test on the HONOR DNP-NX9. Full details are in `EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`.
