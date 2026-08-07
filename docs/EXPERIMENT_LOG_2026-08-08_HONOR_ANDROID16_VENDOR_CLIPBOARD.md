@@ -63,11 +63,15 @@ Primary references:
 
 - AOSP `IClipboard.aidl` current source: https://android.googlesource.com/platform/frameworks/base/+/HEAD/core/java/android/content/IClipboard.aidl
 - AOSP `ClipboardManager.java` current source: https://android.googlesource.com/platform/frameworks/base/+/HEAD/core/java/android/content/ClipboardManager.java
+- AOSP Android 16 shell manifest: https://android.googlesource.com/platform/frameworks/base/+/android16-release/packages/Shell/AndroidManifest.xml
+- AOSP Android 16 `ClipboardService`: https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/services/core/java/com/android/server/clipboard/ClipboardService.java
 - Shizuku API / UserService developer guide: https://github.com/RikkaApps/Shizuku-API/blob/master/README.md
 
 The AOSP framework `ClipboardManager` itself owns the private `IClipboard` call and supplies package, attribution, user, and device arguments. A vendor framework is compiled against its own vendor Binder interface, so the device framework is a more appropriate compatibility boundary than application-side reflection over the hidden interface.
 
-Shizuku v13 supports a UserService constructor receiving `Context`. ClipCascade uses Shizuku API 13.1.5.
+AOSP Android 16's `com.android.shell` package uses the shell UID and declares `READ_CLIPBOARD_IN_BACKGROUND`; Android 16 `ClipboardService` explicitly allows packages holding that permission to read the clipboard. Shizuku started through ADB runs UserService as shell UID 2000.
+
+Shizuku v13 supports a UserService constructor receiving `Context`. ClipCascade uses Shizuku API 13.1.5. The official guide also warns that UserService is not a normal app process and not every `Context` API works, so actual HONOR execution remains required even after compilation succeeds.
 
 ## Rejected correction
 
@@ -83,7 +87,7 @@ Rejected examples include:
 
 The diagnostic exposes the parameter type but not its semantic contract. Guessing it would repeat the same hidden-ABI mistake.
 
-## Accepted correction
+## Accepted correction — device framework owns vendor ABI
 
 Commit `744f0efff09d245f0dd5b0a0ec4073e4d1c28e85` replaces direct hidden `IClipboard` reflection in `ShizukuClipboardUserService` with the device framework `ClipboardManager`.
 
@@ -106,29 +110,58 @@ Why the shell package Context is used:
 
 The existing ClipCascade transport, acquisition coordinator, overlay fallback, Accessibility trigger, and STOMP destinations are unchanged.
 
-## Regression contract
+## Second issue found before retest — stale UserService code
 
-Commit `7af159555a61653953ed26817500d53b94c0a23e` replaces the old source contract that required hidden-API reflection with the opposite contract:
+A source audit after the first correction found another concrete retest hazard in `ShizukuClipboardBridge`.
 
-- UserService must obtain `ClipboardManager` from the device framework;
-- it must use the shell package Context;
+The bridge previously used:
+
+```text
+.version(BuildConfig.VERSION_CODE)
+```
+
+The standalone app version remains `3.2.0 / 30200`. Shizuku's official UserService contract uses `UserServiceArgs.version` to determine when an existing service implementation must be replaced. Therefore installing another engineering APK with the same app version could reconnect to an already-running old UserService containing the rejected hidden-`IClipboard` code.
+
+That would make a correct new APK appear broken for the old reason.
+
+Commit `2fc18d16269287ce3c54c72c3e5a20ca28ebcdfa` separates privileged-service implementation versioning from product versioning:
+
+```text
+USER_SERVICE_IMPLEMENTATION_VERSION = 4
+.version(USER_SERVICE_IMPLEMENTATION_VERSION)
+```
+
+The existing stable service tag is retained so the version mismatch targets the same logical UserService and forces replacement rather than creating a second unrelated tagged service.
+
+Commit `5d2f99c3ff591195f71b6179d5f19528645e5c4d` adds a source contract requiring the dedicated implementation version and forbidding `.version(BuildConfig.VERSION_CODE)` in this path.
+
+Future changes to `ShizukuClipboardUserService` behavior must bump `USER_SERVICE_IMPLEMENTATION_VERSION` even when the product version does not change.
+
+## Regression contracts
+
+The Android native source-contract tests now require:
+
+- UserService obtains `ClipboardManager` from the device framework;
+- it uses the shell package Context;
 - direct `Class.forName` hidden Binder reflection is forbidden in this source path;
-- `IClipboard$Stub`, hard-coded device ID arguments, overload selection, and synthetic argument generation are forbidden.
+- `IClipboard$Stub`, hard-coded device ID arguments, overload selection, and synthetic argument generation are forbidden;
+- UserService implementation version is independent of `BuildConfig.VERSION_CODE`.
 
-This prevents a future cleanup from reintroducing the cross-OEM hidden-ABI assumption.
+These contracts prevent both the cross-OEM hidden-ABI assumption and stale privileged-service reuse from silently returning.
 
 ## Verification boundary
 
-At the time this record was written, the correction is source-backed but not yet proven on the target HONOR device.
+At the time this record was updated, the correction is source-backed but not yet proven on the target HONOR device.
 
 Required next stages:
 
 1. permanent Android CI must compile/test/package the corrected source;
 2. inspect the generated APK and checksum;
 3. install that APK on the same HONOR DNP-NX9;
-4. run the manual Shizuku read test again;
-5. verify `Shizuku successes` increments and the unsupported-signature error disappears;
-6. then verify foreground and background copy delivery through the unified pipeline;
-7. separately verify overlay fallback with Shizuku unavailable.
+4. open/refresh ClipCascade so Shizuku binds the new implementation-version UserService;
+5. run the manual Shizuku read test again;
+6. verify `Shizuku successes` increments and the unsupported-signature error disappears;
+7. then verify foreground and background copy delivery through the unified pipeline;
+8. separately verify overlay fallback with Shizuku unavailable.
 
-Do not call the HONOR issue fixed until stage 4/5 succeeds on the real device.
+Do not call the HONOR issue fixed until the real-device manual read succeeds.
