@@ -20,10 +20,11 @@ Documentation-only commits follow the product head. If product code changes agai
 
 Read next:
 
-1. `docs/EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`
-2. `docs/EXPERIMENT_LOG_2026-08-08_HONOR_FIX_VERIFICATION.md`
-3. `docs/EXPERIMENT_LOG.md`
-4. `docs/ANDROID_SETUP.md`
+1. `docs/EXPERIMENT_LOG_2026-08-08_SHIZUKU_OFFICIAL_SOURCE_REAUDIT.md`
+2. `docs/EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`
+3. `docs/EXPERIMENT_LOG_2026-08-08_HONOR_FIX_VERIFICATION.md`
+4. `docs/EXPERIMENT_LOG.md`
+5. `docs/ANDROID_SETUP.md`
 
 ## Absolute constraints
 
@@ -55,6 +56,25 @@ Last error: Unsupported IClipboard#getPrimaryClip signature: (java.lang.String, 
 ```
 
 The old implementation enumerated AOSP hidden `IClipboard#getPrimaryClip` signatures. HONOR exposes a vendor five-argument variant, so treating the AOSP hidden ABI as an OEM-stable interface was wrong.
+
+## 2026-08-08 official-source re-audit and chronology
+
+The supplied failure report was generated at `2026-08-08T08:21:04.855+09:00`.
+
+The current framework-delegation correction commit `744f0efff09d245f0dd5b0a0ec4073e4d1c28e85` was committed at `08:27:43 JST`, about six minutes later. The final artifact-verified product head followed at `09:00:50 JST`.
+
+Therefore that diagnostic is evidence for the **old hidden-Binder implementation**, not a failed execution of the current correction. Do not react to it by adding another speculative vendor-signature patch.
+
+The current design was re-audited against only official Shizuku source/API documentation and AOSP Android 16 source. The audit confirmed:
+
+- Shizuku v13 constructs a UserService `Context` for the calling app's Android user and may pass it through the Context constructor;
+- UserService still runs with root/shell process identity and is not a normal Android app process, so each Context API must be checked against Android source;
+- Android 16 ClipboardService verifies UID/package ownership using `AppOps.checkPackage(uid, callingPackage)`;
+- Android 16 `com.android.shell` declares `READ_CLIPBOARD_IN_BACKGROUND`, which ClipboardService explicitly accepts for background clipboard access;
+- framework `ClipboardManager` supplies its hidden Binder arguments from the device `Context`, so it remains the correct OEM compatibility boundary instead of application-side hidden-interface reflection;
+- UserService behavior changes must continue to bump a dedicated implementation version while retaining the logical service tag.
+
+No product-code change was made during that re-audit because no post-correction target-device failure has yet been observed. Full evidence is in `EXPERIMENT_LOG_2026-08-08_SHIZUKU_OFFICIAL_SOURCE_REAUDIT.md`.
 
 ## Current Shizuku clipboard implementation
 
@@ -165,12 +185,13 @@ Seven moderate `fast-xml-parser` findings also remain through React Native Commu
 
 ## Immediate next action — real HONOR test
 
-Use **only** the APK from Android run `31228888126` / artifact `9013102582` (SHA above), not the 2026-08-04 APK.
+Use **only** the APK from Android run `31228888126` / artifact `9013102582` (SHA above), not the 2026-08-04 APK and not the APK that produced the `08:21:04` diagnostic.
 
 1. Install it over the old engineering build.
 2. Open/refresh ClipCascade with Shizuku running; this must bind the new UserService implementation version.
-3. Run **Shizuku読み取りをテスト**.
-4. Capture the new diagnostic report.
+3. Put a known non-empty text value on the clipboard.
+4. Run **Shizuku読み取りをテスト**.
+5. Capture the new diagnostic report.
 
 Success criterion for this stage:
 
@@ -180,9 +201,9 @@ Success criterion for this stage:
 
 Only after that passes:
 
-5. test a fresh foreground copy to Windows;
-6. background ClipCascade and test real Accessibility `ACTION_COPY` delivery;
-7. stop Shizuku and test overlay fallback separately;
-8. test duplicate behavior/reconnect/battery over longer runtime.
+6. test a fresh foreground copy to Windows;
+7. background ClipCascade and test real Accessibility `ACTION_COPY` delivery;
+8. stop Shizuku and test overlay fallback separately;
+9. test duplicate behavior/reconnect/battery over longer runtime.
 
 If the manual read still fails, diagnose the **new exact error**. Do not invent another vendor Binder signature or argument.
