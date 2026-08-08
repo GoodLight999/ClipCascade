@@ -32,6 +32,7 @@ Detailed files retain hypotheses, source inspection, failed attempts, correction
 - `docs/EXPERIMENT_LOG_2026-08-04_FINAL_STATIC_VERIFICATION.md`
 - `docs/EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`
 - `docs/EXPERIMENT_LOG_2026-08-08_HONOR_FIX_VERIFICATION.md`
+- `docs/EXPERIMENT_LOG_2026-08-08_SHIZUKU_OFFICIAL_SOURCE_REAUDIT.md`
 
 ## Chronology
 
@@ -210,3 +211,11 @@ Final APK artifact `9013102582`:
 Desktop run `31228888150` also passed all jobs.
 
 This is build/package proof only. The same HONOR DNP-NX9 must still pass the manual Shizuku read before the runtime bug is called fixed. Full verification detail is in `EXPERIMENT_LOG_2026-08-08_HONOR_FIX_VERIFICATION.md`.
+
+### 2026-08-08 — Official Shizuku/AOSP source re-audit after the 08:21 report
+
+The repeated HONOR diagnostic was timestamped `08:21:04.855 JST`; the framework-delegation fix was committed at `08:27:43 JST`. Therefore that report came from the old hidden-Binder implementation and does not constitute a failed run of the accepted correction.
+
+Before touching product code again, the current correction was re-audited against official Shizuku-API source and AOSP Android 16 source. The audit confirmed the v13 Context constructor behavior, UserService tag/version replacement semantics, Android 16's UID/package verification, `com.android.shell`'s background-clipboard permission, and the framework `ClipboardManager` as the correct owner of device-specific hidden Binder arguments.
+
+No new product patch was made. The next experiment is the first real-device execution of the already-built corrected APK. Full findings are in `EXPERIMENT_LOG_2026-08-08_SHIZUKU_OFFICIAL_SOURCE_REAUDIT.md`.
