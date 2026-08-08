@@ -1,30 +1,36 @@
 // android\app\src\main\java\com\clipcascade\ScheduleService.kt
 package com.clipcascade
 
-import android.content.Context
-import android.content.Intent
-import android.os.Build
-import androidx.work.WorkerParameters
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import androidx.core.app.NotificationCompat
-import androidx.work.CoroutineWorker
-import kotlinx.coroutines.delay
 import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
-import androidx.core.content.ContextCompat
+import android.os.Build
 import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
+import androidx.work.CoroutineWorker
+import androidx.work.WorkerParameters
+import kotlinx.coroutines.delay
 
+class ScheduleService(
+    context: Context,
+    workerParams: WorkerParameters
+) : CoroutineWorker(context, workerParams) {
 
-class ScheduleService(context: Context, workerParams: WorkerParameters) : CoroutineWorker(context, workerParams) {
-    
     companion object {
         private const val TAG = "ScheduleService"
-        private const val NOTIFICATION_CHANNEL_ID = "clipcascade_foreground_service_stopped_running"
+        private const val NOTIFICATION_CHANNEL_ID =
+            "clipcascade_foreground_service_stopped_running"
         private const val NOTIFICATION_ID = 1
+        private const val LIVENESS_POLL_INTERVAL_MS = 100L
+        private const val LIVENESS_POLL_ATTEMPTS = 35
 
         fun removeNotificationIfPresent(context: Context) {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.cancel(NOTIFICATION_ID)
         }
 
@@ -40,40 +46,35 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
         }
     }
 
-    // init
     override suspend fun doWork(): Result {
-
-        // show notification if foreground service is not running
-        try {
-            if(hasNotificationPermission(applicationContext)) {
+        return try {
+            if (hasNotificationPermission(applicationContext)) {
                 val bridgeData = AsyncStorageBridge(applicationContext)
-                if(enableForegroundService(bridgeData)) {
-                    if(!foregroundServiceIsActive(bridgeData)) {
+                if (enableForegroundService(bridgeData)) {
+                    if (!foregroundServiceIsActive(bridgeData)) {
                         showNotificationIfNotPresent()
                     } else {
                         removeNotificationIfPresent(applicationContext)
                     }
                 }
             }
-
-            return Result.success()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error running worker", e)
-            return Result.failure()
+            Result.success()
+        } catch (error: Exception) {
+            Log.e(TAG, "Error running worker", error)
+            Result.failure()
         }
     }
 
+    fun enableForegroundService(bridgeData: AsyncStorageBridge): Boolean {
+        return bridgeData.getValue("wsIsRunning")?.toBoolean() ?: false
+    }
 
-    fun enableForegroundService(bridgeData: AsyncStorageBridge) : Boolean {
-        // Get websocket(foreground service) status (enabled/disabled)
-        return bridgeData.getValue("wsIsRunning")?.toBoolean() ?: false 
-    } 
-    
-    suspend fun foregroundServiceIsActive(bridgeData: AsyncStorageBridge) : Boolean {
-        // check if foreground service is running
+    suspend fun foregroundServiceIsActive(bridgeData: AsyncStorageBridge): Boolean {
+        // Existing AsyncStorage ping/pong protocol. The 3.5-second budget spans
+        // multiple one-second JavaScript status-poller iterations.
         bridgeData.setValue("echo", "ping")
-        repeat(35) { // 3500 ms
-            delay(100) // Wait for 100 ms
+        repeat(LIVENESS_POLL_ATTEMPTS) {
+            delay(LIVENESS_POLL_INTERVAL_MS)
             if (bridgeData.getValue("echo") == "pong") {
                 return true
             }
@@ -82,18 +83,16 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
     }
 
     private fun showNotificationIfNotPresent() {
-        val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+            applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                "ClipCascade Alerts",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID,
+            "ClipCascade Alerts",
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        notificationManager.createNotificationChannel(channel)
 
-        // Check if the notification is already shown
         if (!isNotificationActive(notificationManager)) {
             val intent = Intent(applicationContext, MainActivity::class.java).apply {
                 action = "com.clipcascade.NOTIFICATION_ACTION"
@@ -102,10 +101,16 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
             }
 
             val pendingIntent = PendingIntent.getActivity(
-                applicationContext, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                applicationContext,
+                0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
+            val notification = NotificationCompat.Builder(
+                applicationContext,
+                NOTIFICATION_CHANNEL_ID
+            )
                 .setSmallIcon(R.drawable.ic_notification_failure)
                 .setContentTitle("ClipCascade Service Inactive")
                 .setContentText("ClipCascade monitoring is inactive. Tap to restart.")
@@ -118,11 +123,6 @@ class ScheduleService(context: Context, workerParams: WorkerParameters) : Corout
         }
     }
 
-    private fun isNotificationActive(notificationManager: NotificationManager): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val activeNotifications = notificationManager.activeNotifications
-            return activeNotifications.any { it.id == NOTIFICATION_ID }
-        }
-        return false
-    }
+    private fun isNotificationActive(notificationManager: NotificationManager): Boolean =
+        notificationManager.activeNotifications.any { it.id == NOTIFICATION_ID }
 }

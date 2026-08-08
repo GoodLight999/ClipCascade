@@ -1,0 +1,174 @@
+name: Stability recovery desktop
+
+on:
+  push:
+    branches:
+      - stability-recovery
+    paths:
+      - 'ClipCascade_Desktop/**'
+      - '.github/workflows/stability-desktop.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'ClipCascade_Desktop/**'
+      - '.github/workflows/stability-desktop.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stability-desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop-tests:
+    name: Desktop tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: ClipCascade_Desktop/src/requirements_win.txt
+
+      - name: Install test dependency
+        run: python -m pip install websocket-client==1.8.0
+
+      - name: Compile recovered desktop modules
+        run: >-
+          python -m py_compile
+          ClipCascade_Desktop/src/connection/__init__.py
+          ClipCascade_Desktop/src/connection/controller.py
+          ClipCascade_Desktop/src/connection/errors.py
+          ClipCascade_Desktop/src/connection/retry.py
+          ClipCascade_Desktop/src/connection/state.py
+          ClipCascade_Desktop/src/connection/tray_view.py
+          ClipCascade_Desktop/src/stomp_ws/client.py
+          ClipCascade_Desktop/src/stomp_ws/stomp_manager.py
+          ClipCascade_Desktop/src/gui/tray.py
+          ClipCascade_Desktop/src/cli/tray.py
+
+      - name: Run desktop unit tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/ClipCascade_Desktop/src
+        run: python -m unittest discover -s ClipCascade_Desktop/tests -p "test_*.py" -v
+
+  windows-exe:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    timeout-minutes: 35
+    needs: desktop-tests
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: ClipCascade_Desktop/src
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: ClipCascade_Desktop/src/requirements_win.txt
+
+      - name: Install Windows dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements_win.txt
+          python -m pip install PyInstaller==6.11.1
+
+      - name: Compile source
+        run: python -m compileall -q .
+
+      - name: Build executable
+        run: python -m PyInstaller --clean --noconfirm ClipCascade_win.spec
+
+      - name: Stage executable and checksum
+        run: |
+          if (-not (Test-Path dist/ClipCascade.exe)) { throw 'ClipCascade.exe was not produced' }
+          New-Item -ItemType Directory -Force -Path ci-artifacts/windows | Out-Null
+          Copy-Item dist/ClipCascade.exe ci-artifacts/windows/ClipCascade-Windows-stability.exe
+          $hash = (Get-FileHash ci-artifacts/windows/ClipCascade-Windows-stability.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  ClipCascade-Windows-stability.exe" | Set-Content -Encoding ascii ci-artifacts/windows/SHA256SUMS.txt
+          $recorded = (Get-Content ci-artifacts/windows/SHA256SUMS.txt).Split(' ')[0]
+          if ($recorded -ne $hash) { throw 'Windows checksum mismatch' }
+          Get-Item ci-artifacts/windows/ClipCascade-Windows-stability.exe | Format-List Name,Length
+          Get-Content ci-artifacts/windows/SHA256SUMS.txt
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: ClipCascade-Windows-stability
+          path: ClipCascade_Desktop/src/ci-artifacts/windows/
+          if-no-files-found: error
+          retention-days: 30
+
+  linux-package:
+    name: Build and test extracted Linux package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: desktop-tests
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install packaged-test dependency
+        run: python -m pip install websocket-client==1.8.0
+
+      - name: Stage source package
+        run: |
+          set -euo pipefail
+          mkdir -p ci-artifacts/linux/package/ClipCascade
+          cp -a ClipCascade_Desktop/src/. ci-artifacts/linux/package/ClipCascade/
+          cp -a ClipCascade_Desktop/tests ci-artifacts/linux/package/ClipCascade/tests
+          find ci-artifacts/linux/package -type d -name __pycache__ -prune -exec rm -rf {} +
+          find ci-artifacts/linux/package -type f -name '*.pyc' -delete
+          tar -C ci-artifacts/linux/package -czf ci-artifacts/linux/ClipCascade-Linux-stability.tar.gz ClipCascade
+
+      - name: Verify and test the extracted deliverable
+        run: |
+          set -euo pipefail
+          cd ci-artifacts/linux
+          sha256sum ClipCascade-Linux-stability.tar.gz > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          tar -tzf ClipCascade-Linux-stability.tar.gz >/dev/null
+          mkdir smoke
+          tar -xzf ClipCascade-Linux-stability.tar.gz -C smoke
+          python -m compileall -q smoke/ClipCascade
+          PYTHONPATH="$PWD/smoke/ClipCascade" \
+            python -m unittest discover \
+              -s smoke/ClipCascade/tests \
+              -p "test_*.py" \
+              -v
+          cat SHA256SUMS.txt
+
+      - name: Upload Linux package
+        uses: actions/upload-artifact@v7
+        with:
+          name: ClipCascade-Linux-stability
+          path: |
+            ci-artifacts/linux/ClipCascade-Linux-stability.tar.gz
+            ci-artifacts/linux/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,175 @@
+name: Stability recovery Android
+
+on:
+  push:
+    branches:
+      - stability-recovery
+    paths:
+      - 'ClipCascade_Mobile/**'
+      - '.github/workflows/stability-android.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'ClipCascade_Mobile/**'
+      - '.github/workflows/stability-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stability-android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-standalone-apk:
+    name: Full audit, tests, and bundled Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: ClipCascade_Mobile/src
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ClipCascade_Mobile/src/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Audit full JavaScript dependency tree
+        id: dependency_audit_full
+        continue-on-error: true
+        run: |
+          mkdir -p ci-logs/android
+          set -o pipefail
+          node ci/check-npm-audit.cjs full \
+            2>&1 | tee ci-logs/android/npm-audit-full.log
+
+      - name: Audit production JavaScript dependencies
+        id: dependency_audit_production
+        continue-on-error: true
+        run: |
+          mkdir -p ci-logs/android
+          set -o pipefail
+          node ci/check-npm-audit.cjs production \
+            2>&1 | tee ci-logs/android/npm-audit-production.log
+
+      - name: Run JavaScript syntax and static analysis
+        id: eslint
+        continue-on-error: true
+        run: |
+          mkdir -p ci-logs/android
+          set -o pipefail
+          {
+            node --check App.js
+            node --check StartForegroundService.js
+            node --check HeadlessTask.js
+            node --check ci/check-npm-audit.cjs
+            npm run lint -- --max-warnings=0
+          } 2>&1 | tee ci-logs/android/eslint.log
+
+      - name: Run JavaScript reliability tests
+        id: jest
+        continue-on-error: true
+        run: |
+          mkdir -p ci-logs/android
+          set -o pipefail
+          npm test -- --runInBand 2>&1 | tee ci-logs/android/jest.log
+
+      - name: Run Android lint and tests, then build standalone APK
+        id: gradle
+        continue-on-error: true
+        run: |
+          mkdir -p ci-logs/android
+          chmod +x android/gradlew
+          set -o pipefail
+          (cd android && ./gradlew --no-daemon --stacktrace \
+            :app:lintStandalone \
+            :app:testDebugUnitTest \
+            :app:assembleStandalone) \
+            2>&1 | tee ci-logs/android/gradle-build.log
+
+      - name: Collect complete Android reports
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p ci-logs/android/lint ci-logs/android/tests
+          find android/app/build -type f \
+            \( -name 'lint-results-standalone*' -o -name 'lint-results*.xml' \) \
+            -exec cp -v {} ci-logs/android/lint/ \; 2>/dev/null || true
+          if [ -d android/app/build/test-results ]; then
+            cp -a android/app/build/test-results/. ci-logs/android/tests/
+          fi
+          if [ -d android/app/build/reports/tests ]; then
+            cp -a android/app/build/reports/tests ci-logs/android/tests/html
+          fi
+
+      - name: Verify bundled JavaScript and stage APK
+        id: package_verify
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          APK_PATH=android/app/build/outputs/apk/standalone/app-standalone.apk
+          test -f "$APK_PATH"
+          unzip -Z1 "$APK_PATH" | grep -Fxq 'assets/index.android.bundle'
+          unzip -tq "$APK_PATH"
+          mkdir -p ci-artifacts/android
+          cp "$APK_PATH" ci-artifacts/android/ClipCascade-Android-stability-standalone.apk
+          cd ci-artifacts/android
+          sha256sum ClipCascade-Android-stability-standalone.apk > SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ClipCascade-stability-android-build-log
+          path: ClipCascade_Mobile/src/ci-logs/android/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload installable engineering APK
+        if: steps.package_verify.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ClipCascade-Android-stability-standalone
+          path: ClipCascade_Mobile/src/ci-artifacts/android/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce every verification gate
+        if: always()
+        run: |
+          set -euo pipefail
+          printf '%-28s %s\n' \
+            dependency-audit-full '${{ steps.dependency_audit_full.outcome }}' \
+            dependency-audit-production '${{ steps.dependency_audit_production.outcome }}' \
+            eslint '${{ steps.eslint.outcome }}' \
+            jest '${{ steps.jest.outcome }}' \
+            android-gradle '${{ steps.gradle.outcome }}' \
+            package-verify '${{ steps.package_verify.outcome }}'
+          test '${{ steps.dependency_audit_full.outcome }}' = success
+          test '${{ steps.dependency_audit_production.outcome }}' = success
+          test '${{ steps.eslint.outcome }}' = success
+          test '${{ steps.jest.outcome }}' = success
+          test '${{ steps.gradle.outcome }}' = success
+          test '${{ steps.package_verify.outcome }}' = success

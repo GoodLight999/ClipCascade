@@ -1,78 +1,57 @@
 {
-  "name": "ClipCascade",
-  "version": "https://raw.githubusercontent.com/Sathvik-Rao/ClipCascade/main/version.json",
-  "description": "A lightweight utility to sync clipboard content seamlessly across devices with privacy and encryption.",
-  "author": {
-    "name": "Sathvik Rao",
-    "email": "sathvik.poladi@gmail.com",
-    "website": "https://github.com/Sathvik-Rao/ClipCascade"
+  "name": "ClipCascade Stability Recovery",
+  "version": "https://raw.githubusercontent.com/GoodLight999/Trial-and-Error-ClipCascade/stability-recovery/version.json",
+  "description": "A ClipCascade-compatible stability recovery focused on reliable Android background capture and desktop reconnect behavior.",
+  "maintainer": {
+    "name": "GoodLight999",
+    "website": "https://github.com/GoodLight999/Trial-and-Error-ClipCascade"
   },
   "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Sathvik-Rao/ClipCascade"
+    "url": "https://github.com/GoodLight999/Trial-and-Error-ClipCascade"
   },
-  "releaseDate": "2024-09-22",
-  "funding": "https://www.paypal.com/donate/?business=SKHQU2CL3TCLN&no_recurring=0&item_name=Support+Sathvik-Rao%27s+open+source+work&currency_code=USD",
+  "funding": null,
   "keywords": [
     "clipboard",
     "sync",
     "cross-platform",
+    "android",
+    "shizuku",
+    "accessibility",
+    "reconnect",
     "open-source",
-    "utility",
     "encryption"
   ],
   "bugs": {
-    "url": "https://github.com/Sathvik-Rao/ClipCascade/issues",
-    "email": "sathvik.poladi@gmail.com"
-  },
-  "discussions": {
-    "url": "https://github.com/Sathvik-Rao/ClipCascade/discussions"
+    "url": "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/issues"
   },
   "releases": {
-    "url": "https://github.com/Sathvik-Rao/ClipCascade/releases"
+    "url": "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/releases"
+  },
+  "help": {
+    "android": "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/blob/stability-recovery/docs/ANDROID_SETUP.md",
+    "handoff": "https://github.com/GoodLight999/Trial-and-Error-ClipCascade/blob/stability-recovery/docs/HANDOFF.md"
   },
   "platforms": {
     "server": {
-      "backend": {
-        "description": "",
-        "languages": ["Java"],
-        "frameworks": ["Spring Boot"],
-        "builds": ["jar"]
-      },
-      "frontend": {
-        "description": "",
-        "languages": ["HTML", "CSS", "JavaScript"],
-        "frameworks": [],
-        "builds": []
-      }
+      "compatibility": "Existing ClipCascade P2S/P2P protocol and public server"
     },
     "mobile": {
       "android": {
-        "description": "",
         "languages": ["Kotlin", "JavaScript"],
-        "frameworks": ["React Native"],
+        "frameworks": ["React Native", "Shizuku-compatible API"],
         "builds": ["apk"]
       }
     },
     "desktop": {
       "windows": {
-        "description": "",
         "languages": ["Python"],
-        "frameworks": [],
         "builds": ["exe"]
       },
-      "macos": {
-        "description": "",
-        "languages": ["Python"],
-        "frameworks": [],
-        "builds": ["app"]
-      },
       "linux": {
-        "description": "",
         "languages": ["Python"],
-        "frameworks": [],
-        "builds": []
+        "builds": ["tar.gz"]
       }
     }
   }

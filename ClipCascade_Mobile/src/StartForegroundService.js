@@ -7,7 +7,7 @@ import {
 
 import notifee, { AndroidImportance } from '@notifee/react-native';
 import { Client } from '@stomp/stompjs';
-import * as encoding from 'text-encoding'; //do not remove this (polyfills for TextEncoder/TextDecoder stompjs)
+import { TextEncoder, TextDecoder } from 'text-encoding';
 import { xxHash32 } from 'js-xxhash';
 import AesGcmCrypto from 'react-native-aes-gcm-crypto';
 import { Buffer } from 'buffer';
@@ -16,20 +16,27 @@ import {
   RTCIceCandidate,
   RTCSessionDescription,
 } from 'react-native-webrtc';
-import Clipboard from '@react-native-clipboard/clipboard';
-
 import {
   setDataInAsyncStorage,
   getDataFromAsyncStorage,
   getMultipleDataFromAsyncStorage,
-  clearAsyncStorage,
 } from './AsyncStorageManagement';
+const { P2STextOutbox } = require('./P2STextOutbox');
+const {
+  getP2SRetryDelayMs,
+  DEFAULT_MAX_DELAY_MS,
+} = require('./P2SRetryPolicy');
 
-function cleanupClipboardListeners() {
-  DeviceEventEmitter.removeAllListeners('SHARED_TEXT');
-  DeviceEventEmitter.removeAllListeners('SHARED_IMAGE');
-  DeviceEventEmitter.removeAllListeners('SHARED_FILES');
-  DeviceEventEmitter.removeAllListeners('onClipboardChange');
+let clipboardListenerGeneration = 0;
+let activeClipboardOnChangeSubscription = null;
+let activeShareAvailabilitySubscription = null;
+
+function cleanupActiveClipboardListeners() {
+  activeClipboardOnChangeSubscription?.remove();
+  activeClipboardOnChangeSubscription = null;
+  activeShareAvailabilitySubscription?.remove();
+  activeShareAvailabilitySubscription = null;
+  NativeModules.ClipboardListener?.stopListening?.();
 }
 
 module.exports = async (inputData = null) => {
@@ -43,14 +50,46 @@ module.exports = async (inputData = null) => {
   // forground service
   notifee.registerForegroundService(notification => {
     return new Promise(async () => {
+      let serviceGeneration = 0;
+      let cleanupServiceInstance = async () => {};
       try {
         const { NativeBridgeModule } = NativeModules;
         const textEncoder = new TextEncoder();
         const textDecoder = new TextDecoder();
 
+        cleanupActiveClipboardListeners();
+        const listenerGeneration = ++clipboardListenerGeneration;
+        serviceGeneration = listenerGeneration;
+        let instanceClipboardOnChangeSubscription = null;
+        let instanceShareAvailabilitySubscription = null;
+        let sharedTransportReady = false;
+        let sharedDrainRequested = false;
+        let sharedDrainPromise = null;
+        const cleanupClipboardListeners = () => {
+          const subscription = instanceClipboardOnChangeSubscription;
+          subscription?.remove();
+          instanceClipboardOnChangeSubscription = null;
+          const shareSubscription = instanceShareAvailabilitySubscription;
+          shareSubscription?.remove();
+          instanceShareAvailabilitySubscription = null;
+          sharedTransportReady = false;
+          sharedDrainRequested = false;
+
+          // A superseded service instance may clean up its own subscription,
+          // but must not stop or remove listeners owned by the current instance.
+          if (listenerGeneration !== clipboardListenerGeneration) return;
+
+          if (activeClipboardOnChangeSubscription === subscription) {
+            activeClipboardOnChangeSubscription = null;
+          }
+          if (activeShareAvailabilitySubscription === shareSubscription) {
+            activeShareAvailabilitySubscription = null;
+          }
+          NativeModules.ClipboardListener?.stopListening?.();
+        };
+
         let previous_clipboard_content_hash = '';
         let toggle = false; // p2s toggle
-        let block_image_once = false;
         let files_in_memory = null;
         let websocket_status_notification_toggle = false;
         let p2pMsg = null; // p2p status message
@@ -67,6 +106,8 @@ module.exports = async (inputData = null) => {
         // get data from async storage
         const {
           websocket_url,
+          username,
+          hashed_password,
           cipher_enabled,
           maxsize: maxsizeStr,
           server_mode,
@@ -77,6 +118,8 @@ module.exports = async (inputData = null) => {
           max_clipboard_size_local_limit_bytes: maxClipboardLimitStr,
         } = await getMultipleDataFromAsyncStorage([
           'websocket_url',
+          'username',
+          'hashed_password',
           'cipher_enabled',
           'maxsize',
           'server_mode',
@@ -115,10 +158,10 @@ module.exports = async (inputData = null) => {
         const decrypt = async encryptedData => {
           try {
             const plainText = await AesGcmCrypto.decrypt(
-              encryptedData['ciphertext'],
+              encryptedData.ciphertext,
               await getDataFromAsyncStorage('hashed_password'),
-              Buffer.from(encryptedData['nonce'], 'base64').toString('hex'),
-              Buffer.from(encryptedData['tag'], 'base64').toString('hex'),
+              Buffer.from(encryptedData.nonce, 'base64').toString('hex'),
+              Buffer.from(encryptedData.tag, 'base64').toString('hex'),
               false,
             );
             return plainText;
@@ -140,7 +183,11 @@ module.exports = async (inputData = null) => {
         const calculateBase64DecodedLength = async base64Str => {
           // Calculates the decoded byte length of a Base64-encoded string.
           const n = base64Str.length;
-          const padding = (base64Str.match(/=/g) || []).length;
+          const padding = base64Str.endsWith('==')
+            ? 2
+            : base64Str.endsWith('=')
+              ? 1
+              : 0;
           return 3 * (n / 4) - padding;
         };
 
@@ -156,6 +203,7 @@ module.exports = async (inputData = null) => {
         };
 
         // generate uuid
+        /* eslint-disable no-bitwise -- UUID v4 masks are bitwise by definition. */
         const generateUuid = async () => {
           return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
             const r = (Math.random() * 16) | 0;
@@ -163,6 +211,7 @@ module.exports = async (inputData = null) => {
             return v.toString(16);
           });
         };
+        /* eslint-enable no-bitwise */
 
         const p2pStatusMessageChanged = async () => {
           isP2PStatusMsgChanged = true;
@@ -252,56 +301,63 @@ module.exports = async (inputData = null) => {
           return false;
         };
 
-        // Event triggered when text content is shared with the app. (or) when text selection popup menu action is invoked
-        DeviceEventEmitter.addListener('SHARED_TEXT', async event => {
-          try {
-            const clipContent = event.text;
-            if (clipContent) {
-              /**
-               * Sometimes `Clipboard.setString` is invoked before the app is fully opened, leading to an unauthorized state.
-               * To handle this, implement a fail-safe mechanism that retries sending clipboard content only when it hasn't been successfully sent yet.
-               * If both events are triggered successfully, the content won't be sent twice because the same content is hashed, ensuring that identical data is only processed once.
-               */
-              Clipboard.setString(clipContent);
-              await sendClipBoard(clipContent, 'text');
-            }
-          } catch (e) {
-            await setDataInAsyncStorage(
-              'wsStatusMessage',
-              '❌ Outbound Error: ' + e,
-            );
-          }
-        });
+        const processPendingShareEvent = async event => {
+          const clipContent = event?.value;
+          if (!clipContent) return;
 
-        // Event listener triggered when image is shared with the app.
-        DeviceEventEmitter.addListener('SHARED_IMAGE', async event => {
-          try {
-            const clipContent = event.image;
-            if (clipContent) {
-              await sendClipBoard(clipContent, 'image');
-            }
-          } catch (e) {
-            await setDataInAsyncStorage(
-              'wsStatusMessage',
-              '❌ Outbound Error: ' + e,
-            );
+          if (event.eventName === 'SHARED_TEXT') {
+            await NativeBridgeModule.setAppOwnedTextClipboard(clipContent);
+            await sendClipBoard(clipContent, 'text');
+          } else if (event.eventName === 'SHARED_IMAGE') {
+            await sendClipBoard(clipContent, 'image');
+          } else if (event.eventName === 'SHARED_FILES') {
+            await sendClipBoard(clipContent, 'files');
+          } else {
+            throw new Error(`Unsupported pending share event: ${event.eventName}`);
           }
-        });
+        };
 
-        // Event listener triggered when files are shared with the app.
-        DeviceEventEmitter.addListener('SHARED_FILES', async event => {
-          try {
-            const clipContent = event.files;
-            if (clipContent) {
-              await sendClipBoard(clipContent, 'files');
+        const requestPendingShareDrain = async () => {
+          sharedDrainRequested = true;
+          if (!sharedTransportReady) return;
+          if (sharedDrainPromise !== null) return sharedDrainPromise;
+
+          sharedDrainPromise = (async () => {
+            while (sharedDrainRequested) {
+              sharedDrainRequested = false;
+              const pendingEvents =
+                (await NativeBridgeModule.drainPendingShareEvents()) ?? [];
+              for (const event of pendingEvents) {
+                try {
+                  await processPendingShareEvent(event);
+                } catch (error) {
+                  await setDataInAsyncStorage(
+                    'wsStatusMessage',
+                    '❌ Outbound shared-content error: ' + error,
+                  );
+                }
+              }
             }
-          } catch (e) {
-            await setDataInAsyncStorage(
-              'wsStatusMessage',
-              '❌ Outbound Error: ' + e,
-            );
+          })();
+
+          try {
+            return await sharedDrainPromise;
+          } finally {
+            sharedDrainPromise = null;
+            if (sharedDrainRequested && sharedTransportReady) {
+              requestPendingShareDrain();
+            }
           }
-        });
+        };
+
+        instanceShareAvailabilitySubscription = DeviceEventEmitter.addListener(
+          'SHARED_EVENT_AVAILABLE',
+          () => {
+            requestPendingShareDrain();
+          },
+        );
+        activeShareAvailabilitySubscription =
+          instanceShareAvailabilitySubscription;
 
         //clipboard monitor
         const { ClipboardListener } = NativeModules;
@@ -309,7 +365,7 @@ module.exports = async (inputData = null) => {
         // start clipboard listening
         ClipboardListener.startListening();
         // clipboard listener callback
-        const clipboardOnChange = clipboardListener.addListener(
+        instanceClipboardOnChangeSubscription = clipboardListener.addListener(
           'onClipboardChange',
           async params => {
             try {
@@ -324,6 +380,8 @@ module.exports = async (inputData = null) => {
             }
           },
         );
+        activeClipboardOnChangeSubscription =
+          instanceClipboardOnChangeSubscription;
 
         const clearFiles = async (expensiveCall = false) => {
           files_in_memory = null;
@@ -374,6 +432,140 @@ module.exports = async (inputData = null) => {
         };
 
         if (server_mode === 'P2S') {
+          const outboxScopeFingerprint = await hashCB(
+            [websocket_url, username || '', cipher_enabled, hashed_password || ''].join('\u0000'),
+          );
+          const p2sTextOutbox = new P2STextOutbox({
+            storage: {
+              read: getDataFromAsyncStorage,
+              write: setDataInAsyncStorage,
+            },
+            storageKey: `p2s_text_outbox_v1_${outboxScopeFingerprint}`,
+            maxItems: 20,
+            maxBytes: Math.max(
+              256 * 1024,
+              Math.min(
+                Number.isFinite(maxsize) && maxsize > 0 ? maxsize * 4 : 4 * 1024 * 1024,
+                8 * 1024 * 1024,
+              ),
+            ),
+          });
+          await p2sTextOutbox.load();
+
+          let p2sTextDrainPromise = null;
+          let p2sTextEchoTimer = null;
+
+          const updateP2STextOutboxStatus = async () => {
+            await setDataInAsyncStorage(
+              'p2sTextOutboxStatus',
+              await p2sTextOutbox.snapshot(),
+            );
+          };
+
+          const clearP2STextEchoTimer = () => {
+            if (p2sTextEchoTimer !== null) {
+              clearTimeout(p2sTextEchoTimer);
+              p2sTextEchoTimer = null;
+            }
+          };
+
+          const reportP2STextRetryError = async error => {
+            await setDataInAsyncStorage(
+              'wsStatusMessage',
+              '❌ Text outbox retry error: ' + error,
+            );
+          };
+
+          const scheduleP2STextDrain = delayMs => {
+            clearP2STextEchoTimer();
+            p2sTextEchoTimer = setTimeout(() => {
+              p2sTextEchoTimer = null;
+              drainP2STextOutbox().catch(reportP2STextRetryError);
+            }, Math.max(1, delayMs));
+          };
+
+          const releaseP2STextInFlight = async () => {
+            clearP2STextEchoTimer();
+            const head = await p2sTextOutbox.peek();
+            if (head && head.state === 'inflight') {
+              await p2sTextOutbox.releaseInFlight(head.id);
+            }
+            await updateP2STextOutboxStatus();
+          };
+
+          const drainP2STextOutbox = async () => {
+            if (p2sTextDrainPromise !== null) {
+              return p2sTextDrainPromise;
+            }
+
+            p2sTextDrainPromise = (async () => {
+              if (!stompClient || !stompClient.connected) return;
+
+              const head = await p2sTextOutbox.peek();
+              if (!head || head.state === 'inflight') return;
+
+              const now = Date.now();
+              const retryWaitMs = Number.isFinite(head.nextAttemptAt)
+                ? Math.max(
+                    0,
+                    Math.min(DEFAULT_MAX_DELAY_MS, head.nextAttemptAt - now),
+                  )
+                : 0;
+              if (retryWaitMs > 0) {
+                scheduleP2STextDrain(retryWaitMs);
+                await setDataInAsyncStorage(
+                  'wsStatusMessage',
+                  `⏳ Queued text retry in ${Math.ceil(retryWaitMs / 1000)}s`,
+                );
+                await updateP2STextOutboxStatus();
+                return;
+              }
+
+              const attemptNumber = head.attempts + 1;
+              const retryDelayMs = getP2SRetryDelayMs(attemptNumber);
+              if (!(await p2sTextOutbox.markAttempt(head.id, retryDelayMs))) return;
+
+              try {
+                stompClient.publish({
+                  destination: SEND_DESTINATION,
+                  body: JSON.stringify({
+                    payload: head.wirePayload,
+                    type: 'text',
+                  }),
+                });
+
+                clearP2STextEchoTimer();
+                p2sTextEchoTimer = setTimeout(() => {
+                  p2sTextEchoTimer = null;
+                  p2sTextOutbox
+                    .releaseInFlight(head.id)
+                    .then(updateP2STextOutboxStatus)
+                    .then(drainP2STextOutbox)
+                    .catch(reportP2STextRetryError);
+                }, retryDelayMs);
+
+                await setDataInAsyncStorage(
+                  'wsStatusMessage',
+                  `📤 Sending queued text (attempt ${attemptNumber}; retry timeout ${Math.ceil(retryDelayMs / 1000)}s)`,
+                );
+              } catch (error) {
+                await p2sTextOutbox.releaseInFlight(head.id);
+                scheduleP2STextDrain(retryDelayMs);
+                throw error;
+              } finally {
+                await updateP2STextOutboxStatus();
+              }
+            })();
+
+            try {
+              return await p2sTextDrainPromise;
+            } finally {
+              p2sTextDrainPromise = null;
+            }
+          };
+
+          await updateP2STextOutboxStatus();
+
           // websocket stomp client
           stompClient = new Client({
             brokerURL: websocket_url,
@@ -384,74 +576,86 @@ module.exports = async (inputData = null) => {
             forceBinaryWSFrames: true, // https://stomp-js.github.io/api-docs/latest/classes/Client.html#forceBinaryWSFrames
             // appendMissingNULLonIncoming: true, // https://stomp-js.github.io/api-docs/latest/classes/Client.html#appendMissingNULLonIncoming
             onConnect: async () => {
-              await setDataInAsyncStorage('wsStatusMessage', '✅ Connected');
-
               toggle = false;
-              // Subscribe to a topic
-              stompClient.subscribe(SUBSCRIPTION_DESTINATION, async message => {
-                try {
-                  await clearFiles();
-                  toggle = false;
-                  await setDataInAsyncStorage(
-                    'wsStatusMessage',
-                    '✅ Connected - Subscribed',
-                  );
 
-                  if (message && message.body) {
-                    const body = JSON.parse(message.body);
-                    let cb = String(body.payload);
-                    const type_ = body.type ?? 'text';
+              const subscription = stompClient.subscribe(
+                SUBSCRIPTION_DESTINATION,
+                async message => {
+                  try {
+                    await clearFiles();
+                    toggle = false;
 
-                    //decrypt
-                    if (cipher_enabled === 'true') {
-                      try {
-                        cb = await decrypt(JSON.parse(cb));
-                      } catch (error) {
-                        throw new Error(
-                          `Encryption must be enabled on all devices if enabled. JSON parsing failed: ${error.message}`,
-                        );
-                      }
-                    }
+                    if (message && message.body) {
+                      const body = JSON.parse(message.body);
+                      let cb = String(body.payload);
+                      const type_ = body.type ?? 'text';
 
-                    // hash clipboard content
-                    const hcb = await hashCB(cb);
-                    if (await newCB(hcb)) {
-                      previous_clipboard_content_hash = hcb;
-
-                      // validate clipboard size
-                      if (await validateClipboardSize(cb, type_, 'Inbound')) {
-                        // set clipboard content
-                        if (type_ === 'text') {
-                          Clipboard.setString(cb);
-                        } else if (type_ === 'image') {
-                          await NativeBridgeModule.copyBase64ImageToClipboardUsingCache(
-                            cb,
-                          );
-                          block_image_once = true;
-                        } else if (type_ === 'files') {
-                          await showFilesDownloadNotification(
-                            '📥 Download File(s)',
-                          );
-
-                          files_in_memory = cb;
-                          await setDataInAsyncStorage(
-                            'filesAvailableToDownload',
-                            'true',
+                      if (cipher_enabled === 'true') {
+                        try {
+                          cb = await decrypt(JSON.parse(cb));
+                        } catch (error) {
+                          throw new Error(
+                            `Encryption must be enabled on all devices if enabled. JSON parsing failed: ${error.message}`,
                           );
                         }
                       }
+
+                      const hcb = await hashCB(cb);
+                      const acknowledgedQueuedText =
+                        type_ === 'text' &&
+                        (await p2sTextOutbox.acknowledgeEcho(hcb));
+
+                      if (acknowledgedQueuedText) {
+                        clearP2STextEchoTimer();
+                        await updateP2STextOutboxStatus();
+                      }
+
+                      if (!acknowledgedQueuedText && (await newCB(hcb))) {
+                        previous_clipboard_content_hash = hcb;
+
+                        if (await validateClipboardSize(cb, type_, 'Inbound')) {
+                          if (type_ === 'text') {
+                            await NativeBridgeModule.setAppOwnedTextClipboard(cb);
+                          } else if (type_ === 'image') {
+                            await NativeBridgeModule.copyBase64ImageToClipboardUsingCache(
+                              cb,
+                            );
+                          } else if (type_ === 'files') {
+                            await showFilesDownloadNotification('📥 Download File(s)');
+                            files_in_memory = cb;
+                            await setDataInAsyncStorage(
+                              'filesAvailableToDownload',
+                              'true',
+                            );
+                          }
+                        }
+                      }
+
+                      if (acknowledgedQueuedText) {
+                        await drainP2STextOutbox();
+                      }
                     }
+                  } catch (e) {
+                    await setDataInAsyncStorage(
+                      'wsStatusMessage',
+                      '❌ Inbound Error: ' + e,
+                    );
                   }
-                } catch (e) {
-                  await setDataInAsyncStorage(
-                    'wsStatusMessage',
-                    '❌ Inbound Error: ' + e,
-                  );
-                }
-              });
+                },
+              );
+
+              if (!subscription) {
+                throw new Error('STOMP subscription was not created');
+              }
+
+              await setDataInAsyncStorage(
+                'wsStatusMessage',
+                '✅ Connected - Subscribed',
+              );
+              await drainP2STextOutbox();
 
               if (enable_websocket_status_notification === 'true') {
-                if (websocket_status_notification_toggle == true) {
+                if (websocket_status_notification_toggle === true) {
                   websocket_status_notification_toggle = false;
                   await showWebSocketStatusNotification(
                     'WebSocket Connection Restored 🔗',
@@ -464,25 +668,25 @@ module.exports = async (inputData = null) => {
               }
             },
             onDisconnect: async () => {
-              block_image_once = false;
+              await releaseP2STextInFlight();
               await setDataInAsyncStorage('wsStatusMessage', 'Disconnected');
             },
             onStompError: async frame => {
-              block_image_once = false;
+              await releaseP2STextInFlight();
               await setDataInAsyncStorage(
                 'wsStatusMessage',
                 '❌ STOMP Error: ' + JSON.stringify(frame, null, 2),
               );
             },
             onWebSocketError: async event => {
-              block_image_once = false;
+              await releaseP2STextInFlight();
               await setDataInAsyncStorage(
                 'wsStatusMessage',
                 '❌ WebSocket Error: ' + JSON.stringify(event, null, 2),
               );
             },
             onWebSocketClose: async event => {
-              block_image_once = false;
+              await releaseP2STextInFlight();
               const reason = event?.reason || 'closed by client';
               await setDataInAsyncStorage(
                 'wsStatusMessage',
@@ -490,7 +694,7 @@ module.exports = async (inputData = null) => {
               );
               if (
                 enable_websocket_status_notification === 'true' &&
-                websocket_status_notification_toggle == false &&
+                websocket_status_notification_toggle === false &&
                 (await getDataFromAsyncStorage('wsIsRunning')) === 'true'
               ) {
                 websocket_status_notification_toggle = true;
@@ -509,82 +713,125 @@ module.exports = async (inputData = null) => {
           sendClipBoardP2S = async (clipContent, type_ = 'text') => {
             try {
               await clearFiles();
-              if (stompClient && stompClient.connected && !toggle) {
-                if (
-                  (type_ === 'image' && enable_image_sharing === 'false') ||
-                  (type_ === 'files' && enable_file_sharing === 'false')
-                ) {
+
+              if (
+                (type_ === 'image' && enable_image_sharing === 'false') ||
+                (type_ === 'files' && enable_file_sharing === 'false')
+              ) {
+                return;
+              }
+
+              if (!(await validateClipboardSize(clipContent, type_, 'Outbound'))) {
+                return;
+              }
+
+              if (type_ === 'text') {
+                const hcb = await hashCB(clipContent);
+                if (!(await newCB(hcb))) return;
+
+                let wirePayload = clipContent;
+                if (cipher_enabled === 'true') {
+                  wirePayload = await encrypt(wirePayload);
+                }
+                wirePayload = String(wirePayload);
+
+                const enqueueResult = await p2sTextOutbox.enqueue({
+                  wirePayload,
+                  contentHash: hcb,
+                  wireBytes: Buffer.byteLength(wirePayload, 'utf8'),
+                });
+
+                if (enqueueResult.accepted || enqueueResult.duplicate) {
+                  previous_clipboard_content_hash = hcb;
+                }
+
+                await setDataInAsyncStorage(
+                  'p2sTextOutboxStatus',
+                  enqueueResult.snapshot,
+                );
+
+                if (enqueueResult.tooLarge || enqueueResult.overflow) {
+                  await setDataInAsyncStorage(
+                    'wsStatusMessage',
+                    '⚠️ Text outbox is full; clipboard was not queued',
+                  );
                   return;
                 }
 
                 if (
-                  await validateClipboardSize(clipContent, type_, 'Outbound')
+                  enqueueResult.accepted &&
+                  (!stompClient || !stompClient.connected)
                 ) {
-                  // base64 encode
-                  if (type_ === 'image') {
-                    clipContent = await NativeBridgeModule.getFileAsBase64(
-                      clipContent,
-                    );
-                  } else if (type_ === 'files') {
-                    temp = {};
-                    const file_paths = clipContent
-                      .split(',')
-                      .filter(item => item.trim() !== '');
-
-                    for (const file_path of file_paths) {
-                      temp[await NativeBridgeModule.getFileName(file_path)] =
-                        await NativeBridgeModule.getFileAsBase64(file_path);
-                    }
-                    clipContent = JSON.stringify(temp);
-                  }
-
-                  // clipboad content hash
-                  const hcb = await hashCB(clipContent);
-                  if (await newCB(hcb)) {
-                    previous_clipboard_content_hash = hcb;
-
-                    if (block_image_once) {
-                      block_image_once = false;
-                    } else {
-                      toggle = true;
-
-                      if (cipher_enabled === 'true') {
-                        //ecrypt
-                        clipContent = await encrypt(clipContent);
-                      }
-
-                      await setDataInAsyncStorage(
-                        'wsStatusMessage',
-                        '✅ Connected - Broadcasting',
-                      );
-
-                      // send
-                      stompClient.publish({
-                        destination: SEND_DESTINATION,
-                        body: JSON.stringify({
-                          payload: String(clipContent),
-                          type: type_,
-                        }),
-                      });
-                    }
-                  }
+                  await setDataInAsyncStorage(
+                    'wsStatusMessage',
+                    `📥 Text queued while offline (${enqueueResult.snapshot.count})`,
+                  );
                 }
+
+                await drainP2STextOutbox();
+                return;
+              }
+
+              if (!(stompClient && stompClient.connected && !toggle)) {
+                return;
+              }
+
+              if (type_ === 'image') {
+                clipContent = await NativeBridgeModule.getFileAsBase64(
+                  clipContent,
+                );
+              } else if (type_ === 'files') {
+                const temp = {};
+                const file_paths = clipContent
+                  .split(',')
+                  .filter(item => item.trim() !== '');
+
+                for (const file_path of file_paths) {
+                  temp[await NativeBridgeModule.getFileName(file_path)] =
+                    await NativeBridgeModule.getFileAsBase64(file_path);
+                }
+                clipContent = JSON.stringify(temp);
+              }
+
+              const hcb = await hashCB(clipContent);
+              if (await newCB(hcb)) {
+                previous_clipboard_content_hash = hcb;
+
+                toggle = true;
+
+                if (cipher_enabled === 'true') {
+                  clipContent = await encrypt(clipContent);
+                }
+
+                await setDataInAsyncStorage(
+                  'wsStatusMessage',
+                  '✅ Connected - Broadcasting',
+                );
+
+                stompClient.publish({
+                  destination: SEND_DESTINATION,
+                  body: JSON.stringify({
+                    payload: String(clipContent),
+                    type: type_,
+                  }),
+                });
               }
             } catch (e) {
               toggle = false;
-              block_image_once = false;
               throw e;
             }
           };
 
           // stop events and connection P2S
           stopServicesP2S = async () => {
+            clearP2STextEchoTimer();
+            await releaseP2STextInFlight();
+
             // 1) Stop clipboard listening
             try {
               await ClipboardListener.stopListening();
-              if (clipboardOnChange) {
-                clipboardOnChange.remove();
-              }
+              instanceClipboardOnChangeSubscription?.remove();
+              instanceClipboardOnChangeSubscription = null;
             } catch (e) {
               // no-op
             }
@@ -633,13 +880,13 @@ module.exports = async (inputData = null) => {
           getP2PStatusMessage = async () => {
             let msg = '📊';
             msg += ` Peers: ${liveConnectionsCount}`;
-            if (sendingFragmentStats != null) {
+            if (sendingFragmentStats !== null) {
               msg += ` | Sending: ${sendingFragmentStats}`;
             }
-            if (receivingFragmentStats != null) {
+            if (receivingFragmentStats !== null) {
               msg += ` | Receiving: ${receivingFragmentStats}`;
             }
-            if (p2pMsg != null) {
+            if (p2pMsg !== null) {
               msg += ` | ${p2pMsg}`;
             }
             return msg;
@@ -743,7 +990,7 @@ module.exports = async (inputData = null) => {
           }
 
           const initializeWebSocketSignalingClient = async () => {
-            if (wsSignalingClient == null) {
+            if (wsSignalingClient === null) {
               wsSignalingClient = new WebSocket(websocket_url);
 
               wsSignalingClient.onopen = async () => {
@@ -752,7 +999,7 @@ module.exports = async (inputData = null) => {
                 await setDataInAsyncStorage('wsStatusMessage', '✅ Connected');
 
                 if (enable_websocket_status_notification === 'true') {
-                  if (websocket_status_notification_toggle == true) {
+                  if (websocket_status_notification_toggle === true) {
                     websocket_status_notification_toggle = false;
                     await showWebSocketStatusNotification(
                       'WebSocket Connection Restored 🔗',
@@ -774,7 +1021,7 @@ module.exports = async (inputData = null) => {
                         await cleanupPeerConnections();
                       }
                       myPeerId = data.peerId;
-                      if (pendingPeerList != null) {
+                      if (pendingPeerList !== null) {
                         const pending = pendingPeerList;
                         pendingPeerList = null;
                         await handlePeerList(pending);
@@ -811,7 +1058,6 @@ module.exports = async (inputData = null) => {
               };
 
               wsSignalingClient.onerror = async event => {
-                block_image_once = false;
                 await setDataInAsyncStorage(
                   'wsStatusMessage',
                   '❌ WebSocket Error: ' + JSON.stringify(event, null, 2),
@@ -819,7 +1065,6 @@ module.exports = async (inputData = null) => {
               };
 
               wsSignalingClient.onclose = async event => {
-                block_image_once = false;
                 const reason = event?.reason || 'closed by client';
                 await setDataInAsyncStorage(
                   'wsStatusMessage',
@@ -827,7 +1072,7 @@ module.exports = async (inputData = null) => {
                 );
                 if (
                   enable_websocket_status_notification === 'true' &&
-                  websocket_status_notification_toggle == false &&
+                  websocket_status_notification_toggle === false &&
                   (await getDataFromAsyncStorage('wsIsRunning')) === 'true'
                 ) {
                   websocket_status_notification_toggle = true;
@@ -840,7 +1085,7 @@ module.exports = async (inputData = null) => {
                 wsSignalingClient = null;
                 setTimeout(async () => {
                   if (
-                    wsSignalingClient == null &&
+                    wsSignalingClient === null &&
                     (await getDataFromAsyncStorage('wsIsRunning')) === 'true'
                   ) {
                     initializeWebSocketSignalingClient();
@@ -871,7 +1116,7 @@ module.exports = async (inputData = null) => {
                     clipContent,
                   );
                 } else if (type_ === 'files') {
-                  temp = {};
+                  const temp = {};
                   const file_paths = clipContent
                     .split(',')
                     .filter(item => item.trim() !== '');
@@ -888,74 +1133,69 @@ module.exports = async (inputData = null) => {
                 if (await newCB(hcb)) {
                   previous_clipboard_content_hash = hcb;
 
-                  if (block_image_once) {
-                    block_image_once = false;
-                  } else {
-                    await resetSendingFragmentId();
-                    await resetReceivingFragments();
+                  await resetSendingFragmentId();
+                  await resetReceivingFragments();
 
-                    const rawPayloadSizeInBytes =
-                      textEncoder.encode(clipContent).length;
+                  const rawPayloadSizeInBytes =
+                    textEncoder.encode(clipContent).length;
 
-                    if (cipher_enabled === 'true') {
-                      //ecrypt
-                      clipContent = await encrypt(clipContent);
+                  if (cipher_enabled === 'true') {
+                    //ecrypt
+                    clipContent = await encrypt(clipContent);
+                  }
+
+                  // fragment payload
+                  const fragments = await fragmentString(
+                    clipContent,
+                    FRAGMENT_SIZE,
+                  );
+
+                  const metadata = {
+                    id: await generateUuid(),
+                    isFragmented: fragments.length > 1,
+                    index: 0,
+                    totalFragments: fragments.length,
+                    combinedRawPayloadSizeInBytes: rawPayloadSizeInBytes,
+                  };
+
+                  let loopBroken = false;
+                  sendingFragmentId = metadata.id;
+                  for (let i = 0; i < fragments.length; i++) {
+                    if (sendingFragmentId !== metadata.id) {
+                      loopBroken = true;
+                      return;
                     }
 
-                    // fragment payload
-                    const fragments = await fragmentString(
-                      clipContent,
-                      FRAGMENT_SIZE,
+                    const fragment = fragments[i];
+
+                    const messageJson = JSON.stringify({
+                      payload: fragment,
+                      type: type_,
+                      metadata: metadata,
+                    });
+                    metadata.index += 1;
+
+                    // send to all open DataChannels
+                    Object.entries(dataChannels).forEach(
+                      async ([peerId, channel]) => {
+                        if (channel.readyState === 'open') {
+                          await channel.send(messageJson);
+                        }
+                      },
                     );
 
-                    const metadata = {
-                      id: await generateUuid(),
-                      isFragmented: fragments.length > 1,
-                      index: 0,
-                      totalFragments: fragments.length,
-                      combinedRawPayloadSizeInBytes: rawPayloadSizeInBytes,
-                    };
-
-                    let loopBroken = false;
-                    sendingFragmentId = metadata.id;
-                    for (let i = 0; i < fragments.length; i++) {
-                      if (sendingFragmentId != metadata.id) {
-                        loopBroken = true;
-                        return;
-                      }
-
-                      const fragment = fragments[i];
-
-                      const messageJson = JSON.stringify({
-                        payload: fragment,
-                        type: type_,
-                        metadata: metadata,
-                      });
-                      metadata.index += 1;
-
-                      // send to all open DataChannels
-                      Object.entries(dataChannels).forEach(
-                        async ([peerId, channel]) => {
-                          if (channel.readyState === 'open') {
-                            await channel.send(messageJson);
-                          }
-                        },
-                      );
-
-                      // Update stats
-                      if (metadata.isFragmented) {
-                        sendingFragmentStats = `${metadata.index}/${metadata.totalFragments}`;
-                        await p2pStatusMessageChanged();
-                      }
+                    // Update stats
+                    if (metadata.isFragmented) {
+                      sendingFragmentStats = `${metadata.index}/${metadata.totalFragments}`;
+                      await p2pStatusMessageChanged();
                     }
-                    if (!loopBroken) {
-                      await resetSendingFragmentId();
-                    }
+                  }
+                  if (!loopBroken) {
+                    await resetSendingFragmentId();
                   }
                 }
               }
             } catch (e) {
-              block_image_once = false;
               p2pMsg = '❌ P2P Outbound Error: ' + JSON.stringify(e, null, 2);
               await p2pStatusMessageChanged();
             }
@@ -966,9 +1206,8 @@ module.exports = async (inputData = null) => {
             // 1) Stop listening to clipboard events
             try {
               await ClipboardListener.stopListening();
-              if (clipboardOnChange) {
-                clipboardOnChange.remove();
-              }
+              instanceClipboardOnChangeSubscription?.remove();
+              instanceClipboardOnChangeSubscription = null;
             } catch (e) {
               // no-op
             }
@@ -1026,7 +1265,7 @@ module.exports = async (inputData = null) => {
                 return;
               }
 
-              await clearFiles((expensiveCall = true));
+              await clearFiles(true);
               await resetSendingFragmentId();
 
               let cb = String(message.payload);
@@ -1035,19 +1274,19 @@ module.exports = async (inputData = null) => {
 
               // Check if the payload exceeds the maximum size: first layer protection
               if (
-                metadata != null &&
+                metadata !== null &&
                 max_clipboard_size_local_limit_bytes >= 0 &&
                 metadata.combinedRawPayloadSizeInBytes >
                   max_clipboard_size_local_limit_bytes
               ) {
                 await resetReceivingFragments();
-                p2pMsg = `⚠️ Payload size limit exceeded: ${metadata['combinedRawPayloadSizeInBytes']} bytes exceeds ${max_clipboard_size_local_limit_bytes} bytes`;
+                p2pMsg = `⚠️ Payload size limit exceeded: ${metadata.combinedRawPayloadSizeInBytes} bytes exceeds ${max_clipboard_size_local_limit_bytes} bytes`;
                 await p2pStatusMessageChanged();
                 return;
               }
 
               // Fragmented message handling
-              if (metadata != null && metadata.isFragmented) {
+              if (metadata !== null && metadata.isFragmented) {
                 receivingFragmentStats = `${metadata.index + 1}/${
                   metadata.totalFragments
                 }`;
@@ -1109,12 +1348,11 @@ module.exports = async (inputData = null) => {
                 if (await validateClipboardSize(cb, type_, 'Inbound')) {
                   // set clipboard content
                   if (type_ === 'text') {
-                    Clipboard.setString(cb);
+                    await NativeBridgeModule.setAppOwnedTextClipboard(cb);
                   } else if (type_ === 'image') {
                     await NativeBridgeModule.copyBase64ImageToClipboardUsingCache(
                       cb,
                     );
-                    block_image_once = true;
                   } else if (type_ === 'files') {
                     await showFilesDownloadNotification('📥 Download File(s)');
 
@@ -1294,17 +1532,17 @@ module.exports = async (inputData = null) => {
             if (p2pShuttingDown || !myPeerId || !peers.has(remotePeerId)) {
               return;
             }
-            if (deadPc != null && peerConnections[remotePeerId] !== deadPc) {
+            if (deadPc !== null && peerConnections[remotePeerId] !== deadPc) {
               return;
             }
             await runSerializedPeerOp(remotePeerId, async () => {
               if (p2pShuttingDown || !myPeerId || !peers.has(remotePeerId)) {
                 return;
               }
-              if (deadPc != null && peerConnections[remotePeerId] !== deadPc) {
+              if (deadPc !== null && peerConnections[remotePeerId] !== deadPc) {
                 return;
               }
-              if (deadPc == null) {
+              if (deadPc === null) {
                 const ch = dataChannels[remotePeerId];
                 if (ch && ch.readyState === 'open') {
                   return;
@@ -1445,16 +1683,22 @@ module.exports = async (inputData = null) => {
           }
         };
 
-        // terminate service when wsIsRunning is false
-        const stopServices = async () => {
-          if (server_mode === 'P2S') {
-            await stopServicesP2S();
-          } else if (server_mode === 'P2P') {
-            await stopServicesP2P();
-          }
+        sharedTransportReady = true;
+        await requestPendingShareDrain();
 
-          cleanupClipboardListeners();
+        // terminate service when wsIsRunning is false
+        cleanupServiceInstance = async () => {
+          try {
+            if (server_mode === 'P2S' && stopServicesP2S !== null) {
+              await stopServicesP2S();
+            } else if (server_mode === 'P2P' && stopServicesP2P !== null) {
+              await stopServicesP2P();
+            }
+          } finally {
+            cleanupClipboardListeners();
+          }
         };
+        const stopServices = cleanupServiceInstance;
 
         function sleep(ms) {
           return new Promise(res => setTimeout(res, ms));
@@ -1468,7 +1712,7 @@ module.exports = async (inputData = null) => {
             'filesAvailableToDownload',
           ];
 
-          while (true) {
+          while (listenerGeneration === clipboardListenerGeneration) {
             const json = NativeBridgeModule.getFlagsSync(POLL_KEYS);
             const latest = JSON.parse(json);
 
@@ -1517,7 +1761,7 @@ module.exports = async (inputData = null) => {
                   },
                 });
 
-                if (files_in_memory != null) {
+                if (files_in_memory !== null) {
                   // save files
                   await NativeBridgeModule.saveBase64Files(
                     dirPath,
@@ -1535,13 +1779,34 @@ module.exports = async (inputData = null) => {
             }
             await sleep(1000);
           }
+
+          if (listenerGeneration !== clipboardListenerGeneration) {
+            await stopServices();
+          }
         }
 
-        pollFlagsLoop();
+        pollFlagsLoop().catch(async error => {
+          try {
+            await setDataInAsyncStorage(
+              'wsStatusMessage',
+              '❌ Foreground service poll error:' + error,
+            );
+            await cleanupServiceInstance();
+          } finally {
+            if (serviceGeneration === clipboardListenerGeneration) {
+              await notifee.stopForegroundService();
+            }
+          }
+        });
       } catch (error) {
-        await setDataInAsyncStorage('wsStatusMessage', '❌ Error:' + error);
-        cleanupClipboardListeners();
-        await notifee.stopForegroundService();
+        try {
+          await setDataInAsyncStorage('wsStatusMessage', '❌ Error:' + error);
+          await cleanupServiceInstance();
+        } finally {
+          if (serviceGeneration === clipboardListenerGeneration) {
+            await notifee.stopForegroundService();
+          }
+        }
       }
     });
   });

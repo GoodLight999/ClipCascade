@@ -1,0 +1,8 @@
+<resources>
+    <color name="background_setup_surface">#111318</color>
+    <color name="background_setup_text_primary">#F2F3F7</color>
+    <color name="background_setup_text_secondary">#C5C8D1</color>
+    <color name="background_setup_button">#292C35</color>
+    <color name="background_setup_accent">#9DB9FF</color>
+    <color name="background_setup_chrome">#1B1E26</color>
+</resources>

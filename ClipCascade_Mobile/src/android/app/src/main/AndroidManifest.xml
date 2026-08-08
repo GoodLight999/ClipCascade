@@ -1,16 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.READ_LOGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-
 
     <application
       android:name=".MainApplication"
@@ -18,55 +14,88 @@
       android:icon="@mipmap/ic_launcher"
       android:roundIcon="@mipmap/ic_launcher_round"
       android:allowBackup="false"
+      android:fullBackupContent="@xml/backup_rules"
+      android:dataExtractionRules="@xml/data_extraction_rules"
       android:theme="@style/AppTheme"
-      android:usesCleartextTraffic="true" 
+      android:usesCleartextTraffic="true"
       android:supportsRtl="true">
       <activity
         android:name=".MainActivity"
-        android:label="@string/app_name"
         android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
         android:launchMode="singleTask"
         android:windowSoftInputMode="adjustResize"
         android:exported="true">
+        <meta-data
+          android:name="android.app.shortcuts"
+          android:resource="@xml/shortcuts" />
         <intent-filter>
           <action android:name="android.intent.action.MAIN" />
           <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
         <intent-filter>
-          <!-- Intent filter for receiving shared text -->
           <action android:name="android.intent.action.SEND" />
           <action android:name="android.intent.action.PROCESS_TEXT" />
           <category android:name="android.intent.category.DEFAULT" />
           <data android:mimeType="text/plain" />
         </intent-filter>
         <intent-filter>
-          <!-- For single image sharing -->
           <action android:name="android.intent.action.SEND" />
           <category android:name="android.intent.category.DEFAULT" />
           <data android:mimeType="image/*" />
         </intent-filter>
         <intent-filter>
-          <!-- For single file sharing -->
           <action android:name="android.intent.action.SEND" />
           <category android:name="android.intent.category.DEFAULT" />
           <data android:mimeType="*/*" />
         </intent-filter>
         <intent-filter>
-          <!-- For multiple files of any type -->
           <action android:name="android.intent.action.SEND_MULTIPLE" />
           <category android:name="android.intent.category.DEFAULT" />
           <data android:mimeType="*/*" />
         </intent-filter>
       </activity>
+
       <activity
         android:name=".ClipboardFloatingActivity"
         android:theme="@style/Theme.TransparentActivity" />
-      
+
+      <activity
+        android:name=".BackgroundSetupActivity"
+        android:exported="true"
+        android:label="@string/background_setup_title"
+        android:theme="@style/Theme.ClipCascade.BackgroundSetup" />
+
+      <!--
+        This is the exact service class documented by Notifee for custom
+        foreground-service types. The implementation lives in Notifee's
+        separately packaged Android core artifact, which Android Lint cannot
+        resolve while analyzing this React Native module graph.
+      -->
       <service
         android:name="app.notifee.core.ForegroundService"
-        android:foregroundServiceType="remoteMessaging" 
-        android:exported="false" 
-        tools:replace="android:foregroundServiceType"/>
+        android:foregroundServiceType="remoteMessaging"
+        android:exported="false"
+        tools:ignore="MissingClass"
+        tools:replace="android:foregroundServiceType" />
+
+      <!--
+        Accessibility services must be exported so Android's system process can
+        bind to them. BIND_ACCESSIBILITY_SERVICE keeps that binding restricted
+        to the system.
+      -->
+      <service
+        android:name=".ClipCascadeAccessibilityService"
+        android:enabled="true"
+        android:exported="true"
+        android:label="@string/accessibility_service_label"
+        android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+        <intent-filter>
+          <action android:name="android.accessibilityservice.AccessibilityService" />
+        </intent-filter>
+        <meta-data
+          android:name="android.accessibilityservice"
+          android:resource="@xml/accessibility_service_config" />
+      </service>
 
       <receiver
         android:name=".BootReceiver"
@@ -80,14 +109,23 @@
         android:name=".HeadlessTaskService"
         android:exported="false" />
 
+      <!-- Required by the official Shizuku API to receive the Binder. -->
+      <provider
+        android:name="rikka.shizuku.ShizukuProvider"
+        android:authorities="${applicationId}.shizuku"
+        android:multiprocess="false"
+        android:enabled="true"
+        android:exported="true"
+        android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
       <provider
         android:name="androidx.core.content.FileProvider"
         android:authorities="${applicationId}.fileprovider"
         android:exported="false"
         android:grantUriPermissions="true">
         <meta-data
-            android:name="android.support.FILE_PROVIDER_PATHS"
-            android:resource="@xml/provider_paths" />
+          android:name="android.support.FILE_PROVIDER_PATHS"
+          android:resource="@xml/provider_paths" />
       </provider>
     </application>
 </manifest>

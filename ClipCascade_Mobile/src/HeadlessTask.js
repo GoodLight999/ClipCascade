@@ -1,7 +1,6 @@
 import {
   setDataInAsyncStorage,
   getDataFromAsyncStorage,
-  clearAsyncStorage,
 } from './AsyncStorageManagement'; // persistent storage
 import StartForegroundService from './StartForegroundService'; // foreground service
 
@@ -13,7 +12,7 @@ module.exports = async data => {
       return wsIsRunning_s === null ? 'false' : wsIsRunning_s;
     };
 
-    if (data && data['event'] === 'BOOT_COMPLETED') {
+    if (data && data.event === 'BOOT_COMPLETED') {
       const relaunch_on_boot = await getDataFromAsyncStorage(
         'relaunch_on_boot',
       );

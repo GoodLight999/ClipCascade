@@ -1,3 +1,36 @@
 <resources>
     <string name="app_name">ClipCascade</string>
+    <string name="background_setup_title">ClipCascade バックグラウンド設定</string>
+    <string name="background_setup_short_label">バックグラウンド設定</string>
+    <string name="background_setup_long_label">ClipCascade バックグラウンド取得を設定</string>
+    <string name="background_setup_intro">前景・背景を区別せず、すべての自動コピー通知を同じ取得経路で処理します。Clipboard listener、ユーザー補助のACTION_COPY、READ_LOGSはトリガーだけを担当し、本文はShizuku UserServiceまたは既存オーバーレイで読み取ります。送信は既存のClipCascade前景サービスが担当します。</string>
+    <string name="background_setup_combined_status">%1$s\n\n%2$s</string>
+    <string name="background_setup_status">Shizuku Binder: %1$s\nShizuku権限: %2$s\nShizuku読取サービス: %3$s\nユーザー補助 ACTION_COPY: %4$s\n他のアプリの上に表示（予備経路）: %5$s\nREAD_LOGS（ADBトリガー）: %6$s\nバッテリー最適化の除外: %7$s\nClipCascade前景サービス: %8$s\n直近のShizukuエラー: %9$s</string>
+    <string name="capture_diagnostics_status">統一取得診断（内容は保存しません）\nトリガー: %1$d\n並行トリガーの集約: %2$d\nShizuku試行: %3$d\nShizuku成功: %4$d\nオーバーレイ移行: %5$d\nJS送出: %6$d\n無視・利用不能: %7$d\n直近ソース: %8$s\n直近段階: %9$s\n直近エラー: %10$s\n直近時刻: %11$s</string>
+    <string name="status_enabled">有効</string>
+    <string name="status_disabled">無効</string>
+    <string name="status_bound_uid">接続済み（UID %1$d）</string>
+    <string name="status_not_bound">未接続</string>
+    <string name="status_none">なし</string>
+    <string name="request_shizuku_permission">1. Shizuku権限を許可して接続</string>
+    <string name="test_shizuku_read">2. Shizuku読み取りをテスト</string>
+    <string name="open_accessibility_settings">3. ユーザー補助の設定を開く</string>
+    <string name="open_overlay_settings">4. 予備経路用「他のアプリの上に表示」</string>
+    <string name="open_battery_settings">5. バッテリー最適化の設定を開く</string>
+    <string name="copy_adb_fallback">ADBフォールバック用コマンドをコピー</string>
+    <string name="refresh_status">状態を再確認</string>
+    <string name="share_diagnostic_report">診断レポートを共有</string>
+    <string name="diagnostic_report_chooser">ClipCascade診断レポートを共有</string>
+    <string name="diagnostic_report_share_unavailable">診断レポートの共有先を開けませんでした</string>
+    <string name="reset_capture_diagnostics">取得診断カウンターをリセット</string>
+    <string name="open_clipcascade">ClipCascadeを開く</string>
+    <string name="background_setup_safety_note">ユーザー補助APIにはクリップボード本文を取得する公式機能はありません。AndroidがAccessibilityEvent.actionとしてACTION_COPYを報告した場合だけ統一取得経路を起動します。画面内容・UI文言・コピー完了メッセージは判定に使わず、本文は診断表示やログへ保存しません。</string>
+    <string name="shizuku_manager_instruction">先にインストール済みのShizuku互換マネージャーを直接開き、そのマネージャーが案内する方法でサーバーを起動してください。ClipCascadeは公式ShizukuProvider経路でBinderを受け取り、マネージャーのパッケージ名や表示名は推測しません。</string>
+    <string name="shizuku_test_started">Shizuku読み取りを確認しています…</string>
+    <string name="shizuku_test_success">成功: 種類=%1$s、長さ=%2$d（内容は表示しません）</string>
+    <string name="shizuku_test_failure">失敗: %1$s</string>
+    <string name="adb_commands_copied">ADBコマンドをクリップボードへコピーしました</string>
+    <string name="settings_unavailable">この端末では設定画面を開けませんでした</string>
+    <string name="accessibility_service_label">ClipCascade ACTION_COPY検出</string>
+    <string name="accessibility_service_description">Androidが報告したACTION_COPYだけを検知し、本文の取得をShizukuまたは既存オーバーレイへ依頼します。画面内容やUI文言は取得しません。</string>
 </resources>
