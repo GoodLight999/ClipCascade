@@ -81,63 +81,109 @@ if (
   process.exit(1);
 }
 
-const evaluating = new Set();
-const memo = new Map();
+const imageSize = vulnerabilities['image-size'];
+if (!imageSize || imageSize.severity !== 'high') {
+  console.error('Expected waived image-size high vulnerability is missing or changed severity.');
+  process.exit(1);
+}
 
-function advisoryAllowed(via) {
+function isAcceptedDirectAdvisory(item) {
   return (
-    via &&
-    typeof via === 'object' &&
-    via.name === 'image-size' &&
-    via.severity === 'high' &&
-    acceptedUrls.has(via.url)
+    item &&
+    typeof item === 'object' &&
+    item.name === 'image-size' &&
+    item.dependency === 'image-size' &&
+    item.severity === 'high' &&
+    acceptedUrls.has(item.url)
   );
 }
 
-function vulnerabilityAllowed(name) {
-  if (memo.has(name)) return memo.get(name);
-  if (evaluating.has(name)) return false;
-
-  const vulnerability = vulnerabilities[name];
-  if (!vulnerability) return false;
-
-  evaluating.add(name);
-  const via = Array.isArray(vulnerability.via) ? vulnerability.via : [];
-  const allowed =
-    via.length > 0 &&
-    via.every(item => {
-      if (typeof item === 'string') return vulnerabilityAllowed(item);
-      return advisoryAllowed(item);
-    });
-  evaluating.delete(name);
-  memo.set(name, allowed);
-  return allowed;
-}
-
-const rejected = highOrCritical.filter(name => !vulnerabilityAllowed(name));
-if (rejected.length > 0) {
-  console.error(
-    `${mode}: unaccepted high/critical npm vulnerabilities: ${rejected.join(', ')}`,
-  );
-  process.exit(1);
-}
-
-const directImageSizeAdvisories = (vulnerabilities['image-size']?.via || [])
-  .filter(item => typeof item === 'object')
-  .map(item => item.url)
-  .filter(Boolean);
-const unexpectedImageSizeAdvisories = directImageSizeAdvisories.filter(
-  url => !acceptedUrls.has(url),
+const imageSizeVia = Array.isArray(imageSize.via) ? imageSize.via : [];
+const directImageSizeAdvisories = imageSizeVia.filter(
+  item => typeof item === 'object',
 );
-if (unexpectedImageSizeAdvisories.length > 0) {
+const directImageSizeUrls = new Set(
+  directImageSizeAdvisories.map(item => item.url).filter(Boolean),
+);
+
+if (
+  imageSizeVia.some(item => typeof item === 'string') ||
+  directImageSizeAdvisories.length !== acceptedUrls.size ||
+  directImageSizeAdvisories.some(item => !isAcceptedDirectAdvisory(item)) ||
+  directImageSizeUrls.size !== acceptedUrls.size ||
+  [...acceptedUrls].some(url => !directImageSizeUrls.has(url))
+) {
   console.error(
-    `image-size has advisories outside the exact temporary waiver: ${unexpectedImageSizeAdvisories.join(', ')}`,
+    'image-size advisory set changed; refusing to broaden the temporary waiver.',
   );
   process.exit(1);
+}
+
+// npm audit represents propagated vulnerabilities as an effects graph. Metro's
+// graph contains cycles (metro <-> metro-config / metro-transform-worker), so a
+// recursive "via" walk incorrectly treats an in-progress cycle as an unknown
+// vulnerability. Build the exact transitive effects closure from image-size
+// instead, then separately reject any direct advisory object that is not one of
+// the two explicitly accepted GHSA records.
+const propagatedClosure = new Set(['image-size']);
+const queue = ['image-size'];
+while (queue.length > 0) {
+  const current = queue.shift();
+  const effects = vulnerabilities[current]?.effects;
+  if (!Array.isArray(effects)) continue;
+
+  for (const affected of effects) {
+    if (!vulnerabilities[affected] || propagatedClosure.has(affected)) continue;
+    propagatedClosure.add(affected);
+    queue.push(affected);
+  }
+}
+
+const rejectedOutsideClosure = highOrCritical.filter(
+  name => !propagatedClosure.has(name),
+);
+if (rejectedOutsideClosure.length > 0) {
+  console.error(
+    `${mode}: high/critical vulnerabilities outside the exact image-size propagation closure: ${rejectedOutsideClosure.join(', ')}`,
+  );
+  process.exit(1);
+}
+
+for (const name of highOrCritical) {
+  const vulnerability = vulnerabilities[name];
+  const via = Array.isArray(vulnerability.via) ? vulnerability.via : [];
+  if (via.length === 0) {
+    console.error(`${mode}: ${name} has no auditable via chain.`);
+    process.exit(1);
+  }
+
+  for (const item of via) {
+    if (typeof item === 'string') {
+      if (!propagatedClosure.has(item)) {
+        console.error(
+          `${mode}: ${name} propagates through non-waived vulnerability ${item}.`,
+        );
+        process.exit(1);
+      }
+      continue;
+    }
+
+    if (!isAcceptedDirectAdvisory(item)) {
+      console.error(
+        `${mode}: ${name} contains a direct advisory outside the exact image-size waiver: ${item?.url || item?.name || 'unknown'}.`,
+      );
+      process.exit(1);
+    }
+  }
 }
 
 console.log(
-  `${mode}: accepted only the two unpatched image-size DoS advisories propagated through Metro 0.82.5`,
+  `${mode}: accepted only the two unpatched image-size DoS advisories and their npm-audit effects closure.`,
 );
-console.log(`image-size=${imageSizeVersion}; waiver expires=${waiverExpires}`);
+console.log(
+  `accepted high/critical nodes: ${highOrCritical.slice().sort().join(', ')}`,
+);
+console.log(
+  `metro=${metroVersion}; image-size=${imageSizeVersion}; waiver expires=${waiverExpires}`,
+);
 console.log(`raw audit JSON: ${rawLog}`);
