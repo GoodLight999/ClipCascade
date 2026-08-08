@@ -31,6 +31,7 @@ Detailed files retain hypotheses, source inspection, failed attempts, correction
 - `docs/EXPERIMENT_LOG_2026-08-03_STATIC_AUDIT_AND_UNIFIED_CAPTURE.md`
 - `docs/EXPERIMENT_LOG_2026-08-04_FINAL_STATIC_VERIFICATION.md`
 - `docs/EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`
+- `docs/EXPERIMENT_LOG_2026-08-08_HONOR_FIX_VERIFICATION.md`
 
 ## Chronology
 
@@ -179,4 +180,33 @@ Code commits:
 - `2fc18d16269287ce3c54c72c3e5a20ca28ebcdfa` — independent UserService implementation version;
 - `5d2f99c3ff591195f71b6179d5f19528645e5c4d` — stale-service regression contract.
 
-The correction is source-backed but must not be called fixed until a new APK passes the same manual Shizuku test on the HONOR DNP-NX9. Full details are in `EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`.
+Full source/research detail is in `EXPERIMENT_LOG_2026-08-08_HONOR_ANDROID16_VENDOR_CLIPBOARD.md`.
+
+### 2026-08-08 — HONOR correction build verification
+
+The correction exposed additional issues before a new APK was accepted:
+
+- run `31227720486`: new `image-size` high advisories plus one stale Jest assertion made the aggregate red, while Android compilation/package generation itself succeeded;
+- stale test was replaced with the new framework-delegation contract;
+- because the two `image-size` high advisories had no patched release, an exact temporary CI exception was introduced instead of forcing the breaking React Native downgrade suggested by npm;
+- run `31228471408`: the first exception script mishandled npm-audit cycles among Metro packages, so the aggregate correctly remained red;
+- audit policy was corrected to validate the exact two GHSA records, exact Metro/image-size dependency shape, an `effects` transitive closure, and an expiry date; all other high/critical findings still fail.
+
+Final product-code head `30c179d9099f67afaa2b4e93a5164fd5ceae5808` passed Android run `31228888126`:
+
+- 11/11 Jest suites, 61/61 tests;
+- Gradle `BUILD SUCCESSFUL in 2m 57s`, 480 tasks;
+- lint 0 errors / 18 reviewed warnings;
+- full/prod exact advisory policy: success;
+- APK/package/integrity/aggregate gates: success.
+
+Final APK artifact `9013102582`:
+
+- size `93,543,179` bytes;
+- SHA-256 `1dfe70fa14be54ddb8f319c12b820e297dca8743ecbdc501f7a97c48d922c604`;
+- 538 entries;
+- independent DEX inspection confirmed the new `com.android.shell`/framework ClipboardManager implementation and absence of the old unsupported-signature error/helper markers.
+
+Desktop run `31228888150` also passed all jobs.
+
+This is build/package proof only. The same HONOR DNP-NX9 must still pass the manual Shizuku read before the runtime bug is called fixed. Full verification detail is in `EXPERIMENT_LOG_2026-08-08_HONOR_FIX_VERIFICATION.md`.
